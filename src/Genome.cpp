@@ -42,7 +42,7 @@
 #include "Random.h"
 #include "Utils.h"
 #include "Parameters.h"
-#include "Assert.h"
+#include "AssertMacros.h"
 
 namespace NEAT
 {
@@ -93,9 +93,6 @@ namespace NEAT
         m_PhenotypeBehavior = a_G.m_PhenotypeBehavior;
         m_initial_num_neurons = a_G.m_initial_num_neurons;
         m_initial_num_links = a_G.m_initial_num_links;
-#ifdef USE_BOOST_PYTHON
-        m_behavior = a_G.m_behavior;
-#endif
     }
 
     // assignment operator
@@ -118,9 +115,6 @@ namespace NEAT
             m_PhenotypeBehavior = a_G.m_PhenotypeBehavior;
             m_initial_num_neurons = a_G.m_initial_num_neurons;
             m_initial_num_links = a_G.m_initial_num_links;
-#ifdef USE_BOOST_PYTHON
-            m_behavior = a_G.m_behavior;
-#endif
         }
 
         return *this;
@@ -1271,13 +1265,6 @@ namespace NEAT
         }*/
         
         // New - if there is a behavior in the genomes, return their distance
-#ifdef USE_BOOST_PYTHON
-        // is it not None?
-        if ((m_behavior.ptr() != py::object().ptr()) && (a_G.m_behavior.ptr() != py::object().ptr()))
-        {
-            return py::extract<double>(m_behavior.attr("distance_to")(a_G.m_behavior));
-        }
-#endif
         
         
         // iterators for moving through the genomes' genes

@@ -30,16 +30,6 @@
 // Description: Definition for the Genome class.
 ///////////////////////////////////////////////////////////////////////////////
 
-#ifdef USE_BOOST_PYTHON
-
-#include <boost/python.hpp>
-#include <boost/archive/text_oarchive.hpp>
-#include <boost/archive/text_iarchive.hpp>
-#include <boost/serialization/vector.hpp>
-#include <boost/shared_ptr.hpp>
-
-#endif
-
 #include <boost/shared_ptr.hpp>
 
 #include <boost/graph/graph_traits.hpp>
@@ -53,7 +43,7 @@
 #include "Substrate.h"
 #include "Innovation.h"
 #include "Genes.h"
-#include "Assert.h"
+#include "AssertMacros.h"
 #include "PhenotypeBehavior.h"
 #include "Random.h"
 
@@ -189,10 +179,6 @@ namespace NEAT
         // A pointer to a class representing the phenotype's behavior
         // Used in novelty searches
         PhenotypeBehavior *m_PhenotypeBehavior;
-        // A Python object behavior
-#ifdef USE_BOOST_PYTHON
-        py::object m_behavior;
-#endif
 
         ////////////////////////////
         // Constructors
@@ -326,13 +312,6 @@ namespace NEAT
                 }
             }
 
-            // for Python-based custom constraint callbacks
-#ifdef USE_BOOST_PYTHON
-            if (a_Parameters.pyCustomConstraints.ptr() != py::object().ptr()) // is it not None?
-            {
-                return py::extract<bool>(a_Parameters.pyCustomConstraints(*this));
-            }
-#endif
             // add more constraints here
             return false;
         }
@@ -352,155 +331,6 @@ namespace NEAT
         // Like CPPN/HyperNEAT stuff
         ////////////
         void BuildHyperNEATPhenotype(NeuralNetwork &net, Substrate &subst);
-
-#ifdef USE_BOOST_PYTHON
-
-        py::dict TraitMap2Dict(std::map< std::string, Trait>& tmap)
-        {
-            py::dict traits;
-            for(auto tit=tmap.begin(); tit!=tmap.end(); tit++)
-            {
-                bool doit = false;
-                if (tit->second.dep_key != "")
-                {
-                    // there is such trait..
-                    if (tmap.count(tit->second.dep_key) != 0)
-                    {
-                        // and it has the right value?
-                        for(int ix=0; ix < tit->second.dep_values.size(); ix++)
-                        {
-                            if (tmap[tit->second.dep_key].value == tit->second.dep_values[ix])
-                            {
-                                doit = true;
-                                break;
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    doit = true;
-                }
-
-                if (doit)
-                {
-                    TraitType t = tit->second.value;
-                    if (t.type() == typeid(int))
-                    {
-                        traits[tit->first] = bs::get<int>(t);
-                    }
-                    if (t.type() == typeid(double))
-                    {
-                        traits[tit->first] = bs::get<double>(t);
-                    }
-                    if (t.type() == typeid(std::string))
-                    {
-                        traits[tit->first] = bs::get<std::string>(t);
-                    }
-                    if (t.type() == typeid(intsetelement))
-                    {
-                        traits[tit->first] = (bs::get<intsetelement>(t)).value;
-                    }
-                    if (t.type() == typeid(floatsetelement))
-                    {
-                        traits[tit->first] = (bs::get<floatsetelement>(t)).value;
-                    }
-                    if (t.type() == typeid(py::object))
-                    {
-                        traits[tit->first] = bs::get<py::object>(t);
-                    }
-                }
-            }
-
-            return traits;
-        }
-        
-        std::map< std::string, Trait> Dict2TraitMap(py::dict d)
-        {
-            py::list ks = d.keys();
-            std::map< std::string, Trait> ts;
-            
-            for(int i=0 ; i<py::len(ks); i++)
-            {
-                py::object key = ks[i];
-                py::object po = d[key];
-                
-                Trait t;
-                t.value = po;
-                
-                ts[py::extract<std::string>(key)] = t;
-            }
-            
-            return ts;
-        };
-        
-
-        py::object GetNeuronTraits()
-        {
-            py::list neurons;
-            for(auto it=m_NeuronGenes.begin(); it != m_NeuronGenes.end(); it++)
-            {
-
-                py::dict traits = TraitMap2Dict((*it).m_Traits);
-
-                py::list little;
-                little.append( (*it).ID() );
-
-                if ((*it).Type() == INPUT)
-                {
-                    little.append( "input" );
-                }
-                else if ((*it).Type() == BIAS)
-                {
-                    little.append( "bias" );
-                }
-                else if ((*it).Type() == HIDDEN)
-                {
-                    little.append( "hidden" );
-                }
-                else if ((*it).Type() == OUTPUT)
-                {
-                    little.append( "output" );
-                }
-                little.append( traits );
-                neurons.append( little );
-            }
-
-            return neurons;
-        }
-
-        py::object GetLinkTraits(bool with_weights=false)
-        {
-            py::list links;
-            for(auto it=m_LinkGenes.begin(); it != m_LinkGenes.end(); it++)
-            {
-                py::dict traits = TraitMap2Dict((*it).m_Traits);
-
-                py::list little;
-                little.append( (*it).FromNeuronID() );
-                little.append( (*it).ToNeuronID() );
-                little.append( traits );
-                if (with_weights)
-                {
-                    little.append( (*it).m_Weight );
-                }
-                links.append( little );
-            }
-
-            return links;
-        }
-
-        py::dict GetGenomeTraits()
-        {
-            return TraitMap2Dict(m_GenomeGene.m_Traits);
-        }
-        
-        void SetGenomeTraits(py::dict traits)
-        {
-            m_GenomeGene.m_Traits = Dict2TraitMap(traits);
-        }
-
-#endif
 
         // Saves this genome to a file
         void Save(const char *a_filename);
@@ -823,60 +653,8 @@ namespace NEAT
         void Clean_Net(std::vector<Connection> &connections, unsigned int input_count,
                        unsigned int output_count, unsigned int hidden_count);
 #endif
-
-#ifdef USE_BOOST_PYTHON
-
-        // Serialization
-        friend class boost::serialization::access;
-        template<class Archive>
-        void serialize(Archive & ar, const unsigned int version)
-        {
-            ar & m_ID;
-            ar & m_NeuronGenes;
-            ar & m_LinkGenes;
-            //ar & m_GenomeGene;
-            ar & m_NumInputs;
-            ar & m_NumOutputs;
-            ar & m_Fitness;
-            ar & m_AdjustedFitness;
-            ar & m_Depth;
-            ar & m_OffspringAmount;
-            ar & m_Evaluated;
-    
-            ar & m_initial_num_neurons;
-            ar & m_initial_num_links;
-            
-            //ar & m_PhenotypeBehavior; // todo: think about how we will handle the behaviors with pickle
-        }
-
-#endif
     };
 
-
-#ifdef USE_BOOST_PYTHON
-
-    struct Genome_pickle_suite : py::pickle_suite
-    {
-        static py::object getstate(const Genome& a)
-        {
-            std::ostringstream os;
-            boost::archive::text_oarchive oa(os);
-            oa << a;
-            return py::str (os.str());
-        }
-
-        static void setstate(Genome& a, py::object entries)
-        {
-            py::str s = py::extract<py::str> (entries)();
-            std::string st = py::extract<std::string> (s)();
-            std::istringstream is (st);
-
-            boost::archive::text_iarchive ia (is);
-            ia >> a;
-        }
-    };
-
-#endif
 
 #define DBG(x) { std::cerr << x << std::endl; }
 

@@ -37,7 +37,7 @@
 #include <iostream>
 #include <vector>
 #include <limits>
-#include "Assert.h"
+#include "AssertMacros.h"
 #include "Random.h"
 
 using namespace std;

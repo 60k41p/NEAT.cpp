@@ -253,31 +253,6 @@ public:
 
     void RemoveIndividual(unsigned int a_idx);
 
-#ifdef USE_BOOST_PYTHON
-        // Serialization
-        friend class boost::serialization::access;
-        template<class Archive>
-        void serialize(Archive & ar, const unsigned int version)
-        {
-            ar & m_ID;
-            //ar & m_Representative;
-            ar & m_BestSpecies;
-            ar & m_WorstSpecies;
-            ar & m_AgeGenerations;
-            ar & m_AgeEvaluations;
-            ar & m_OffspringRqd;
-            ar & m_BestFitness;
-            ar & m_BestGenome;
-            ar & m_GensNoImprovement;
-            ar & m_EvalsNoImprovement;
-            ar & m_R;
-            ar & m_G;
-            ar & m_B;
-            ar & m_Individuals;
-            ar & m_AverageFitness;
-        }
-#endif
-
 };
 
 } // namespace NEAT
