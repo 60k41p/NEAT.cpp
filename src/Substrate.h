@@ -28,17 +28,6 @@
 #include <vector>
 #include "NeuralNetwork.h"
 
-#ifdef USE_BOOST_PYTHON
-
-#include <boost/python.hpp>
-#include <boost/archive/text_oarchive.hpp>
-#include <boost/archive/text_iarchive.hpp>
-#include <boost/serialization/vector.hpp>
-
-namespace py = boost::python;
-
-#endif
-
 namespace NEAT
 {
 
@@ -97,19 +86,6 @@ public:
               std::vector< std::vector<double> >& a_hidden,
               std::vector< std::vector<double> >& a_outputs );
 
-#ifdef USE_BOOST_PYTHON
-              
-    // Construct from 3 Python lists of tuples
-    Substrate(py::list a_inputs, py::list a_hidden, py::list a_outputs);
-    
-    // Same as the constructor, except it doesn't set any flags
-    void SetNeurons(py::list a_inputs, py::list a_hidden, py::list a_outputs);
-    
-    // Sets a custom connectivity scheme
-    // The neurons must be set before calling this 
-    void SetCustomConnectivity(py::list a_conns);
-#endif
-
     // Sets a custom connectivity scheme
     // The neurons must be set before calling this
     void SetCustomConnectivity(std::vector< std::vector<int> >& a_conns);
@@ -127,71 +103,7 @@ public:
     // Prints some info about itself
     void PrintInfo();
     
-#ifdef USE_BOOST_PYTHON
-    
-    // Serialization
-    friend class boost::serialization::access;
-    template<class Archive>
-    void serialize(Archive & ar, const unsigned int version)
-    {
-        ar & m_input_coords;
-        ar & m_hidden_coords;
-        ar & m_output_coords;
-        
-        ar & m_leaky;
-        ar & m_with_distance;
-        
-        ar & m_allow_input_hidden_links;
-        ar & m_allow_input_output_links;
-        ar & m_allow_hidden_hidden_links;
-        ar & m_allow_hidden_output_links;
-        ar & m_allow_output_hidden_links;
-        ar & m_allow_output_output_links;
-        ar & m_allow_looped_hidden_links;
-        ar & m_allow_looped_output_links;
-        
-        ar & m_hidden_nodes_activation;
-        ar & m_output_nodes_activation;        
-
-        ar & m_max_weight_and_bias;
-        ar & m_min_time_const;
-        ar & m_max_time_const;
-
-        ar & m_custom_connectivity;
-        ar & m_custom_conn_obeys_flags;
-        ar & m_query_weights_only;
-    }
-    
-#endif
-
 };
-
-#ifdef USE_BOOST_PYTHON
-
-struct Substrate_pickle_suite : py::pickle_suite
-{
-    static py::object getstate(const Substrate& a)
-    {
-        std::ostringstream os;
-        boost::archive::text_oarchive oa(os);
-        oa << a;
-        return py::str(os.str());
-    }
-
-    static void setstate(Substrate& a, py::object entries)
-    {
-        py::str s = py::extract<py::str> (entries)();
-        std::string st = py::extract<std::string> (s)();
-        std::istringstream is(st);
-
-        boost::archive::text_iarchive ia (is);
-        ia >> a;
-    }
-    
-    //static bool getstate_manages_dict() { return true; }
-};
-
-#endif
 
 }
 

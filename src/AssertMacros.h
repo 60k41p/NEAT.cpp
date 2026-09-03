@@ -1,5 +1,5 @@
-#ifndef ASSERT_H
-#define ASSERT_H
+#ifndef MULTINEAT_AssertMacros_h
+#define MULTINEAT_AssertMacros_h
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 //    MultiNEAT - Python/C++ NeuroEvolution of Augmenting Topologies Library

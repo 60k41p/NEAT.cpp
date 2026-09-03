@@ -1,5 +1,4 @@
 #include <cmath>
-#include <Python.h>
 
 #ifndef _INNOVATION_H
 #define _INNOVATION_H
@@ -136,20 +135,6 @@ public:
         return m_NeuronType;
     }
 
-#ifdef USE_BOOST_PYTHON
-        // Serialization
-        friend class boost::serialization::access;
-        template<class Archive>
-        void serialize(Archive & ar, const unsigned int version)
-        {
-            ar & m_ID;
-            ar & m_InnovType;
-            ar & m_FromNeuronID;
-            ar & m_ToNeuronID;
-            ar & m_NeuronType;
-            ar & m_NeuronID;
-        }
-#endif
     };
 
 
@@ -238,18 +223,6 @@ public:
 
     // Saves the database to an already opened file
     void Save(FILE* a_file);
-
-#ifdef USE_BOOST_PYTHON
-        // Serialization
-        friend class boost::serialization::access;
-        template<class Archive>
-        void serialize(Archive & ar, const unsigned int version)
-        {
-            ar & m_NextNeuronID;
-            ar & m_NextInnovationNum;
-            ar & m_Innovations;
-        }
-#endif
 
     };
 

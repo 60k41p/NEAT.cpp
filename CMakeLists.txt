@@ -1,77 +1,90 @@
-cmake_minimum_required(VERSION 3.3)
+cmake_minimum_required(VERSION 3.5)
 project(MultiNEAT)
 
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-if(MINGW OR CYGWIN)
-    add_definitions(-O3)
+# Options
+option(MULTINEAT_BUILD_SHARED "Build the shared library" ON)
+option(MULTINEAT_BUILD_STATIC "Build the static library" ON)
+
+set(Boost_USE_STATIC_LIBS OFF)
+set(Boost_USE_MULTITHREADED ON)
+
+find_package(Boost REQUIRED COMPONENTS date_time serialization)
+
+if(NOT Boost_FOUND)
+    message(FATAL_ERROR "Boost (date_time, serialization) is required to build MultiNEAT")
 endif()
 
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wa,-mbig-obj")
+set(MULTINEAT_SOURCES
+    src/Genome.cpp
+    src/Innovation.cpp
+    src/NeuralNetwork.cpp
+    src/Parameters.cpp
+    src/PhenotypeBehavior.cpp
+    src/Population.cpp
+    src/Random.cpp
+    src/Species.cpp
+    src/Substrate.cpp
+    src/Traits.cpp
+    src/Utils.cpp)
 
-find_package(PythonLibs REQUIRED)
-include(FindPythonLibs)
-#set(Boost_Path "C:/boost/include")
+set(MULTINEAT_HEADERS
+    src/AssertMacros.h
+    src/Genes.h
+    src/Genome.h
+    src/Innovation.h
+    src/NeuralNetwork.h
+    src/Parameters.h
+    src/PhenotypeBehavior.h
+    src/Population.h
+    src/Random.h
+    src/Species.h
+    src/Substrate.h
+    src/Traits.h
+    src/Utils.h)
 
-#set(BOOST_ROOT "C:\\Boost")
-#set(BOOSTROOT "C:\\Boost")
+set(MULTINEAT_TARGETS "")
 
-add_definitions("-DMS_WIN64")
-
-set(Boost_USE_STATIC_LIBS       OFF) # only find static libs
-set(Boost_USE_MULTITHREADED      ON)
-set(Boost_USE_STATIC_RUNTIME   OFF)
-
-find_package(BOOST COMPONENTS REQUIRED
-        system
-        python
-        numpy
-        date_time
-        filesystem
-        serialization)
-
-if(Boost_FOUND)
-    message(STATUS "It works!")
-    include_directories(${Boost_INCLUDE_DIRS})
-    link_directories("C:/Boost/lib")
+if(MULTINEAT_BUILD_STATIC)
+    add_library(MultiNEAT STATIC ${MULTINEAT_SOURCES} ${MULTINEAT_HEADERS})
+    list(APPEND MULTINEAT_TARGETS MultiNEAT)
 endif()
 
+if(MULTINEAT_BUILD_SHARED)
+    add_library(MultiNEAT_shared SHARED ${MULTINEAT_SOURCES} ${MULTINEAT_HEADERS})
+    set_target_properties(MultiNEAT_shared PROPERTIES OUTPUT_NAME MultiNEAT)
+    list(APPEND MULTINEAT_TARGETS MultiNEAT_shared)
+endif()
 
-include_directories(${PYTHON_INCLUDE_DIRS})
+foreach(target IN LISTS MULTINEAT_TARGETS)
+    target_include_directories(${target}
+        PUBLIC
+            $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src>
+            $<INSTALL_INTERFACE:include/MultiNEAT>
+        PRIVATE
+            ${Boost_INCLUDE_DIRS})
 
-add_definitions(-DUSE_BOOST_PYTHON)
-#add_definitions(-DUSE_BOOST_NUMPY)
-add_definitions(-DUSE_BOOST_RANDOM)
-#add_definitions(-DVDEBUG)
+    # USE_BOOST_RANDOM changes the layout of RNG (and classes embedding it, e.g.
+    # Population), so it must be PUBLIC to keep ABI consistency with consumers.
+    target_compile_definitions(${target} PUBLIC USE_BOOST_RANDOM)
 
+    if(UNIX AND NOT APPLE)
+        target_link_libraries(${target} PUBLIC pthread)
+    endif()
 
-add_executable(MultiNEAT ${PROJECT_SOURCE_DIR}/src/Assert.h
-                         ${PROJECT_SOURCE_DIR}/src/Genes.h
-                         ${PROJECT_SOURCE_DIR}/src/Genome.cpp
-                         ${PROJECT_SOURCE_DIR}/src/Genome.h
-                         ${PROJECT_SOURCE_DIR}/src/Innovation.cpp
-                         ${PROJECT_SOURCE_DIR}/src/Innovation.h
-                         ${PROJECT_SOURCE_DIR}/src/Main.cpp
-                         ${PROJECT_SOURCE_DIR}/src/NeuralNetwork.cpp
-                         ${PROJECT_SOURCE_DIR}/src/NeuralNetwork.h
-                         ${PROJECT_SOURCE_DIR}/src/Parameters.cpp
-                         ${PROJECT_SOURCE_DIR}/src/Parameters.h
-                         ${PROJECT_SOURCE_DIR}/src/PhenotypeBehavior.cpp
-                         ${PROJECT_SOURCE_DIR}/src/PhenotypeBehavior.h
-                         ${PROJECT_SOURCE_DIR}/src/Population.cpp
-                         ${PROJECT_SOURCE_DIR}/src/Population.h
-                         ${PROJECT_SOURCE_DIR}/src/PythonBindings.cpp
-                         ${PROJECT_SOURCE_DIR}/src/Random.cpp
-                         ${PROJECT_SOURCE_DIR}/src/Random.h
-                         ${PROJECT_SOURCE_DIR}/src/Species.cpp
-                         ${PROJECT_SOURCE_DIR}/src/Species.h
-                         ${PROJECT_SOURCE_DIR}/src/Substrate.cpp
-                         ${PROJECT_SOURCE_DIR}/src/Substrate.h
-                         ${PROJECT_SOURCE_DIR}/src/Utils.cpp
-                         ${PROJECT_SOURCE_DIR}/src/Utils.h
-                         ${PROJECT_SOURCE_DIR}/src/Traits.h
-                         ${PROJECT_SOURCE_DIR}/src/Traits.cpp)
+    target_link_libraries(${target}
+        PUBLIC
+            ${Boost_LIBRARIES})
+endforeach()
 
-target_link_libraries(MultiNEAT
-        "ws2_32"
-        ${BOOST_LIBRARIES}
-        ${PYTHON_LIBRARIES})
+# Installation
+include(GNUInstallDirs)
+
+install(TARGETS ${MULTINEAT_TARGETS}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+install(FILES ${MULTINEAT_HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/MultiNEAT)

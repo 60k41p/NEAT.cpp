@@ -36,7 +36,7 @@
 #include <string>
 #include <iostream>
 #include "NeuralNetwork.h"
-#include "Assert.h"
+#include "AssertMacros.h"
 #include "Utils.h"
 
 //#define NULL 0
@@ -602,54 +602,6 @@ void NeuralNetwork::Input(std::vector<double>& a_Inputs)
         m_neurons[i].m_activation = a_Inputs[i];
     }
 }
-
-#ifdef USE_BOOST_PYTHON
-
-void NeuralNetwork::Input_python_list(const py::list& a_Inputs)
-{
-    int len = py::len(a_Inputs);
-    std::vector<double> inp;
-    inp.resize(len);
-    for(int i=0; i<len; i++)
-    {
-        inp[i] = py::extract<double>(a_Inputs[i]);
-    }
-
-    // if the number of passed inputs differs from the actual number of inputs,
-    // clip them to fit.
-    if (inp.size() != m_num_inputs)
-    {
-        inp.resize(m_num_inputs);
-    }
-
-    Input(inp);
-}
-
-#ifdef USE_BOOST_NUMPY
-
-void NeuralNetwork::Input_numpy(const pyndarray& a_Inputs)
-{
-    int len = py::len(a_Inputs);
-    std::vector<double> inp;
-    inp.resize(len);
-    for(int i=0; i<len; i++)
-    {
-        inp[i] = py::extract<double>(a_Inputs[i]);
-    }
-
-    // if the number of passed inputs differs from the actual number of inputs,
-    // clip them to fit.
-    if (inp.size() != m_num_inputs)
-    {
-        inp.resize(m_num_inputs);
-    }
-
-    Input(inp);
-}
-
-#endif
-
-#endif
 
 std::vector<double> NeuralNetwork::Output()
 {

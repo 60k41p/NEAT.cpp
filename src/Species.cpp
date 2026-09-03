@@ -603,16 +603,7 @@ namespace NEAT
             t_baby.SetOffspringAmount(0);
 
             t_baby.ResetEvaluated();
-            
-            // Compute the baby's behavior if possible, before it's added to the species
-#ifdef USE_BOOST_PYTHON
-            // is it not None?
-            if (a_Parameters.pyBehaviorGetter.ptr() != py::object().ptr())
-            {
-                t_baby.m_behavior = a_Parameters.pyBehaviorGetter(t_baby);
-            }
-#endif
-    
+
             // Archive the baby if needed
             if (a_Parameters.ArchiveEnforcement)
             {
@@ -900,15 +891,6 @@ namespace NEAT
         t_baby.SetOffspringAmount(0);
 
         t_baby.ResetEvaluated();
-    
-        // Compute the baby's behavior if possible, before it's added to the species
-#ifdef USE_BOOST_PYTHON
-        // is it not None?
-        if (a_Parameters.pyBehaviorGetter.ptr() != py::object().ptr())
-        {
-            t_baby.m_behavior = a_Parameters.pyBehaviorGetter(t_baby);
-        }
-#endif
 
         // In case of archiving, add the new baby to the archive
         if (a_Parameters.ArchiveEnforcement)

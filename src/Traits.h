@@ -11,18 +11,12 @@
 #include <boost/variant.hpp>
 #include <cmath>
 
-#ifdef USE_BOOST_PYTHON
-#include <boost/python.hpp>
-#endif
 #include <boost/archive/text_oarchive.hpp>
 #include <boost/archive/text_iarchive.hpp>
 #include <boost/serialization/vector.hpp>
 #include <boost/shared_ptr.hpp>
 
 namespace bs = boost;
-#ifdef USE_BOOST_PYTHON
-namespace py = bs::python;
-#endif
 
 namespace NEAT
 {
@@ -73,9 +67,6 @@ namespace NEAT
     };
     
     typedef bs::variant<int, double, std::string, intsetelement, floatsetelement
-#ifdef USE_BOOST_PYTHON
-  , py::object
-#endif
     > TraitType;
 
     class IntTraitParameters
@@ -195,9 +186,6 @@ namespace NEAT
                     StringTraitParameters,
                     IntSetTraitParameters,
                     FloatSetTraitParameters
-#ifdef USE_BOOST_PYTHON
-                  , py::object
-#endif
         > m_Details;
 
         std::string dep_key; // counts only if this other trait exists..
