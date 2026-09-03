@@ -1,3 +1,3 @@
 * CMake 3.5 and above
-* A C++11 compiler
-* Boost (headers: any, variant, shared_ptr, graph, random, accumulators; libraries: date_time, serialization)
+* A C++17 compiler
+* No external dependencies (standard library only)

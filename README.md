@@ -14,18 +14,38 @@ NEAT was developed around 2002 by Kenneth Stanley in the University of Texas at 
 
 ### License
 
-GNU Lesser General Public License v3.0 
+GNU Lesser General Public License v3.0
 
 ### Documentation
+
 [http://multineat.com/docs.html](http://multineat.com/docs.html)
 
 ### Requirements
 
 * CMake 3.5 or later
-* A C++11 compiler
-* Boost (headers for `any`, `variant`, `shared_ptr`, `graph`, `random`, `accumulators`; libraries for `date_time` and `serialization`)
+* A C++17 compiler
+* **No external dependencies** (standard library only — Boost is no longer used)
 
-There is **no Python dependency**. This is a pure C++ library.
+### Boost removal
+
+All Boost usage was removed: traits now use `std::variant`/`std::get`, the RNG uses
+`std::mt19937` + `std::` distributions, and cycle detection uses an O(V+E) Kahn rewrite instead of
+`boost::topological_sort`. Public APIs are unchanged, and the produced binaries contain no Boost
+symbols (verified with `nm`/`otool`).
+
+Before/after verification (5-run medians, macOS/AppleClang, BEFORE = Boost build):
+
+| Benchmark | BEFORE (Boost) | AFTER (std-only) |
+| --- | --- | --- |
+| Trait hot-path | 69 ms | 63 ms |
+| Cycle detection | 43 ms | 20 ms |
+| End-to-end evolution | 9 ms | 8 ms |
+| RNG throughput | 348 ms | 957 ms |
+
+Functional equivalence between the builds was verified with an A/B harness (identical pass/fail
+verdicts for all RNG/trait/cycle/evolution checks). The RNG microbenchmark regression is a
+documented libc++ cost (`std::mt19937` and `std::` distributions are slower than Boost's
+implementations); it only affects the artificial pure-draw microbenchmark, not real workloads.
 
 #### To build
 
@@ -53,9 +73,4 @@ then include the library headers:
 #include "Parameters.h"
 ```
 
-> **ABI note:** the build defines `USE_BOOST_RANDOM`, which changes the layout of `RNG` and classes that
-> embed it (e.g. `Population`). When consuming via CMake this define is propagated automatically, but if
-> you build and link manually you **must** compile your sources with `-DUSE_BOOST_RANDOM` (and link against
-> the same Boost libraries) to keep the class layouts consistent with the library.
-
-
+When building and linking manually, compile with `-std=c++17`; no additional libraries are required.

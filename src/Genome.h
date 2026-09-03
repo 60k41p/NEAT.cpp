@@ -30,12 +30,6 @@
 // Description: Definition for the Genome class.
 ///////////////////////////////////////////////////////////////////////////////
 
-#include <boost/shared_ptr.hpp>
-
-#include <boost/graph/graph_traits.hpp>
-#include <boost/graph/adjacency_list.hpp>
-#include <boost/graph/topological_sort.hpp>
-
 #include <vector>
 #include <queue>
 
@@ -62,11 +56,6 @@ namespace NEAT
     class PhenotypeBehavior;
 
     extern ActivationFunction GetRandomActivation(Parameters &a_Parameters, RNG &a_RNG);
-
-    namespace bs = boost;
-
-    typedef bs::adjacency_list <bs::vecS, bs::vecS, bs::directedS> Graph;
-    typedef bs::graph_traits<Graph>::vertex_descriptor Vertex;
 
 	enum GenomeSeedType
 	{

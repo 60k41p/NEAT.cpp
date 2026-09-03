@@ -107,19 +107,19 @@ namespace NEAT
 
                 if (it->second.type == "int")
                 {
-                    IntTraitParameters itp = bs::get<IntTraitParameters>(it->second.m_Details);
+                    IntTraitParameters itp = std::get<IntTraitParameters>(it->second.m_Details);
                     t = a_RNG.RandInt(itp.min, itp.max);
                 }
                 if (it->second.type == "float")
                 {
-                    FloatTraitParameters itp = bs::get<FloatTraitParameters>(it->second.m_Details);
+                    FloatTraitParameters itp = std::get<FloatTraitParameters>(it->second.m_Details);
                     double x = a_RNG.RandFloat();
                     Scale(x, 0, 1, itp.min, itp.max);
                     t = x;
                 }
                 if (it->second.type == "str")
                 {
-                    StringTraitParameters itp = bs::get<StringTraitParameters>(it->second.m_Details);
+                    StringTraitParameters itp = std::get<StringTraitParameters>(it->second.m_Details);
                     std::vector<double> probs = itp.probs;
                     if (itp.set.size() == 0)
                     {
@@ -132,7 +132,7 @@ namespace NEAT
                 }
                 if (it->second.type == "intset")
                 {
-                    IntSetTraitParameters itp = bs::get<IntSetTraitParameters>(it->second.m_Details);
+                    IntSetTraitParameters itp = std::get<IntSetTraitParameters>(it->second.m_Details);
                     std::vector<double> probs = itp.probs;
                     if (itp.set.size() == 0)
                     {
@@ -145,7 +145,7 @@ namespace NEAT
                 }
                 if (it->second.type == "floatset")
                 {
-                    FloatSetTraitParameters itp = bs::get<FloatSetTraitParameters>(it->second.m_Details);
+                    FloatSetTraitParameters itp = std::get<FloatSetTraitParameters>(it->second.m_Details);
                     std::vector<double> probs = itp.probs;
                     if (itp.set.size() == 0)
                     {
@@ -173,7 +173,7 @@ namespace NEAT
                 TraitType mine = m_Traits[it->first].value;
                 TraitType yours = it->second.value;
 
-                if (!(mine.type() == yours.type()))
+                if (mine.index() != yours.index())
                 {
                     //std::cout << "t1:" << mine << " t2:" << yours << "\n";
                     throw std::runtime_error("Types of traits doesn't match");
@@ -187,33 +187,33 @@ namespace NEAT
                     else
                     {
                         // try to average
-                        if (mine.type() == typeid(int))
+                        if (std::holds_alternative<int>(mine))
                         {
-                            int m1 = bs::get<int>(mine);
-                            int m2 = bs::get<int>(yours);
+                            int m1 = std::get<int>(mine);
+                            int m2 = std::get<int>(yours);
                             m_Traits[it->first].value = (m1 + m2) / 2;
                         }
 
-                        if (mine.type() == typeid(double))
+                        if (std::holds_alternative<double>(mine))
                         {
-                            double m1 = bs::get<double>(mine);
-                            double m2 = bs::get<double>(yours);
+                            double m1 = std::get<double>(mine);
+                            double m2 = std::get<double>(yours);
                             m_Traits[it->first].value = (m1 + m2) / 2.0;
                         }
 
-                        if (mine.type() == typeid(std::string))
+                        if (std::holds_alternative<std::string>(mine))
                         {
                             // strings are always either-or
                             m_Traits[it->first].value = (a_RNG.RandFloat() < 0.5) ? mine : yours;
                         }
 
-                        if (mine.type() == typeid(intsetelement))
+                        if (std::holds_alternative<intsetelement>(mine))
                         {
                             // int sets are always either-or
                             m_Traits[it->first].value = (a_RNG.RandFloat() < 0.5) ? mine : yours;
                         }
 
-                        if (mine.type() == typeid(floatsetelement))
+                        if (std::holds_alternative<floatsetelement>(mine))
                         {
                             // float sets are always either-or
                             m_Traits[it->first].value = (a_RNG.RandFloat() < 0.5) ? mine : yours;
@@ -260,13 +260,13 @@ namespace NEAT
                     {
                         if (it->second.type == "int")
                         {
-                            IntTraitParameters itp = bs::get<IntTraitParameters>(it->second.m_Details);
+                            IntTraitParameters itp = std::get<IntTraitParameters>(it->second.m_Details);
         
                             // determine type of mutation - modify or replace, according to parameters
                             if (a_RNG.RandFloat() < itp.mut_replace_prob)
                             {
                                 // replace
-                                int val = bs::get<int>(m_Traits[it->first].value);
+                                int val = std::get<int>(m_Traits[it->first].value);
                                 int cur = val;
                                 while (cur == val)
                                 {
@@ -278,7 +278,7 @@ namespace NEAT
                             else
                             {
                                 // modify
-                                int val = bs::get<int>(m_Traits[it->first].value);
+                                int val = std::get<int>(m_Traits[it->first].value);
                                 int cur = val;
                                 while (cur == val)
                                 {
@@ -291,13 +291,13 @@ namespace NEAT
                         }
                         else if (it->second.type == "float")
                         {
-                            FloatTraitParameters itp = bs::get<FloatTraitParameters>(it->second.m_Details);
+                            FloatTraitParameters itp = std::get<FloatTraitParameters>(it->second.m_Details);
         
                             // determine type of mutation - modify or replace, according to parameters
                             if (a_RNG.RandFloat() < itp.mut_replace_prob)
                             {
                                 // replace
-                                double val = bs::get<double>(m_Traits[it->first].value);
+                                double val = std::get<double>(m_Traits[it->first].value);
                                 double cur = val;
                                 while (cur == val)
                                 {
@@ -310,7 +310,7 @@ namespace NEAT
                             else
                             {
                                 // modify
-                                double val = bs::get<double>(m_Traits[it->first].value);
+                                double val = std::get<double>(m_Traits[it->first].value);
                                 double cur = val;
                                 while (cur == val)
                                 {
@@ -324,10 +324,10 @@ namespace NEAT
                         }
                         else if (it->second.type == "str")
                         {
-                            StringTraitParameters itp = bs::get<StringTraitParameters>(it->second.m_Details);
+                            StringTraitParameters itp = std::get<StringTraitParameters>(it->second.m_Details);
                             std::vector<double> probs = itp.probs;
                             probs.resize(itp.set.size());
-                            std::string cur = bs::get<std::string>(m_Traits[it->first].value);
+                            std::string cur = std::get<std::string>(m_Traits[it->first].value);
                             int idx = a_RNG.Roulette(probs);
         
                             while (cur == itp.set[idx])
@@ -340,10 +340,10 @@ namespace NEAT
                         }
                         else if (it->second.type == "intset")
                         {
-                            IntSetTraitParameters itp = bs::get<IntSetTraitParameters>(it->second.m_Details);
+                            IntSetTraitParameters itp = std::get<IntSetTraitParameters>(it->second.m_Details);
                             std::vector<double> probs = itp.probs;
                             probs.resize(itp.set.size());
-                            intsetelement cur = bs::get<intsetelement>(m_Traits[it->first].value);
+                            intsetelement cur = std::get<intsetelement>(m_Traits[it->first].value);
                             int idx = a_RNG.Roulette(probs);
         
                             while (cur.value == itp.set[idx].value)
@@ -356,10 +356,10 @@ namespace NEAT
                         }
                         else if (it->second.type == "floatset")
                         {
-                            FloatSetTraitParameters itp = bs::get<FloatSetTraitParameters>(it->second.m_Details);
+                            FloatSetTraitParameters itp = std::get<FloatSetTraitParameters>(it->second.m_Details);
                             std::vector<double> probs = itp.probs;
                             probs.resize(itp.set.size());
-                            floatsetelement cur = bs::get<floatsetelement>(m_Traits[it->first].value);
+                            floatsetelement cur = std::get<floatsetelement>(m_Traits[it->first].value);
                             int idx = a_RNG.Roulette(probs);
         
                             while (cur.value == itp.set[idx].value)
@@ -384,7 +384,7 @@ namespace NEAT
                 TraitType mine = m_Traits[it->first].value;
                 TraitType yours = it->second.value;
 
-                if (!(mine.type() == yours.type()))
+                if (mine.index() != yours.index())
                 {
                     throw std::runtime_error("Types of traits don't match");
                 }
@@ -417,20 +417,20 @@ namespace NEAT
 
                 if (doit)
                 {
-                    if (mine.type() == typeid(int))
+                    if (std::holds_alternative<int>(mine))
                     {
                         // distance between ints - calculate directly
-                        dist[it->first] = abs(bs::get<int>(mine) - bs::get<int>(yours));
+                        dist[it->first] = abs(std::get<int>(mine) - std::get<int>(yours));
                     }
-                    if (mine.type() == typeid(double))
+                    if (std::holds_alternative<double>(mine))
                     {
                         // distance between floats - calculate directly
-                        dist[it->first] = abs(bs::get<double>(mine) - bs::get<double>(yours));
+                        dist[it->first] = abs(std::get<double>(mine) - std::get<double>(yours));
                     }
-                    if (mine.type() == typeid(std::string))
+                    if (std::holds_alternative<std::string>(mine))
                     {
                         // distance between strings - matching is 0, non-matching is 1
-                        if (bs::get<std::string>(mine) == bs::get<std::string>(yours))
+                        if (std::get<std::string>(mine) == std::get<std::string>(yours))
                         {
                             dist[it->first] = 0.0;
                         }
@@ -439,15 +439,15 @@ namespace NEAT
                             dist[it->first] = 1.0;
                         }
                     }
-                    if (mine.type() == typeid(intsetelement))
+                    if (std::holds_alternative<intsetelement>(mine))
                     {
                         // distance between ints - calculate directly
-                        dist[it->first] = abs((bs::get<intsetelement>(mine)).value - (bs::get<intsetelement>(yours)).value);
+                        dist[it->first] = abs((std::get<intsetelement>(mine)).value - (std::get<intsetelement>(yours)).value);
                     }
-                    if (mine.type() == typeid(floatsetelement))
+                    if (std::holds_alternative<floatsetelement>(mine))
                     {
                         // distance between floats - calculate directly
-                        dist[it->first] = abs((bs::get<floatsetelement>(mine)).value - (bs::get<floatsetelement>(yours)).value);
+                        dist[it->first] = abs((std::get<floatsetelement>(mine)).value - (std::get<floatsetelement>(yours)).value);
                     }
                 }
             }

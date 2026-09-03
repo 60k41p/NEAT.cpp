@@ -32,11 +32,6 @@
 #include <queue>
 #include <math.h>
 #include <utility>
-#include <boost/unordered_map.hpp>
-#include <boost/shared_ptr.hpp>
-#include <boost/accumulators/accumulators.hpp>
-#include <boost/accumulators/statistics/stats.hpp>
-#include <boost/accumulators/statistics/variance.hpp>
 
 #include "Genome.h"
 #include "Random.h"
@@ -735,27 +730,66 @@ namespace NEAT
     {
         NeuralNetwork net;
         BuildPhenotype(net);
-        bool has_cycles = false;
 
-        // convert the net to a Boost::Graph object
-        Graph g;
+        // Detect directed cycles using Kahn's algorithm (indegree-based
+        // topological sort). If every node cannot be processed, a cycle exists.
+        const int n = static_cast<int>(net.m_neurons.size());
+        std::vector<int> indegree(n, 0);
+
         for (int i = 0; i < net.m_connections.size(); i++)
         {
-            bs::add_edge(net.m_connections[i].m_source_neuron_idx, net.m_connections[i].m_target_neuron_idx, g);
+            int tgt = net.m_connections[i].m_target_neuron_idx;
+            if ((tgt >= 0) && (tgt < n))
+            {
+                indegree[tgt]++;
+            }
         }
 
-        typedef std::vector<Vertex> container;
-        container c;
-        try
+        std::vector<int> stack;
+        for (int i = 0; i < n; i++)
         {
-            bs::topological_sort(g, std::back_inserter(c));
-        }
-        catch (bs::not_a_dag)
-        {
-            has_cycles = true;
+            if (indegree[i] == 0)
+            {
+                stack.push_back(i);
+            }
         }
 
-        return has_cycles;
+        int visited = 0;
+        while (!stack.empty())
+        {
+            int node = stack.back();
+            stack.pop_back();
+            visited++;
+            for (int i = 0; i < net.m_connections.size(); i++)
+            {
+                int src = net.m_connections[i].m_source_neuron_idx;
+                int tgt = net.m_connections[i].m_target_neuron_idx;
+                if (src == node)
+                {
+                    if ((tgt >= 0) && (tgt < n))
+                    {
+                        indegree[tgt]--;
+                        if (indegree[tgt] == 0)
+                        {
+                            stack.push_back(tgt);
+                        }
+                    }
+                }
+            }
+        }
+
+        // A self-loop on a single node (src == tgt) is also a cycle
+        bool self_loop = false;
+        for (int i = 0; i < net.m_connections.size(); i++)
+        {
+            if (net.m_connections[i].m_source_neuron_idx == net.m_connections[i].m_target_neuron_idx)
+            {
+                self_loop = true;
+                break;
+            }
+        }
+
+        return (visited < n) || self_loop;
     }
 
     // Returns true if the specified link is present in the genome
@@ -818,7 +852,7 @@ namespace NEAT
             {
                 try
                 {
-                    t_c.m_hebb_rate = boost::get<double>(m_LinkGenes[i].m_Traits["hebb_rate"].value);
+                    t_c.m_hebb_rate = std::get<double>(m_LinkGenes[i].m_Traits["hebb_rate"].value);
                 }
                 catch(std::exception e)
                 {
@@ -830,7 +864,7 @@ namespace NEAT
             {
                 try
                 {
-                    t_c.m_hebb_pre_rate = boost::get<double>(m_LinkGenes[i].m_Traits["hebb_pre_rate"].value);
+                    t_c.m_hebb_pre_rate = std::get<double>(m_LinkGenes[i].m_Traits["hebb_pre_rate"].value);
                 }
                 catch(std::exception e)
                 {
@@ -3596,25 +3630,25 @@ namespace NEAT
             if (doit)
             {
                 std::cout << t->first << " - ";
-                if (t->second.value.type() == typeid(int))
+                if (std::holds_alternative<int>(t->second.value))
                 {
-                    std::cout << bs::get<int>(t->second.value);
+                    std::cout << std::get<int>(t->second.value);
                 }
-                if (t->second.value.type() == typeid(double))
+                if (std::holds_alternative<double>(t->second.value))
                 {
-                    std::cout << bs::get<double>(t->second.value);
+                    std::cout << std::get<double>(t->second.value);
                 }
-                if (t->second.value.type() == typeid(std::string))
+                if (std::holds_alternative<std::string>(t->second.value))
                 {
-                    std::cout << "\"" << bs::get<std::string>(t->second.value) << "\"";
+                    std::cout << "\"" << std::get<std::string>(t->second.value) << "\"";
                 }
-                if (t->second.value.type() == typeid(intsetelement))
+                if (std::holds_alternative<intsetelement>(t->second.value))
                 {
-                    std::cout << (bs::get<intsetelement>(t->second.value)).value;
+                    std::cout << (std::get<intsetelement>(t->second.value)).value;
                 }
-                if (t->second.value.type() == typeid(floatsetelement))
+                if (std::holds_alternative<floatsetelement>(t->second.value))
                 {
-                    std::cout << (bs::get<floatsetelement>(t->second.value)).value;
+                    std::cout << (std::get<floatsetelement>(t->second.value)).value;
                 }
             
                 std::cout << ", ";
