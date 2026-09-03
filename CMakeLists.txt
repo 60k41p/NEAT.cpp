@@ -1,21 +1,12 @@
 cmake_minimum_required(VERSION 3.5)
 project(MultiNEAT)
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Options
 option(MULTINEAT_BUILD_SHARED "Build the shared library" ON)
 option(MULTINEAT_BUILD_STATIC "Build the static library" ON)
-
-set(Boost_USE_STATIC_LIBS OFF)
-set(Boost_USE_MULTITHREADED ON)
-
-find_package(Boost REQUIRED COMPONENTS date_time serialization)
-
-if(NOT Boost_FOUND)
-    message(FATAL_ERROR "Boost (date_time, serialization) is required to build MultiNEAT")
-endif()
 
 set(MULTINEAT_SOURCES
     src/Genome.cpp
@@ -62,21 +53,11 @@ foreach(target IN LISTS MULTINEAT_TARGETS)
     target_include_directories(${target}
         PUBLIC
             $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src>
-            $<INSTALL_INTERFACE:include/MultiNEAT>
-        PRIVATE
-            ${Boost_INCLUDE_DIRS})
-
-    # USE_BOOST_RANDOM changes the layout of RNG (and classes embedding it, e.g.
-    # Population), so it must be PUBLIC to keep ABI consistency with consumers.
-    target_compile_definitions(${target} PUBLIC USE_BOOST_RANDOM)
+            $<INSTALL_INTERFACE:include/MultiNEAT>)
 
     if(UNIX AND NOT APPLE)
         target_link_libraries(${target} PUBLIC pthread)
     endif()
-
-    target_link_libraries(${target}
-        PUBLIC
-            ${Boost_LIBRARIES})
 endforeach()
 
 # Installation

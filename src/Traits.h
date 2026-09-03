@@ -7,16 +7,8 @@
 
 #include <string>
 #include <vector>
-#include <boost/any.hpp>
-#include <boost/variant.hpp>
+#include <variant>
 #include <cmath>
-
-#include <boost/archive/text_oarchive.hpp>
-#include <boost/archive/text_iarchive.hpp>
-#include <boost/serialization/vector.hpp>
-#include <boost/shared_ptr.hpp>
-
-namespace bs = boost;
 
 namespace NEAT
 {
@@ -66,7 +58,7 @@ namespace NEAT
 
     };
     
-    typedef bs::variant<int, double, std::string, intsetelement, floatsetelement
+    typedef std::variant<int, double, std::string, intsetelement, floatsetelement
     > TraitType;
 
     class IntTraitParameters
@@ -181,7 +173,7 @@ namespace NEAT
         double m_MutationProb;
 
         std::string type; // can be "int", "float", "string", "intset", "floatset", "pyobject"
-        bs::variant<IntTraitParameters,
+        std::variant<IntTraitParameters,
                     FloatTraitParameters,
                     StringTraitParameters,
                     IntSetTraitParameters,
