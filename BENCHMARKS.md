@@ -53,3 +53,22 @@ Population save+load (~15%, disk noise).
 | Date       | Commit | Change                                              | Deltas |
 | ---------- | ------ | --------------------------------------------------- | ------ |
 | 2026-09-15 | (base) | Baseline recorded after rename + test/bugfix commits | —     |
+| 2026-09-15 | optimization | Algorithmic fixes: BuildPhenotype ID-index table, CompatibilityDistance neuron-lookup hoist, HasLoops O(V+E) Kahn, IsDeadEndNeuron type table. XOR solve generations unchanged (30/16/35/41/30) — bit-identical trajectories. | see table below |
+
+## Post-optimization (2026-09-15)
+
+| Benchmark                    | ops   | ns/op     | vs baseline |
+| ---------------------------- | ----- | --------- | ----------- |
+| BuildPhenotype small         | 200k  | 605       | -17%        |
+| BuildPhenotype large         | 2k    | 18,202    | **-89%**    |
+| Activate large net           | 20k   | 4,239     | ~same       |
+| CompatibilityDistance        | 20k   | 10,728    | **-78%**    |
+| Copy+mutate genome           | 50k   | 76,132    | -7%         |
+| Epoch pop100                 | 100   | 857,885   | ~same (noise band 85–113) |
+| XOR solve seed1              | 1     | 136.4 ms  | ~same; still gen 31 |
+| Genome save+load             | 100   | 3,715,181 | ~same       |
+| Population save+load         | 20    | 12,802,737| ~same       |
+
+Rejected: replacing `Mutate_AddLink`'s per-try `HasLink` linear scan with an
+`unordered_set` of existing (from,to) pairs — building the set per call cost
+~2× more than the cache-friendly scans it replaced (Copy+mutate 82→187 µs).

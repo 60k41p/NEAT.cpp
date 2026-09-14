@@ -392,7 +392,7 @@ namespace NEAT {
                 // Start very minimally - connect a random input to each output
                 // Also connect the bias to every output
 
-                std::vector<std::pair<int, int> > made_already;
+                std::vector<std::pair<int, int>> made_already;
                 bool there = false;
                 int linksmade = 0;
 
@@ -612,12 +612,23 @@ namespace NEAT {
         // Detect directed cycles using Kahn's algorithm (indegree-based
         // topological sort). If every node cannot be processed, a cycle exists.
         const int n = static_cast<int>(net.m_neurons.size());
+        const int e = static_cast<int>(net.m_connections.size());
         std::vector<int> indegree(n, 0);
+        // Flat out-adjacency (head/next chains) so each edge is visited once
+        // overall instead of once per popped node (was O(nodes x edges)); two
+        // vector allocations regardless of graph size.
+        std::vector<int> t_head(n, -1);
+        std::vector<int> t_next(e, -1);
 
-        for (int i = 0; i < net.m_connections.size(); i++) {
+        for (int i = 0; i < e; i++) {
+            int src = net.m_connections[i].m_source_neuron_idx;
             int tgt = net.m_connections[i].m_target_neuron_idx;
             if ((tgt >= 0) && (tgt < n)) {
                 indegree[tgt]++;
+                if ((src >= 0) && (src < n)) {
+                    t_next[i] = t_head[src];
+                    t_head[src] = i;
+                }
             }
         }
 
@@ -633,16 +644,11 @@ namespace NEAT {
             int node = stack.back();
             stack.pop_back();
             visited++;
-            for (int i = 0; i < net.m_connections.size(); i++) {
-                int src = net.m_connections[i].m_source_neuron_idx;
-                int tgt = net.m_connections[i].m_target_neuron_idx;
-                if (src == node) {
-                    if ((tgt >= 0) && (tgt < n)) {
-                        indegree[tgt]--;
-                        if (indegree[tgt] == 0) {
-                            stack.push_back(tgt);
-                        }
-                    }
+            for (int k = t_head[node]; k != -1; k = t_next[k]) {
+                int tgt = net.m_connections[k].m_target_neuron_idx;
+                indegree[tgt]--;
+                if (indegree[tgt] == 0) {
+                    stack.push_back(tgt);
                 }
             }
         }
@@ -678,9 +684,22 @@ namespace NEAT {
         a_Net.Clear();
         a_Net.SetInputOutputDimentions(m_NumInputs, m_NumOutputs);
 
+        // Build an ID->index table once so the connection loop below resolves
+        // endpoints in O(1); the previous GetNeuronIndex() rescans made this
+        // O(links x neurons).
+        int t_max_id = 0;
+        for (unsigned int i = 0; i < NumNeurons(); i++) {
+            if (m_NeuronGenes[i].ID() > t_max_id) {
+                t_max_id = m_NeuronGenes[i].ID();
+            }
+        }
+        std::vector<int> t_id_to_index(static_cast<size_t>(t_max_id) + 1, -1);
+
         // Fill the net with the neurons
         for (unsigned int i = 0; i < NumNeurons(); i++) {
             Neuron t_n;
+
+            t_id_to_index[static_cast<size_t>(m_NeuronGenes[i].ID())] = static_cast<int>(i);
 
             t_n.m_a = m_NeuronGenes[i].m_A;
             t_n.m_b = m_NeuronGenes[i].m_B;
@@ -697,8 +716,10 @@ namespace NEAT {
         for (unsigned int i = 0; i < NumLinks(); i++) {
             Connection t_c;
 
-            t_c.m_source_neuron_idx = GetNeuronIndex(m_LinkGenes[i].FromNeuronID());
-            t_c.m_target_neuron_idx = GetNeuronIndex(m_LinkGenes[i].ToNeuronID());
+            const int t_from = m_LinkGenes[i].FromNeuronID();
+            const int t_to = m_LinkGenes[i].ToNeuronID();
+            t_c.m_source_neuron_idx = (t_from >= 0 && t_from <= t_max_id) ? t_id_to_index[static_cast<size_t>(t_from)] : GetNeuronIndex(t_from);
+            t_c.m_target_neuron_idx = (t_to >= 0 && t_to <= t_max_id) ? t_id_to_index[static_cast<size_t>(t_to)] : GetNeuronIndex(t_to);
             t_c.m_weight = m_LinkGenes[i].GetWeight();
             t_c.m_recur_flag = m_LinkGenes[i].IsRecurrent();
 
@@ -864,7 +885,7 @@ namespace NEAT {
         }
 
         // list of src_idx, dst_idx pairs of all connections to query
-        std::vector<std::vector<int> > t_to_query;
+        std::vector<std::vector<int>> t_to_query;
 
         // There isn't custom connectiviy scheme?
         if (subst.m_custom_connectivity.size() == 0) {
@@ -1159,47 +1180,63 @@ namespace NEAT {
         }
 
         // find matching neuron IDs
+        // One ID->index table for the other genome (instead of HasNeuronID +
+        // repeated GetNeuronByID linear rescans per matched neuron, which made
+        // this loop quadratic).
+        int t_other_max_id = 0;
+        for (unsigned int i = 0; i < a_G.NumNeurons(); i++) {
+            if (a_G.m_NeuronGenes[i].ID() > t_other_max_id) {
+                t_other_max_id = a_G.m_NeuronGenes[i].ID();
+            }
+        }
+        std::vector<int> t_other_index(static_cast<size_t>(t_other_max_id) + 1, -1);
+        for (unsigned int i = 0; i < a_G.NumNeurons(); i++) {
+            t_other_index[static_cast<size_t>(a_G.m_NeuronGenes[i].ID())] = static_cast<int>(i);
+        }
+
         for (unsigned int i = NumInputs(); i < NumNeurons(); i++) {
             // no inputs considered for comparison
             if ((m_NeuronGenes[i].Type() != INPUT) && (m_NeuronGenes[i].Type() != BIAS)) {
+                const int t_id = m_NeuronGenes[i].ID();
+                const int t_oi = (t_id >= 0 && t_id <= t_other_max_id) ? t_other_index[static_cast<size_t>(t_id)] : -1;
                 // a match
-                if (a_G.HasNeuronID(m_NeuronGenes[i].ID())) {
+                if (t_oi != -1) {
+                    const NeuronGene &t_other_gene = a_G.m_NeuronGenes[static_cast<size_t>(t_oi)];
                     t_num_matching_neurons++;
 
                     if (a_Parameters.ActivationADiffCoeff > 0.0) {
-                        double t_A_difference = m_NeuronGenes[i].m_A - a_G.GetNeuronByID(m_NeuronGenes[i].ID()).m_A;
+                        double t_A_difference = m_NeuronGenes[i].m_A - t_other_gene.m_A;
                         if (t_A_difference < 0.0f) t_A_difference = -t_A_difference;
                         t_total_A_difference += t_A_difference;
                     }
 
                     if (a_Parameters.ActivationBDiffCoeff > 0.0) {
-                        double t_B_difference = m_NeuronGenes[i].m_B - a_G.GetNeuronByID(m_NeuronGenes[i].ID()).m_B;
+                        double t_B_difference = m_NeuronGenes[i].m_B - t_other_gene.m_B;
                         if (t_B_difference < 0.0f) t_B_difference = -t_B_difference;
                         t_total_B_difference += t_B_difference;
                     }
 
                     if (a_Parameters.TimeConstantDiffCoeff > 0.0) {
-                        double t_time_constant_difference = m_NeuronGenes[i].m_TimeConstant - a_G.GetNeuronByID(m_NeuronGenes[i].ID()).m_TimeConstant;
+                        double t_time_constant_difference = m_NeuronGenes[i].m_TimeConstant - t_other_gene.m_TimeConstant;
                         if (t_time_constant_difference < 0.0f) t_time_constant_difference = -t_time_constant_difference;
                         t_total_timeconstant_difference += t_time_constant_difference;
                     }
 
                     if (a_Parameters.BiasDiffCoeff > 0.0) {
-                        double t_bias_difference = m_NeuronGenes[i].m_Bias - a_G.GetNeuronByID(m_NeuronGenes[i].ID()).m_Bias;
+                        double t_bias_difference = m_NeuronGenes[i].m_Bias - t_other_gene.m_Bias;
                         if (t_bias_difference < 0.0f) t_bias_difference = -t_bias_difference;
                         t_total_bias_difference += t_bias_difference;
                     }
 
                     // Activation function type difference is found
                     if (a_Parameters.ActivationFunctionDiffCoeff > 0.0) {
-                        if (m_NeuronGenes[i].m_ActFunction != a_G.GetNeuronByID(m_NeuronGenes[i].ID()).m_ActFunction) {
+                        if (m_NeuronGenes[i].m_ActFunction != t_other_gene.m_ActFunction) {
                             t_total_num_activation_difference++;
                         }
                     }
 
                     // calculate and add node trait difference here
-                    std::map<std::string, double> neuron_trait_difference =
-                        m_NeuronGenes[i].GetTraitDistances(a_G.GetNeuronByID(m_NeuronGenes[i].ID()).m_Traits);
+                    std::map<std::string, double> neuron_trait_difference = m_NeuronGenes[i].GetTraitDistances(t_other_gene.m_Traits);
                     // add to the totals
                     for (auto it = neuron_trait_difference.begin(); it != neuron_trait_difference.end(); it++) {
                         if (t_total_neuron_trait_difference.count(it->first) == 0) {
@@ -1836,17 +1873,31 @@ namespace NEAT {
         bool t_no_incoming = true;
         bool t_no_outgoing = true;
 
+        // ID->type table so the link scan below does not rescan the neuron list
+        // for every connection (was O(links x neurons) per query).
+        int t_max_id = 0;
+        for (unsigned int i = 0; i < NumNeurons(); i++) {
+            if (m_NeuronGenes[i].ID() > t_max_id) {
+                t_max_id = m_NeuronGenes[i].ID();
+            }
+        }
+        std::vector<int> t_id_to_type(static_cast<size_t>(t_max_id) + 1, -1);
+        for (unsigned int i = 0; i < NumNeurons(); i++) {
+            t_id_to_type[static_cast<size_t>(m_NeuronGenes[i].ID())] = static_cast<int>(m_NeuronGenes[i].Type());
+        }
+
         // search the links and prove both are wrong
         for (unsigned int i = 0; i < NumLinks(); i++) {
+            const int t_from = m_LinkGenes[i].FromNeuronID();
+            const int t_from_type =
+                (t_from >= 0 && t_from <= t_max_id) ? t_id_to_type[static_cast<size_t>(t_from)] : static_cast<int>(GetNeuronByID(t_from).Type());
             // there is a link going to this neuron, so there are incoming don't count the link if it is recurrent or coming from a bias
-            if ((m_LinkGenes[i].ToNeuronID() == a_ID) && (!m_LinkGenes[i].IsLoopedRecurrent()) &&
-                (GetNeuronByID(m_LinkGenes[i].FromNeuronID()).Type() != BIAS)) {
+            if ((m_LinkGenes[i].ToNeuronID() == a_ID) && (!m_LinkGenes[i].IsLoopedRecurrent()) && (t_from_type != static_cast<int>(BIAS))) {
                 t_no_incoming = false;
             }
 
             // there is a link going from this neuron, so there are outgoing don't count the link if it is recurrent or coming from a bias
-            if ((m_LinkGenes[i].FromNeuronID() == a_ID) && (!m_LinkGenes[i].IsLoopedRecurrent()) &&
-                (GetNeuronByID(m_LinkGenes[i].FromNeuronID()).Type() != BIAS)) {
+            if ((m_LinkGenes[i].FromNeuronID() == a_ID) && (!m_LinkGenes[i].IsLoopedRecurrent()) && (t_from_type != static_cast<int>(BIAS))) {
                 t_no_outgoing = false;
             }
         }
