@@ -1,3 +1,5 @@
+[![CI](https://github.com/60k41p/MultiNEAT/actions/workflows/ci.yml/badge.svg)](https://github.com/60k41p/MultiNEAT/actions/workflows/ci.yml)
+
 # MultiNEAT
 
 MultiNEAT is a portable C++17 library for neuroevolution — training neural networks with a genetic algorithm. It is based on NEAT, which evolves both topology and weights through complexification from minimal genomes, historical markings for crossover alignment, and speciation with fitness sharing.
