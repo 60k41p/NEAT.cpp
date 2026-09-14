@@ -8,6 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(NEATCPP_BUILD_SHARED "Build the shared library" ON)
 option(NEATCPP_BUILD_STATIC "Build the static library" ON)
 option(NEATCPP_ENABLE_TESTS "Build the unit test harness" ON)
+option(NEATCPP_ENABLE_BENCHMARKS "Build the benchmark harness" OFF)
 
 set(NEATCPP_SOURCES
     src/Genome.cpp
@@ -77,4 +78,8 @@ install(FILES ${NEATCPP_HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/NEAT.cp
 include(CTest)
 if(BUILD_TESTING AND NEATCPP_ENABLE_TESTS)
     add_subdirectory(tests)
+endif()
+
+if(NEATCPP_ENABLE_BENCHMARKS)
+    add_subdirectory(benchmarks)
 endif()
