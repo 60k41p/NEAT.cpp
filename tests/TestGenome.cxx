@@ -177,11 +177,11 @@ int TestGenome(int argc, char *argv[]) {
     {
         Genome g = MakeSeed(3, 1);
         g.SetID(4242);
-        g.Randomize_LinkWeights(DefaultParams(), [] {
-            RNG r;
-            r.Seed(3);
-            return r;
-        }());
+        // NOTE: named RNG required here; binding a temporary to the
+        // non-const RNG& parameter is an MSVC extension GCC rejects.
+        RNG rng;
+        rng.Seed(3);
+        g.Randomize_LinkWeights(DefaultParams(), rng);
         const auto tmp = std::filesystem::temp_directory_path() / "multineat_test_genome.txt";
         g.Save(tmp.string().c_str());
 
