@@ -1,3 +1,0 @@
-* CMake 3.5 and above
-* A C++17 compiler
-* No external dependencies (standard library only)

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.16)
 project(MultiNEAT)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Options
 option(MULTINEAT_BUILD_SHARED "Build the shared library" ON)
 option(MULTINEAT_BUILD_STATIC "Build the static library" ON)
+option(MULTINEAT_ENABLE_TESTS "Build the unit test harness" ON)
 
 set(MULTINEAT_SOURCES
     src/Genome.cpp
@@ -69,3 +70,10 @@ install(TARGETS ${MULTINEAT_TARGETS}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 install(FILES ${MULTINEAT_HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/MultiNEAT)
+
+# Testing (see Mastering CMake: Testing With CMake and CTest).
+# include(CTest) provides BUILD_TESTING and dashboard support.
+include(CTest)
+if(BUILD_TESTING AND MULTINEAT_ENABLE_TESTS)
+    add_subdirectory(tests)
+endif()

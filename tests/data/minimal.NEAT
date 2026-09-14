@@ -1,0 +1,16 @@
+NEAT_ParametersStart
+PopulationSize 20
+Speciation true
+DynamicCompatibility true
+MinSpecies 2
+MaxSpecies 5
+InnovationsForever true
+AllowClones true
+CompatTreshold 4.25
+MinCompatTreshold 0.2
+SurvivalRate 0.3
+CrossoverRate 0.7
+MutateAddNeuronProb 0.05
+MutateAddLinkProb 0.1
+MutateWeightsProb 0.8
+NEAT_ParametersEnd

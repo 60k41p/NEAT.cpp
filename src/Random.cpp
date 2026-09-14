@@ -27,75 +27,62 @@
 // Description: Definition for a class dealing with random numbers.
 ///////////////////////////////////////////////////////////////////////////////
 
+#include "Random.h"
 
 #include <math.h>
+
 #include <chrono>
-#include "Random.h"
+
 #include "Utils.h"
 
-namespace NEAT
-{
+namespace NEAT {
 
+    // Seeds the random number generator with this value
+    void RNG::Seed(long a_Seed) { gen.seed(a_Seed); }
 
-// Seeds the random number generator with this value
-void RNG::Seed(long a_Seed)
-{
-    gen.seed(a_Seed);
-}
+    void RNG::TimeSeed() {
+        auto now = std::chrono::system_clock::now().time_since_epoch();
+        long ms = (long)std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+        Seed(ms);
+    }
 
-void RNG::TimeSeed()
-{
-    auto now = std::chrono::system_clock::now().time_since_epoch();
-    long ms = (long)std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
-    Seed(ms);
-}
+    // Returns randomly either 1 or -1
+    int RNG::RandPosNeg() {
+        std::uniform_int_distribution<int> dist(0, 1);
+        int choice = dist(gen);
+        if (choice == 0)
+            return -1;
+        else
+            return 1;
+    }
 
-// Returns randomly either 1 or -1
-int RNG::RandPosNeg()
-{
-    std::uniform_int_distribution<int> dist(0, 1);
-    int choice = dist(gen);
-    if (choice == 0)
-        return -1;
-    else
-        return 1;
-}
+    // Returns a random integer between X and Y
+    int RNG::RandInt(int aX, int aY) {
+        std::uniform_int_distribution<int> dist(aX, aY);
+        return dist(gen);
+    }
 
-// Returns a random integer between X and Y
-int RNG::RandInt(int aX, int aY)
-{
-    std::uniform_int_distribution<int> dist(aX, aY);
-    return dist(gen);
-}
+    // Returns a random number from a uniform distribution in the range of [0 .. 1]
+    double RNG::RandFloat() {
+        std::uniform_real_distribution<double> dist(0.0, 1.0);
+        return dist(gen);
+    }
 
-// Returns a random number from a uniform distribution in the range of [0 .. 1]
-double RNG::RandFloat()
-{
-    std::uniform_real_distribution<double> dist(0.0, 1.0);
-    return dist(gen);
-}
+    // Returns a random number from a uniform distribution in the range of [-1 .. 1]
+    double RNG::RandFloatSigned() { return (RandFloat() - RandFloat()); }
 
-// Returns a random number from a uniform distribution in the range of [-1 .. 1]
-double RNG::RandFloatSigned()
-{
-    return (RandFloat() - RandFloat());
-}
+    // Returns a random number from a gaussian (normal) distribution in the range of [-1 .. 1]
+    double RNG::RandGaussSigned() {
+        std::normal_distribution<double> dist;
+        double pick = dist(gen);
+        Clamp(pick, -1, 1);
+        return pick;
+    }
 
-// Returns a random number from a gaussian (normal) distribution in the range of [-1 .. 1]
-double RNG::RandGaussSigned()
-{
-    std::normal_distribution<double> dist;
-    double pick = dist(gen);
-    Clamp(pick, -1, 1);
-    return pick;
-}
+    int RNG::Roulette(std::vector<double> &a_probs) {
+        std::discrete_distribution<int> d_dist(a_probs.begin(), a_probs.end());
+        return d_dist(gen);
+    }
 
-int RNG::Roulette(std::vector<double>& a_probs)
-{
-    std::discrete_distribution<int> d_dist(a_probs.begin(), a_probs.end());
-    return d_dist(gen);
-}
-
-
-}
- // namespace NEAT
+}  // namespace NEAT
+   // namespace NEAT

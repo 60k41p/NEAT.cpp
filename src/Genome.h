@@ -30,19 +30,18 @@
 // Description: Definition for the Genome class.
 ///////////////////////////////////////////////////////////////////////////////
 
-#include <vector>
 #include <queue>
+#include <vector>
 
-#include "NeuralNetwork.h"
-#include "Substrate.h"
-#include "Innovation.h"
-#include "Genes.h"
 #include "AssertMacros.h"
+#include "Genes.h"
+#include "Innovation.h"
+#include "NeuralNetwork.h"
 #include "PhenotypeBehavior.h"
 #include "Random.h"
+#include "Substrate.h"
 
-namespace NEAT
-{
+namespace NEAT {
 
     //////////////////////////////////////////////
     // The Genome class
@@ -57,50 +56,41 @@ namespace NEAT
 
     extern ActivationFunction GetRandomActivation(Parameters &a_Parameters, RNG &a_RNG);
 
-	enum GenomeSeedType
-	{
-		PERCEPTRON = 0,
-		LAYERED = 1
-	};
+    enum GenomeSeedType { PERCEPTRON = 0, LAYERED = 1 };
 
-	class GenomeInitStruct
-	{
-	public:
-		int NumInputs;
-		int NumHidden; // ignored for seed_type == 0, specifies number of hidden units if seed_type == 1
-		int NumOutputs;
-		bool FS_NEAT;
-		ActivationFunction OutputActType;
-		ActivationFunction HiddenActType;
-		GenomeSeedType SeedType;
-		int NumLayers;
-		int FS_NEAT_links;
+    class GenomeInitStruct {
+       public:
+        int NumInputs;
+        int NumHidden;  // ignored for seed_type == 0, specifies number of hidden units if seed_type == 1
+        int NumOutputs;
+        bool FS_NEAT;
+        ActivationFunction OutputActType;
+        ActivationFunction HiddenActType;
+        GenomeSeedType SeedType;
+        int NumLayers;
+        int FS_NEAT_links;
 
-		GenomeInitStruct()
-		{
-			NumInputs = 1;
-			NumHidden = 0;
-			NumOutputs = 1;
-			FS_NEAT = 0;
-			FS_NEAT_links = 1;
-			HiddenActType = UNSIGNED_SIGMOID;
-			OutputActType = UNSIGNED_SIGMOID;
-			SeedType = GenomeSeedType::PERCEPTRON;
-			NumLayers = 0;
-		}
-	};
+        GenomeInitStruct() {
+            NumInputs = 1;
+            NumHidden = 0;
+            NumOutputs = 1;
+            FS_NEAT = 0;
+            FS_NEAT_links = 1;
+            HiddenActType = UNSIGNED_SIGMOID;
+            OutputActType = UNSIGNED_SIGMOID;
+            SeedType = GenomeSeedType::PERCEPTRON;
+            NumLayers = 0;
+        }
+    };
 
-
-    class Genome
-    {
+    class Genome {
         /////////////////////
         // Members
         /////////////////////
-    private:
-
+       private:
         // ID of genome
         int m_ID;
-        
+
         // How many inputs/outputs
         int m_NumInputs;
         int m_NumOutputs;
@@ -148,8 +138,7 @@ namespace NEAT
         // Returns true is the specified neuron ID is a dead end or isolated
         bool IsDeadEndNeuron(int a_id) const;
 
-    public:
-
+       public:
         // The two lists of genes
         std::vector<NeuronGene> m_NeuronGenes;
         std::vector<LinkGene> m_LinkGenes;
@@ -183,10 +172,7 @@ namespace NEAT
 
         // comparison operator (nessesary for boost::python)
         // todo: implement a better comparison technique
-        bool operator==(Genome const &other) const
-        {
-            return m_ID == other.m_ID;
-        }
+        bool operator==(Genome const &other) const { return m_ID == other.m_ID; }
 
         // Builds this genome from a file
         Genome(const char *a_filename);
@@ -196,21 +182,18 @@ namespace NEAT
 
         // This creates a CTRNN fully-connected genome
 
-        //Genome(int a_ID, int a_NumInputs, int a_NumHidden, int a_NumOutputs,
-        //      ActivationFunction a_OutputActType, ActivationFunction a_HiddenActType, const Parameters &a_Parameters);
-
-        //Genome(unsigned int a_ID, unsigned int a_NumInputs, unsigned int a_NumHidden, unsigned int a_NumOutputs,
+        // Genome(int a_ID, int a_NumInputs, int a_NumHidden, int a_NumOutputs,
         //       ActivationFunction a_OutputActType, ActivationFunction a_HiddenActType, const Parameters &a_Parameters);
 
+        // Genome(unsigned int a_ID, unsigned int a_NumInputs, unsigned int a_NumHidden, unsigned int a_NumOutputs,
+        //        ActivationFunction a_OutputActType, ActivationFunction a_HiddenActType, const Parameters &a_Parameters);
 
         // This creates a standart minimal genome - perceptron-like structure
-        Genome(const Parameters &a_Parameters,
-			   const GenomeInitStruct &init_struct);
+        Genome(const Parameters &a_Parameters, const GenomeInitStruct &init_struct);
 
         /////////////
         // Other possible constructors for different types of networks go here
         // TODO
-
 
         ////////////////////////////
         // Destructor
@@ -237,17 +220,13 @@ namespace NEAT
         // A little helper function to find the index of a link, given its innovation ID
         int GetLinkIndex(int a_innovid) const;
 
-        unsigned int NumNeurons() const
-        { return static_cast<unsigned int>(m_NeuronGenes.size()); }
+        unsigned int NumNeurons() const { return static_cast<unsigned int>(m_NeuronGenes.size()); }
 
-        unsigned int NumLinks() const
-        { return static_cast<unsigned int>(m_LinkGenes.size()); }
+        unsigned int NumLinks() const { return static_cast<unsigned int>(m_LinkGenes.size()); }
 
-        unsigned int NumInputs() const
-        { return m_NumInputs; }
+        unsigned int NumInputs() const { return m_NumInputs; }
 
-        unsigned int NumOutputs() const
-        { return m_NumOutputs; }
+        unsigned int NumOutputs() const { return m_NumOutputs; }
 
         void SetNeuronXY(unsigned int a_idx, int a_x, int a_y);
 
@@ -264,7 +243,7 @@ namespace NEAT
         void SetAdjFitness(double a_af);
 
         int GetID() const;
-        
+
         void SetID(int a_id);
 
         unsigned int GetDepth() const;
@@ -277,26 +256,20 @@ namespace NEAT
         // Returns true if there is any looping path in the network
         bool HasLoops();
 
-        bool FailsConstraints(const Parameters &a_Parameters)
-        {
+        bool FailsConstraints(const Parameters &a_Parameters) {
             bool fails = false;
 
-            if (HasDeadEnds() || (NumLinks() == 0))
-            {
-                return true; // no reason to continue
+            if (HasDeadEnds() || (NumLinks() == 0)) {
+                return true;  // no reason to continue
             }
 
-
-            if ((HasLoops() && (a_Parameters.AllowLoops == false)))
-            {
+            if ((HasLoops() && (a_Parameters.AllowLoops == false))) {
                 return true;
             }
 
             // Custom constraints
-            if (a_Parameters.CustomConstraints != NULL)
-            {
-                if (a_Parameters.CustomConstraints(*this))
-                {
+            if (a_Parameters.CustomConstraints != NULL) {
+                if (a_Parameters.CustomConstraints(*this)) {
                     return true;
                 }
             }
@@ -327,7 +300,7 @@ namespace NEAT
         // Saves this genome to an already opened file for writing
         void Save(FILE *a_fstream);
 
-        void PrintTraits(std::map< std::string, Trait>& traits);
+        void PrintTraits(std::map<std::string, Trait> &traits);
         void PrintAllTraits();
 
         // returns the max neuron ID
@@ -341,10 +314,7 @@ namespace NEAT
         void SortGenes();
 
         // overload '<' used for sorting. From fittest to poorest.
-        friend bool operator<(const Genome &a_lhs, const Genome &a_rhs)
-        {
-            return (a_lhs.m_Fitness > a_rhs.m_Fitness);
-        }
+        friend bool operator<(const Genome &a_lhs, const Genome &a_rhs) { return (a_lhs.m_Fitness > a_rhs.m_Fitness); }
 
         // Returns true if this genome and a_G are compatible (belong in the same species)
         bool IsCompatibleWith(Genome &a_G, Parameters &a_Parameters);
@@ -383,7 +353,7 @@ namespace NEAT
         void Randomize_LinkWeights(const Parameters &a_Parameters, RNG &a_RNG);
 
         // Set all traits to random values
-        void Randomize_Traits(const Parameters& a_Parameters, RNG &a_RNG);
+        void Randomize_Traits(const Parameters &a_Parameters, RNG &a_RNG);
 
         // Perturbs the A parameters of the neuron activation functions
         bool Mutate_NeuronActivations_A(const Parameters &a_Parameters, RNG &a_RNG);
@@ -413,14 +383,12 @@ namespace NEAT
         // Mating
         ///////////
 
-
         // Mate this genome with dad and return the baby
         // If this is multipoint mating, genes are inherited randomly
         // If the a_averagemating bool is true, then the genes are averaged
         // Disjoint and excess genes are inherited from the fittest parent
         // If fitness is equal, the smaller genome is assumed to be the better one
         Genome Mate(Genome &a_dad, bool a_averagemating, bool a_interspecies, RNG &a_RNG, Parameters &a_Parameters);
-
 
         //////////
         // Utility
@@ -438,7 +406,7 @@ namespace NEAT
 
         void ResetEvaluated();
 
-#if 0 // disabling because of errors I can't fix right now
+#if 0  // disabling because of errors I can't fix right now
 
         /////////////////////////////////////////////
         // Evolvable Substrate HyperNEAT
@@ -644,10 +612,11 @@ namespace NEAT
 #endif
     };
 
+#define DBG(x)                       \
+    {                                \
+        std::cerr << x << std::endl; \
+    }
 
-#define DBG(x) { std::cerr << x << std::endl; }
-
-
-} // namespace NEAT
+}  // namespace NEAT
 
 #endif
