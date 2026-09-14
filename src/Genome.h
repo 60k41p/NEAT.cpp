@@ -2,7 +2,7 @@
 #define _GENOME_H
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-//    MultiNEAT - Python/C++ NeuroEvolution of Augmenting Topologies Library
+//    NEAT.cpp - C++ NeuroEvolution of Augmenting Topologies Library
 //
 //    Copyright (C) 2012 Peter Chervenski
 //

@@ -1,8 +1,8 @@
-[![CI](https://github.com/60k41p/MultiNEAT/actions/workflows/ci.yml/badge.svg)](https://github.com/60k41p/MultiNEAT/actions/workflows/ci.yml)
+[![CI](https://github.com/60k41p/NEAT.cpp/actions/workflows/ci.yml/badge.svg)](https://github.com/60k41p/NEAT.cpp/actions/workflows/ci.yml)
 
-# MultiNEAT
+# NEAT.cpp
 
-MultiNEAT is a portable C++17 library for neuroevolution — training neural networks with a genetic algorithm. It is based on NEAT, which evolves both topology and weights through complexification from minimal genomes, historical markings for crossover alignment, and speciation with fitness sharing.
+NEAT.cpp is a portable C++17 library for neuroevolution — training neural networks with a genetic algorithm. It is based on NEAT, which evolves both topology and weights through complexification from minimal genomes, historical markings for crossover alignment, and speciation with fitness sharing.
 
 * Kenneth O. Stanley and Risto Miikkulainen, "Evolving Neural Networks through Augmenting Topologies," *Evolutionary Computation* 10(2), 2002. PDF: <https://nn.cs.utexas.edu/downloads/papers/stanley.ec02.pdf>
 
@@ -28,7 +28,7 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 
-This produces both a static library (`libMultiNEAT.a`) and a shared library (`libMultiNEAT.dylib`/`.so`/`.dll`), and installs them together with the headers:
+This produces both a static library (`libNEAT.a`) and a shared library (`libNEAT.dylib`/`.so`/`.dll`), and installs them together with the headers:
 
 ```bash
 cmake --install build
@@ -38,7 +38,7 @@ When building and linking manually, compile with `-std=c++17`.
 
 ### Usage
 
-Add MultiNEAT as a CMake subdirectory and link against `MultiNEAT` (static) or `MultiNEAT_shared` (shared), then include the library headers:
+Add NEAT.cpp as a CMake subdirectory and link against `NEAT.cpp` (static) or `NEAT.cpp_shared` (shared), then include the library headers:
 
 ```cpp
 #include "Genome.h"

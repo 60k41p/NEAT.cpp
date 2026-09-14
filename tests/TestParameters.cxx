@@ -114,7 +114,7 @@ int TestParameters(int argc, char *argv[]) {
 
     // Loading the curated minimal fixture works and overrides Reset values.
     {
-        const std::filesystem::path fixture = std::filesystem::path(MULTINEAT_TEST_DATA_DIR) / "minimal.NEAT";
+        const std::filesystem::path fixture = std::filesystem::path(NEATCPP_TEST_DATA_DIR) / "minimal.NEAT";
         CHECK(std::filesystem::exists(fixture));
         Parameters p;
         p.Reset();

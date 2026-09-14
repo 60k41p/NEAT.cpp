@@ -2,8 +2,8 @@
 // Created by peter on 28.04.17.
 //
 
-#ifndef MULTINEAT_TRAITS_H
-#define MULTINEAT_TRAITS_H
+#ifndef NEATCPP_TRAITS_H
+#define NEATCPP_TRAITS_H
 
 #include <cmath>
 #include <string>
@@ -196,4 +196,4 @@ namespace NEAT {
     };
 
 }  // namespace NEAT
-#endif  // MULTINEAT_TRAITS_H
+#endif  // NEATCPP_TRAITS_H

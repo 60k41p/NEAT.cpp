@@ -1,8 +1,8 @@
-#ifndef MULTINEAT_AssertMacros_h
-#define MULTINEAT_AssertMacros_h
+#ifndef NEATCPP_AssertMacros_h
+#define NEATCPP_AssertMacros_h
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-//    MultiNEAT - Python/C++ NeuroEvolution of Augmenting Topologies Library
+//    NEAT.cpp - C++ NeuroEvolution of Augmenting Topologies Library
 //
 //    Copyright (C) 2012 Peter Chervenski
 //

@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DMULTINEAT_ENABLE_TESTS=ON
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DNEATCPP_ENABLE_TESTS=ON
 
       - name: Build
         run: cmake --build build --config ${{ matrix.build_type }} -j 2
@@ -39,7 +39,7 @@ jobs:
         run: >
           cmake -S . -B build-san
           -DCMAKE_BUILD_TYPE=Debug
-          -DMULTINEAT_ENABLE_TESTS=ON
+          -DNEATCPP_ENABLE_TESTS=ON
           -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
           -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
           -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
@@ -71,7 +71,7 @@ jobs:
         run: >
           cmake -S . -B build-cov
           -DCMAKE_BUILD_TYPE=Debug
-          -DMULTINEAT_ENABLE_TESTS=ON
+          -DNEATCPP_ENABLE_TESTS=ON
           -DCMAKE_CXX_FLAGS="--coverage -O0 -g"
           -DCMAKE_EXE_LINKER_FLAGS="--coverage"
           -DCMAKE_SHARED_LINKER_FLAGS="--coverage"
