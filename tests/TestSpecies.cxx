@@ -153,6 +153,46 @@ int TestSpecies(int argc, char *argv[]) {
         CHECK(s.NumIndividuals() == 0);
     }
 
+    // GetRepresentative returns the first individual; empty species throws.
+    {
+        Parameters p = DefaultParams();
+        Genome seed = MakeScoredSeed(1, 1.0);
+        Species s(seed, p, 1);
+        Genome rep2 = MakeScoredSeed(2, 9.0);
+        s.AddIndividual(rep2);
+        s.SortIndividuals();
+        CHECK(s.GetRepresentative().GetID() == s.m_Individuals[0].GetID());
+        Species empty;
+        bool threw = false;
+        try {
+            (void)empty.GetRepresentative();
+        } catch (const std::runtime_error &) {
+            threw = true;
+        }
+        CHECK(threw);
+    }
+
+    // AdjustFitness divides by species size; long-stagnant non-best species get killed off.
+    {
+        Parameters p = DefaultParams();
+        Genome seed = MakeScoredSeed(1, 1.0);
+        Species s(seed, p, 1);
+        Genome second = MakeScoredSeed(2, 3.0);
+        s.AddIndividual(second);
+        s.AdjustFitness(p);
+        // Species age 0 < YoungAgeTreshold, so fitness gets the young-age boost
+        // and is then divided by species size.
+        CHECK(std::fabs(s.m_Individuals[0].GetAdjFitness() - 0.5 * p.YoungAgeFitnessBoost) < 1e-9);
+        CHECK(std::fabs(s.m_Individuals[1].GetAdjFitness() - 1.5 * p.YoungAgeFitnessBoost) < 1e-9);
+
+        // Stagnation beyond the threshold crushes the adjusted fitness —
+        // but never for the species flagged best (the fresh constructor sets that).
+        s.SetBestSpecies(false);
+        s.m_GensNoImprovement = p.SpeciesMaxStagnation + 1;
+        s.AdjustFitness(p);
+        CHECK(s.m_Individuals[1].GetAdjFitness() < 1e-6);
+    }
+
     if (g_failures != 0) {
         std::cerr << "Test failed: TestSpecies with " << g_failures << " failure(s)\n";
         return 1;

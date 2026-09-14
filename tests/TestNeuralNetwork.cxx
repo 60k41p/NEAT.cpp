@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "NeuralNetwork.h"
+#include "Parameters.h"
 
 namespace {
 
@@ -229,6 +230,246 @@ int TestNeuralNetwork(int argc, char *argv[]) {
         CHECK(!net.Load(in));
         std::error_code ec;
         std::filesystem::remove(tmp, ec);
+    }
+
+    // Golden table for all 14 activation functions through Activate(),
+    // using a hand-built 1-in / 1-out network.
+    {
+        struct Case {
+            NEAT::ActivationFunction fn;
+            double x, a, b, expected;
+        };
+        const double x = 0.7;
+        const std::vector<Case> cases = {
+            {UNSIGNED_SIGMOID, x, 1, 0, 1.0 / (1.0 + exp(-x))},
+            {SIGNED_SIGMOID, x, 1, 0, 2.0 * (1.0 / (1.0 + exp(-x)) - 0.5)},
+            {TANH, x, 1, 0, tanh(x)},
+            {TANH_CUBIC, x, 1, 0, tanh(x * x * x)},
+            {SIGNED_STEP, x, 1, 0, 1.0},
+            {UNSIGNED_STEP, x, 1, 0, 1.0},
+            {SIGNED_GAUSS, x, 1, 0, 2.0 * (exp(-x * x) - 0.5)},
+            {UNSIGNED_GAUSS, x, 1, 0, exp(-x * x)},
+            {ABS, -x, 1, 0, x},
+            {SIGNED_SINE, x, 1, 0, sin(x)},
+            {UNSIGNED_SINE, x, 1, 0, (sin(x) + 1.0) / 2.0},
+            {LINEAR, -x, 1, 0, -x},
+            {RELU, -x, 1, 0, 0.0},
+            {SOFTPLUS, x, 1, 0, log(1.0 + exp(x))},
+            // slope/shift parameters are honored (TANH deliberately ignores b, as upstream)
+            {UNSIGNED_SIGMOID, x, 2.0, 0.5, 1.0 / (1.0 + exp(-(2.0 * x + 0.5)))},
+            {SIGNED_SINE, x, 2.0, 0.5, sin(2.0 * x + 0.5)},
+            {UNSIGNED_GAUSS, x, 2.0, 0.5, exp(-2.0 * x * x + 0.5)},
+            {LINEAR, x, 1, 0.5, x + 0.5},
+            {SIGNED_STEP, 0.3, 1, 0.5, -1.0},
+            {UNSIGNED_STEP, 0.3, 1, 0.5, 0.0},
+        };
+        for (const Case &c : cases) {
+            NeuralNetwork net;
+            Neuron in_n, out_n;
+            in_n.m_activesum = in_n.m_activation = 0;
+            in_n.m_a = 1;
+            in_n.m_b = 0;
+            in_n.m_timeconst = 1;
+            in_n.m_bias = 0;
+            in_n.m_membrane_potential = 0;
+            in_n.m_activation_function_type = LINEAR;
+            in_n.m_type = INPUT;
+            out_n = in_n;
+            out_n.m_type = OUTPUT;
+            out_n.m_activation_function_type = c.fn;
+            out_n.m_a = c.a;
+            out_n.m_b = c.b;
+            Connection conn;
+            conn.m_source_neuron_idx = 0;
+            conn.m_target_neuron_idx = 1;
+            conn.m_weight = 1.0;
+            conn.m_signal = 0;
+            conn.m_recur_flag = false;
+            conn.m_hebb_rate = 0;
+            conn.m_hebb_pre_rate = 0;
+            net.AddNeuron(in_n);
+            net.AddNeuron(out_n);
+            net.AddConnection(conn);
+            net.SetInputOutputDimentions(1, 1);
+            std::vector<double> in{c.x};
+            net.Input(in);
+            net.Activate();
+            CHECK(net.Output().size() == 1);
+            CHECK(Near(net.Output()[0], c.expected, 1e-9));
+        }
+    }
+
+    // ActivateFast assumes unsigned sigmoid regardless of the neuron's type.
+    {
+        NeuralNetwork net;
+        Neuron in_n, out_n;
+        in_n.m_activesum = in_n.m_activation = 0;
+        in_n.m_a = 1;
+        in_n.m_b = in_n.m_timeconst = in_n.m_bias = in_n.m_membrane_potential = 0;
+        in_n.m_activation_function_type = LINEAR;
+        in_n.m_type = INPUT;
+        out_n = in_n;
+        out_n.m_type = OUTPUT;
+        out_n.m_activation_function_type = LINEAR;  // ActivateFast must still apply unsigned sigmoid
+        Connection conn;
+        conn.m_source_neuron_idx = 0;
+        conn.m_target_neuron_idx = 1;
+        conn.m_weight = 0.0;
+        conn.m_signal = 0;
+        conn.m_recur_flag = false;
+        conn.m_hebb_rate = conn.m_hebb_pre_rate = 0;
+        net.AddNeuron(in_n);
+        net.AddNeuron(out_n);
+        net.AddConnection(conn);
+        net.SetInputOutputDimentions(1, 1);
+        std::vector<double> in{5.0};
+        net.Input(in);
+        net.ActivateFast();
+        CHECK(Near(net.Output()[0], 0.5));  // sigmoid(0) — linear would give 0.0
+    }
+
+    // ActivateUseInternalBias adds m_bias to the activation sum.
+    {
+        NeuralNetwork net;
+        Neuron in_n, out_n;
+        in_n.m_activesum = in_n.m_activation = 0;
+        in_n.m_a = 1;
+        in_n.m_b = in_n.m_timeconst = in_n.m_bias = in_n.m_membrane_potential = 0;
+        in_n.m_activation_function_type = LINEAR;
+        in_n.m_type = INPUT;
+        out_n = in_n;
+        out_n.m_type = OUTPUT;
+        out_n.m_activation_function_type = LINEAR;
+        out_n.m_bias = 0.5;
+        Connection conn;
+        conn.m_source_neuron_idx = 0;
+        conn.m_target_neuron_idx = 1;
+        conn.m_weight = 2.0;
+        conn.m_signal = 0;
+        conn.m_recur_flag = false;
+        conn.m_hebb_rate = conn.m_hebb_pre_rate = 0;
+        net.AddNeuron(in_n);
+        net.AddNeuron(out_n);
+        net.AddConnection(conn);
+        net.SetInputOutputDimentions(1, 1);
+        std::vector<double> in{3.0};
+        net.Input(in);
+        net.Activate();
+        CHECK(Near(net.Output()[0], 6.0));  // bias ignored by Activate
+        net.Flush();
+        net.Input(in);
+        net.ActivateUseInternalBias();
+        CHECK(Near(net.Output()[0], 6.5));  // 2*3 + 0.5
+    }
+
+    // ActivateLeaky integrates the membrane potential over steps.
+    {
+        NeuralNetwork net;
+        Neuron in_n, out_n;
+        in_n.m_activesum = in_n.m_activation = 0;
+        in_n.m_a = 1;
+        in_n.m_b = in_n.m_timeconst = in_n.m_bias = in_n.m_membrane_potential = 0;
+        in_n.m_activation_function_type = LINEAR;
+        in_n.m_type = INPUT;
+        out_n = in_n;
+        out_n.m_type = OUTPUT;
+        out_n.m_activation_function_type = LINEAR;
+        out_n.m_timeconst = 1.0;
+        Connection conn;
+        conn.m_source_neuron_idx = 0;
+        conn.m_target_neuron_idx = 1;
+        conn.m_weight = 1.0;
+        conn.m_signal = 0;
+        conn.m_recur_flag = false;
+        conn.m_hebb_rate = conn.m_hebb_pre_rate = 0;
+        net.AddNeuron(in_n);
+        net.AddNeuron(out_n);
+        net.AddConnection(conn);
+        net.SetInputOutputDimentions(1, 1);
+        std::vector<double> in{4.0};
+        net.Input(in);
+        net.ActivateLeaky(0.5);  // mp = 0.5 * 4 = 2
+        CHECK(Near(net.Output()[0], 2.0));
+        net.ActivateLeaky(0.5);  // mp = 0.5 * 2 + 0.5 * 4 = 3
+        CHECK(Near(net.Output()[0], 3.0));
+    }
+
+    // Flush zeroes activations, active sums and membrane potentials.
+    {
+        NeuralNetwork net(false);  // XOR topology, random weights
+        net.Flush();
+        std::vector<double> in{1.0, 1.0, 1.0};
+        net.Input(in);
+        net.Activate();
+        CHECK(!Near(net.Output()[0], 0.0));
+        net.Flush();
+        for (const auto &n : net.m_neurons) {
+            CHECK(n.m_activation == 0.0);
+            CHECK(n.m_activesum == 0.0);
+            CHECK(n.m_membrane_potential == 0.0);
+        }
+    }
+
+    // RTRL pipeline: gradients -> error -> weights, all finite with a real update.
+    {
+        NeuralNetwork net(false);
+        for (auto &n : net.m_neurons) {
+            n.m_activation_function_type = UNSIGNED_SIGMOID;  // RTRL knows sigmoids only
+        }
+        net.InitRTRLMatrix();
+        CHECK(net.m_neurons[0].m_sensitivity_matrix.size() == net.m_neurons.size());
+        std::vector<double> in{1.0, 1.0, 1.0};
+        net.Input(in);
+        net.Activate();
+        const double w_before = net.m_connections[0].m_weight;
+        net.RTRL_update_gradients();
+        net.RTRL_update_error(1.0);
+        net.RTRL_update_weights();
+        CHECK(std::isfinite(net.m_connections[0].m_weight));
+        CHECK(!Near(net.m_connections[0].m_weight, w_before, 1e-12));
+        net.FlushCube();
+    }
+
+    // Hebbian Adapt moves weights and clamps them to [-MaxWeight, MaxWeight].
+    {
+        Parameters p;
+        p.Reset();
+        NeuralNetwork net;
+        Neuron in_n, out_n;
+        in_n.m_activesum = in_n.m_activation = 0;
+        in_n.m_a = 1;
+        in_n.m_b = in_n.m_timeconst = in_n.m_bias = in_n.m_membrane_potential = 0;
+        in_n.m_activation_function_type = LINEAR;
+        in_n.m_type = INPUT;
+        out_n = in_n;
+        out_n.m_type = OUTPUT;
+        out_n.m_activation_function_type = LINEAR;
+        Connection conn;
+        conn.m_source_neuron_idx = 0;
+        conn.m_target_neuron_idx = 1;
+        conn.m_weight = 0.5;
+        conn.m_signal = 0;
+        conn.m_recur_flag = false;
+        conn.m_hebb_rate = 0.1;
+        conn.m_hebb_pre_rate = 0.1;
+        net.AddNeuron(in_n);
+        net.AddNeuron(out_n);
+        net.AddConnection(conn);
+        net.SetInputOutputDimentions(1, 1);
+        std::vector<double> in{1.0};
+        net.Input(in);
+        net.Activate();  // out = 0.5
+        net.Adapt(p);
+        // delta = 0.1*(0.5-0.5)*1*0.5 + 0.1*0.5*1*(0.5-1) = -0.025
+        CHECK(Near(net.m_connections[0].m_weight, 0.475, 1e-9));
+
+        // Oversized weight gets clamped to MaxWeight.
+        net.m_connections[0].m_weight = 999.0;
+        net.Flush();
+        net.Input(in);
+        net.Activate();
+        net.Adapt(p);
+        CHECK(net.m_connections[0].m_weight <= p.MaxWeight);
     }
 
     if (g_failures != 0) {

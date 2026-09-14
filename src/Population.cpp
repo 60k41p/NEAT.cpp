@@ -591,6 +591,9 @@ namespace NEAT {
                 break;  // cannot happen (total > 0), but never spin
             }
             m_Species[last].RemoveIndividual(static_cast<unsigned int>(m_Species[last].m_Individuals.size() - 1));
+            if (m_Species[last].m_Individuals.empty()) {
+                m_Species.erase(m_Species.begin() + last);
+            }
             t_total_genomes--;
         }
 

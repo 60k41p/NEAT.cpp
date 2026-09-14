@@ -17,6 +17,7 @@ set(NEATCPP_TEST_SOURCES
     TestGenome.cxx
     TestSpecies.cxx
     TestPopulation.cxx
+    TestEvolution.cxx
     TestCompliance.cxx
 )
 
@@ -88,3 +89,9 @@ foreach(t IN LISTS NEATCPP_COMPLIANCE_TESTS)
         TIMEOUT 30
         PASS_REGULAR_EXPRESSION "Test passed")
 endforeach()
+
+# End-to-end evolution: heavier than the smoke tests, so its own label and budget.
+set_tests_properties(TestEvolution PROPERTIES
+    LABELS "Evolution"
+    TIMEOUT 600
+    PASS_REGULAR_EXPRESSION "Test passed")

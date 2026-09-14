@@ -355,6 +355,65 @@ int TestGenome(int argc, char *argv[]) {
         }
     }
 
+    // Compatibility distance: zero to self, grows with disjoint genes, and
+    // IsCompatibleWith agrees with the threshold.
+    {
+        Parameters p = DefaultParams();
+        RNG rng;
+        rng.Seed(99);
+        Genome a = MakeSeed(3, 2);
+        Genome b = MakeSeed(3, 2);
+        CHECK(Near(a.CompatibilityDistance(a, p), 0.0));
+        CHECK(Near(a.CompatibilityDistance(b, p), 0.0));  // identical topology
+        CHECK(a.IsCompatibleWith(b, p));
+
+        // Remove links from b only: each removal makes b missing a gene that a
+        // has, i.e. adds disjoint genes to the pair, so the distance strictly grows.
+        double prev = 0.0;
+        int removed = 0;
+        for (int i = 0; i < 3 && b.NumLinks() > 0; ++i) {
+            if (b.Mutate_RemoveLink(rng)) {
+                ++removed;
+                const double d = a.CompatibilityDistance(b, p);
+                CHECK(d > prev);
+                prev = d;
+            }
+        }
+        CHECK(removed == 3);
+        CHECK(a.IsCompatibleWith(b, p) == (prev <= p.CompatTreshold));
+    }
+
+    // DerivePhenotypicChanges copies network weights back into the genome.
+    {
+        Parameters p = DefaultParams();
+        Genome g = MakeSeed(3, 2);
+        NeuralNetwork net;
+        g.BuildPhenotype(net);
+        CHECK(net.m_connections.size() == static_cast<size_t>(g.NumLinks()));
+        for (unsigned i = 0; i < net.m_connections.size(); ++i) {
+            net.m_connections[i].m_weight = 0.25 * static_cast<double>(i) - 1.0;
+        }
+        g.DerivePhenotypicChanges(net);
+        for (unsigned i = 0; i < net.m_connections.size(); ++i) {
+            CHECK(Near(g.GetLinkByIndex(static_cast<int>(i)).GetWeight(), net.m_connections[i].m_weight));
+        }
+    }
+
+    // Phenotype outputs are deterministic and match a freshly built network.
+    {
+        Parameters p = DefaultParams();
+        Genome g = MakeSeed(3, 1);
+        NeuralNetwork net1, net2;
+        g.BuildPhenotype(net1);
+        g.BuildPhenotype(net2);
+        std::vector<double> in{0.3, 0.6, 0.9};
+        net1.Input(in);
+        net1.Activate();
+        net2.Input(in);
+        net2.Activate();
+        CHECK(Near(net1.Output()[0], net2.Output()[0]));
+    }
+
     if (g_failures != 0) {
         std::cerr << "Test failed: TestGenome with " << g_failures << " failure(s)\n";
         return 1;

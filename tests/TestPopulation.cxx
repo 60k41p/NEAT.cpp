@@ -1,8 +1,10 @@
 // Seeded evolution smoke/regression tests for NEAT::Population.
 // Small populations + fixed RNG seeds keep these fast and deterministic.
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -187,6 +189,100 @@ int TestPopulation(int argc, char *argv[]) {
 
         std::error_code ec;
         std::filesystem::remove(tmp, ec);
+    }
+
+    // Sort orders species best-first; ChooseParentSpecies stays in range;
+    // best-ever and generation counters advance through Epoch().
+    {
+        Parameters params = SmallParams();
+        Population pop(MakeSeed(), params, true, 1.0, 5);
+        EvaluateByLinkCount(pop);
+        pop.Epoch();
+        EvaluateByLinkCount(pop);
+        pop.Epoch();
+        CHECK(pop.GetGeneration() == 2);
+        CHECK(pop.GetBestFitnessEver() > 0.0);
+        pop.Sort();
+        for (size_t i = 1; i < pop.m_Species.size(); ++i) {
+            CHECK(pop.m_Species[i - 1].GetBestFitness() >= pop.m_Species[i].GetBestFitness());
+        }
+        CHECK(pop.ChooseParentSpecies() < pop.m_Species.size());
+        EXPECT_UNIQUE_IDS(pop);
+    }
+
+    // Constant fitness makes the stagnation counter climb monotonically.
+    {
+        Parameters params = SmallParams();
+        Population pop(MakeSeed(), params, true, 1.0, 8);
+        for (unsigned k = 0; k < 5; ++k) {
+            for (unsigned i = 0; i < pop.NumGenomes(); ++i) {
+                pop.AccessGenomeByIndex(static_cast<int>(i)).SetFitness(1.0);
+                pop.AccessGenomeByIndex(static_cast<int>(i)).SetEvaluated();
+            }
+            const unsigned before = pop.GetStagnation();
+            pop.Epoch();
+            CHECK(pop.GetStagnation() >= before);
+        }
+        CHECK(pop.GetStagnation() >= 3);
+    }
+
+    // RemoveWorstIndividual kills exactly the worst evaluated genome; ClearEmptySpecies and ReassignSpecies keep the population consistent.
+    {
+        Parameters params = SmallParams();
+        Population pop(MakeSeed(), params, true, 1.0, 9);
+        EvaluateByLinkCount(pop);
+        double minfit = std::numeric_limits<double>::max();
+        for (unsigned i = 0; i < pop.NumGenomes(); ++i) {
+            minfit = std::min(minfit, pop.AccessGenomeByIndex(static_cast<int>(i)).GetFitness());
+        }
+        const unsigned size0 = pop.NumGenomes();
+        Genome removed = pop.RemoveWorstIndividual();
+        CHECK(removed.GetFitness() <= minfit + 1e-12);
+        CHECK(pop.NumGenomes() == size0 - 1);
+        pop.ClearEmptySpecies();
+        pop.ReassignSpecies(0);
+        EXPECT_UNIQUE_IDS(pop);
+    }
+
+    // Tick() replaces one evaluated individual per call and preserves size.
+    {
+        Parameters params = SmallParams();
+        Population pop(MakeSeed(), params, true, 1.0, 11);
+        for (int k = 0; k < 10; ++k) {
+            EvaluateByLinkCount(pop);
+            Genome deleted;
+            Genome *baby = pop.Tick(deleted);
+            CHECK(baby != nullptr);
+            CHECK(pop.NumGenomes() == params.PopulationSize);
+        }
+        EXPECT_UNIQUE_IDS(pop);
+    }
+
+    // Novelty search plumbing: InitPhenotypeBehaviorData wires every genome to a
+    // behavior slot and zeroes fitness; one tick runs the full pipeline without
+    // corrupting the population. (With the base PhenotypeBehavior, distance is 0
+    // so nothing archives, and the base Successful() contract is 'true'.)
+    {
+        Parameters params = SmallParams();
+        params.NoveltySearch_P_min = 0.0;
+        Population pop(MakeSeed(), params, true, 1.0, 13);
+
+        std::vector<PhenotypeBehavior> behaviors;
+        std::vector<PhenotypeBehavior> archive;
+        pop.InitPhenotypeBehaviorData(&behaviors, &archive);
+        CHECK(behaviors.size() == pop.NumGenomes());
+        CHECK(archive.empty());
+        for (unsigned i = 0; i < pop.NumGenomes(); ++i) {
+            CHECK(pop.AccessGenomeByIndex(static_cast<int>(i)).m_PhenotypeBehavior != nullptr);
+            CHECK(pop.AccessGenomeByIndex(static_cast<int>(i)).GetFitness() == 0.0);
+            pop.AccessGenomeByIndex(static_cast<int>(i)).SetEvaluated();  // Tick() needs evaluated individuals
+        }
+
+        Genome out;
+        const bool solved = pop.NoveltySearchTick(out);
+        CHECK(solved);  // base Successful() returns true by contract
+        CHECK(pop.NumGenomes() == params.PopulationSize);
+        EXPECT_UNIQUE_IDS(pop);
     }
 
     if (g_failures != 0) {
