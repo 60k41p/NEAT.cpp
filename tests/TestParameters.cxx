@@ -133,6 +133,44 @@ int TestParameters(int argc, char *argv[]) {
         CHECK(p.PopulationSize == 77);  // untouched
     }
 
+    // Regression: an existing file without the NEAT_ParametersStart marker must
+    // return non-zero quickly (it used to loop forever on EOF).
+    {
+        const auto tmp = std::filesystem::temp_directory_path() / "neatcpp_test_garbage_params.NEAT";
+        {
+            std::ofstream out(tmp);
+            out << "no markers here at all\n";
+        }
+        Parameters p;
+        p.Reset();
+        CHECK(p.Load(tmp.string().c_str()) != 0);
+        std::error_code ec;
+        std::filesystem::remove(tmp, ec);
+    }
+
+    // Regression: a truncated parameters file (start marker, no end marker)
+    // must return non-zero instead of spinning on EOF.
+    {
+        Parameters q;
+        q.Reset();
+        const auto src = std::filesystem::temp_directory_path() / "neatcpp_test_good_params.NEAT";
+        const auto trunc = std::filesystem::temp_directory_path() / "neatcpp_test_trunc_params.NEAT";
+        q.Save(src.string().c_str());
+        std::ifstream in(src);
+        std::string body((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        body.erase(body.find("NEAT_ParametersEnd"));
+        {
+            std::ofstream out(trunc);
+            out << body;
+        }
+        Parameters p;
+        p.Reset();
+        CHECK(p.Load(trunc.string().c_str()) != 0);
+        std::error_code ec;
+        std::filesystem::remove(src, ec);
+        std::filesystem::remove(trunc, ec);
+    }
+
     if (g_failures != 0) {
         std::cerr << "Test failed: TestParameters with " << g_failures << " failure(s)\n";
         return 1;

@@ -577,6 +577,23 @@ namespace NEAT {
         unsigned int t_total_genomes = 0;
         for (unsigned int i = 0; i < m_Species.size(); i++) t_total_genomes += static_cast<unsigned int>(m_Species[i].m_Individuals.size());
 
+        // Rounding of the per-species offspring quotas can also overshoot the
+        // population size (not just undershoot). Trim the surplus newborns —
+        // the freshly created babies at the end of the last species — so the
+        // population-size invariant (SameGenomeIDCheck, AccessGenomeByIndex,
+        // CountOffspring) always holds.
+        while (t_total_genomes > m_Parameters.PopulationSize) {
+            int last = static_cast<int>(m_Species.size()) - 1;
+            while (last >= 0 && m_Species[last].m_Individuals.empty()) {
+                last--;
+            }
+            if (last < 0) {
+                break;  // cannot happen (total > 0), but never spin
+            }
+            m_Species[last].RemoveIndividual(static_cast<unsigned int>(m_Species[last].m_Individuals.size() - 1));
+            t_total_genomes--;
+        }
+
         if (t_total_genomes < m_Parameters.PopulationSize) {
             int t_nts = m_Parameters.PopulationSize - t_total_genomes;
 
@@ -602,7 +619,11 @@ namespace NEAT {
 
     Genome g_dummy;  // empty genome
     Genome &Population::AccessGenomeByIndex(int const a_idx) {
-        ASSERT(a_idx < m_Genomes.size());
+        // The genomes live in the species; m_Genomes is only the initial seed list
+        // and goes stale after the first Epoch, so bounds-check against the
+        // actual number of individuals.
+        ASSERT(a_idx >= 0);
+        ASSERT(a_idx < static_cast<int>(NumGenomes()));
         int t_counter = 0;
 
         for (unsigned int i = 0; i < m_Species.size(); i++) {

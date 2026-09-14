@@ -45,7 +45,9 @@
 using namespace std;
 
 inline void GetMaxMin(const vector<double> &a_Vals, double &a_Min, double &a_Max) {
-    a_Max = std::numeric_limits<double>::min();
+    // lowest() (most negative), not min() (smallest positive) — otherwise an
+    // all-negative input vector yields a bogus max equal to ~2.2e-308.
+    a_Max = std::numeric_limits<double>::lowest();
     a_Min = std::numeric_limits<double>::max();
     for (vector<double>::const_iterator t_It = a_Vals.begin(); t_It != a_Vals.end(); ++t_It) {
         const double t_CurrentVal = (*t_It);

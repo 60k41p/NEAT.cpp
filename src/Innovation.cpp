@@ -82,9 +82,13 @@ namespace NEAT {
 
         std::string t_str;
 
-        // search for InnovationDatabaseStart
+        // search for InnovationDatabaseStart (with EOF guard: failed extraction
+        // leaves t_str unchanged, so the loop would otherwise never terminate)
         do {
             a_DataFile >> t_str;
+            if (a_DataFile.eof()) {
+                throw std::runtime_error("Innovation database file error: InnovationDatabaseStart not found!");
+            }
         } while (t_str != "InnovationDatabaseStart");
 
         // Read the last innov numbers
@@ -96,6 +100,9 @@ namespace NEAT {
         // Read the database until InnovationDatabaseEnd is encountered
         do {
             a_DataFile >> t_str;
+            if (a_DataFile.eof()) {
+                throw std::runtime_error("Innovation database file error: InnovationDatabaseEnd not found!");
+            }
 
             if (t_str == "Innovation") {
                 // Read in the innovation

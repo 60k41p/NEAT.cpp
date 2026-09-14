@@ -1,9 +1,11 @@
 // Tests for NEAT::Genome: structure, compatibility, phenotype, mutations.
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
+#include <vector>
 
 #include "Genome.h"
 #include "Innovation.h"
@@ -198,7 +200,7 @@ int TestGenome(int argc, char *argv[]) {
         std::filesystem::remove(tmp, ec);
     }
 
-    // Missing genome file throws (no hang, unlike garbage without markers).
+    // Missing genome file throws (no hang).
     {
         bool threw = false;
         try {
@@ -210,6 +212,147 @@ int TestGenome(int argc, char *argv[]) {
             threw = true;
         }
         CHECK(threw);
+    }
+
+    // Regression: a file without markers must throw instead of spinning on EOF forever.
+    {
+        const auto tmp = std::filesystem::temp_directory_path() / "neatcpp_test_garbage_genome.txt";
+        {
+            std::ofstream out(tmp);
+            out << "this file has no markers at all\n";
+        }
+        bool threw = false;
+        try {
+            Genome g(tmp.string().c_str());
+            (void)g;
+        } catch (...) {
+            threw = true;
+        }
+        CHECK(threw);
+        std::error_code ec;
+        std::filesystem::remove(tmp, ec);
+    }
+
+    // Regression: truncated genome (GenomeStart but no GenomeEnd) must throw.
+    {
+        Genome g = MakeSeed();
+        const auto src = std::filesystem::temp_directory_path() / "neatcpp_test_good_genome.txt";
+        const auto trunc = std::filesystem::temp_directory_path() / "neatcpp_test_trunc_genome.txt";
+        g.Save(src.string().c_str());
+        std::ifstream in(src);
+        std::string body((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        body.erase(body.find("GenomeEnd"));
+        {
+            std::ofstream out(trunc);
+            out << body;
+        }
+        bool threw = false;
+        try {
+            Genome g2(trunc.string().c_str());
+            (void)g2;
+        } catch (...) {
+            threw = true;
+        }
+        CHECK(threw);
+        std::error_code ec;
+        std::filesystem::remove(src, ec);
+        std::filesystem::remove(trunc, ec);
+    }
+
+    // Regression: Mutate_RemoveLink removes exactly one link and keeps the
+    // genome consistent. The underlying RemoveLinkGene used to erase by
+    // position: a requested innovation ID of 0 wiped every link and larger IDs
+    // could erase unrelated entries.
+    {
+        RNG rng;
+        rng.Seed(11);
+        Genome g = MakeSeed(3, 2);
+        const unsigned n0 = g.NumLinks();
+        std::vector<int> before;
+        for (unsigned i = 0; i < g.NumLinks(); ++i) {
+            before.push_back(g.GetLinkByIndex(static_cast<int>(i)).InnovationID());
+        }
+        CHECK(g.Mutate_RemoveLink(rng));
+        CHECK(g.NumLinks() == n0 - 1);
+        // Remaining links are the original ones minus exactly one, order preserved.
+        size_t j = 0;
+        int missing = -1;
+        for (int id : before) {
+            if (j < g.NumLinks() && g.GetLinkByIndex(static_cast<int>(j)).InnovationID() == id) {
+                ++j;
+            } else {
+                missing = id;
+            }
+        }
+        CHECK(missing != -1);
+        CHECK(j == static_cast<size_t>(g.NumLinks()));
+        CHECK(!g.HasDeadEnds());
+    }
+
+    // Regression: Mutate_RemoveSimpleNeuron drops the hidden neuron and its
+    // links without erasing wrong positions or leaving dangling links.
+    {
+        Parameters p = DefaultParams();
+        RNG rng;
+        rng.Seed(7);
+        InnovationDatabase innovs;
+        innovs.Init(1, 1000);
+        Genome g = MakeSeed();
+        for (int i = 0; i < 50 && g.NumNeurons() == 4; ++i) {
+            g.Mutate_AddNeuron(innovs, p, rng);
+        }
+        CHECK(g.NumNeurons() > 4);
+        bool removed = false;
+        for (int i = 0; i < 50 && !removed; ++i) {
+            removed = g.Mutate_RemoveSimpleNeuron(innovs, p, rng);
+        }
+        CHECK(removed);
+        CHECK(g.NumNeurons() == 4);
+        // Every link still references existing neurons.
+        std::vector<int> neuron_ids;
+        for (unsigned i = 0; i < g.NumNeurons(); ++i) {
+            neuron_ids.push_back(g.GetNeuronByIndex(static_cast<int>(i)).ID());
+        }
+        for (unsigned i = 0; i < g.NumLinks(); ++i) {
+            const LinkGene &l = g.GetLinkByIndex(static_cast<int>(i));
+            CHECK(std::find(neuron_ids.begin(), neuron_ids.end(), l.FromNeuronID()) != neuron_ids.end());
+            CHECK(std::find(neuron_ids.begin(), neuron_ids.end(), l.ToNeuronID()) != neuron_ids.end());
+        }
+    }
+
+    // Regression: with MultipointCrossoverRate = PreferFitterParentRate = 1,
+    // matching genes must come from the *fitter* parent (was inverted: picked
+    // the weaker one).
+    {
+        Parameters p = DefaultParams();
+        p.MultipointCrossoverRate = 1.0;
+        p.PreferFitterParentRate = 1.0;
+        RNG rng;
+        rng.Seed(31);
+        Genome mom = MakeSeed(3, 2);
+        Genome dad = MakeSeed(3, 2);
+        for (int i = 0; i < 10; ++i) {
+            mom.Mutate_LinkWeights(p, rng);
+            dad.Mutate_LinkWeights(p, rng);
+        }
+        bool any_differ = false;
+        for (unsigned i = 0; i < mom.NumLinks(); ++i) {
+            if (mom.GetLinkByIndex(static_cast<int>(i)).GetWeight() != dad.GetLinkByIndex(static_cast<int>(i)).GetWeight()) {
+                any_differ = true;
+            }
+        }
+        CHECK(any_differ);
+        mom.SetFitness(10.0);
+        dad.SetFitness(1.0);
+        Genome baby = mom.Mate(dad, false, false, rng, p);
+        CHECK(baby.NumLinks() == mom.NumLinks());
+        for (unsigned i = 0; i < baby.NumLinks(); ++i) {
+            const double wm = mom.GetLinkByIndex(static_cast<int>(i)).GetWeight();
+            const double wd = dad.GetLinkByIndex(static_cast<int>(i)).GetWeight();
+            if (wm != wd) {
+                CHECK(Near(baby.GetLinkByIndex(static_cast<int>(i)).GetWeight(), wm));
+            }
+        }
     }
 
     if (g_failures != 0) {

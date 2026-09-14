@@ -29,6 +29,8 @@
 
 #include <exception>
 #include <iostream>
+#include <stdexcept>
+#include <string>
 
 // kill any existing declarations
 #ifdef ASSERT
@@ -48,12 +50,14 @@
 //--------------
 #define BREAK_CPU()  //__asm { int 3 }
 
-#define ASSERT(expr)                                                                                                  \
-    {                                                                                                                 \
-        if (!(expr)) {                                                                                                \
-            std::cout << "\n*** ASSERT! ***\n" << __FILE__ ", line " << __LINE__ << ": " << #expr << " is false\n\n"; \
-            throw std::exception();                                                                                   \
-        }                                                                                                             \
+// Throws std::runtime_error (not bare std::exception) so that code paths which
+// contractually throw runtime_error keep the same catchable type in debug builds.
+#define ASSERT(expr)                                                                                                                  \
+    {                                                                                                                                 \
+        if (!(expr)) {                                                                                                                \
+            std::cout << "\n*** ASSERT! ***\n" << __FILE__ ", line " << __LINE__ << ": " << #expr << " is false\n\n";                 \
+            throw std::runtime_error(std::string("Assertion failed: ") + #expr + " at " + __FILE__ + ":" + std::to_string(__LINE__)); \
+        }                                                                                                                             \
     }
 
 #define VERIFY(expr)                                                                                                        \

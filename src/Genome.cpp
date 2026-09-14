@@ -224,7 +224,7 @@ namespace NEAT {
     }*/
 
     Genome::Genome(const Parameters &a_Parameters, const GenomeInitStruct &in) {
-        ASSERT((a_NumInputs > 1) && (a_NumOutputs > 0));
+        ASSERT((in.NumInputs > 1) && (in.NumOutputs > 0));
         RNG t_RNG;
         t_RNG.TimeSeed();
 
@@ -1778,14 +1778,16 @@ namespace NEAT {
         }
     }*/
 
-    // this version uses a simple index
-    void Genome::RemoveLinkGene(int a_idx) {
-        // for iterating through the genes
-        auto t_curlink = m_LinkGenes.begin();
-        if (a_idx > 0) {
-            m_LinkGenes.erase(m_LinkGenes.begin() + a_idx);
-        } else {
-            m_LinkGenes.clear();
+    // Removes the link with the given innovation ID (the semantics the header declares
+    // and that Mutate_RemoveLink/Cleanup rely on). The previous "simple index" version
+    // erased by position — wiping the whole link list whenever a_idx was 0, and
+    // erasing out-of-range positions when callers (correctly) passed innovation IDs.
+    void Genome::RemoveLinkGene(int a_innovid) {
+        for (auto t_curlink = m_LinkGenes.begin(); t_curlink != m_LinkGenes.end(); ++t_curlink) {
+            if (t_curlink->InnovationID() == a_innovid) {
+                m_LinkGenes.erase(t_curlink);
+                return;
+            }
         }
     }
 
@@ -1801,9 +1803,8 @@ namespace NEAT {
             // Remove all links connected to this neuron ID
             for (int i = 0; i < NumLinks(); i++) {
                 if ((m_LinkGenes[i].FromNeuronID() == a_ID) || (m_LinkGenes[i].ToNeuronID() == a_ID)) {
-                    // found one, remove it
-                    // t_link_removal_queue.emplace_back(i);//m_LinkGenes[i].InnovationID());
-                    RemoveLinkGene(i);
+                    // found one, remove it (by innovation ID, the sole RemoveLinkGene contract)
+                    RemoveLinkGene(m_LinkGenes[i].InnovationID());
                     removed = true;
                     break;
                 }
@@ -2481,7 +2482,8 @@ namespace NEAT {
                     // get a gene from either parent or average
                     if (a_RNG.RandFloat() < a_Parameters.MultipointCrossoverRate) {
                         if (a_RNG.RandFloat() < a_Parameters.PreferFitterParentRate) {
-                            if (GetFitness() < a_Dad.GetFitness()) {
+                            // Prefer the *fitter* parent's gene (was inverted: picked the mom when she was worse)
+                            if (GetFitness() > a_Dad.GetFitness()) {
                                 t_selectedgene = *t_curMom;
                             } else {
                                 t_selectedgene = *t_curDad;
@@ -2789,9 +2791,13 @@ namespace NEAT {
             throw std::runtime_error("Genome file error!");
         }
 
-        // search for GenomeStart
+        // search for GenomeStart (guard against EOF: a stream extraction failure
+        // leaves t_Str unchanged, so without the eof check this loop never ends)
         do {
             a_DataFile >> t_Str;
+            if (a_DataFile.eof()) {
+                throw std::runtime_error("Genome file error: GenomeStart not found!");
+            }
         } while (t_Str != "GenomeStart");
 
         // read the genome ID
@@ -2802,6 +2808,9 @@ namespace NEAT {
         // read the genome until GenomeEnd is encountered
         do {
             a_DataFile >> t_Str;
+            if (a_DataFile.eof()) {
+                throw std::runtime_error("Genome file error: GenomeEnd not found!");
+            }
 
             if (t_Str == "Neuron") {
                 int t_id, t_type, t_activationfunc;

@@ -433,12 +433,20 @@ namespace NEAT {
 
     int Parameters::Load(std::ifstream &a_DataFile) {
         std::string s, tf;
+        // EOF guard: extraction failure leaves s unchanged, so without this a
+        // file missing the marker would spin forever.
         do {
             a_DataFile >> s;
+            if (a_DataFile.eof()) {
+                return 1;
+            }
         } while (s != "NEAT_ParametersStart");
 
         while (s != "NEAT_ParametersEnd") {
             a_DataFile >> s;
+            if (a_DataFile.eof()) {
+                return 1;  // missing NEAT_ParametersEnd marker — would otherwise spin forever
+            }
 
             if (s == "PopulationSize") a_DataFile >> PopulationSize;
 
