@@ -27,11 +27,6 @@
 // Description: Definition for the base phenotype behavior class.
 ///////////////////////////////////////////////////////////////////////////////
 
-
-
 #include "PhenotypeBehavior.h"
 
-namespace NEAT
-{
-
-};
+namespace NEAT {};

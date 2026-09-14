@@ -1,0 +1,32 @@
+# MultiNEAT code style: Google C++ style with repo-specific adjustments.
+# See https://google.github.io/styleguide/cppguide.html
+# BasedOnStyle carries K&R attached braces, namespace closing comments, etc.
+# Settings marked "Deviates from Google" are deliberate repo choices.
+# Generated/checked with clang-format 22 (CI pins clang-format==22.1.8).
+BasedOnStyle: Google
+# Google mandates 80 columns; loosened to 160 to avoid churn on the
+# existing long lines while keeping a hard limit for new code.
+ColumnLimit: 160
+# Deviates from Google (2 spaces): 4-space indent for readability.
+IndentWidth: 4
+UseTab: Never
+BreakBeforeBraces: Attach
+# Deviates from Google (unindented): indent all namespace contents.
+NamespaceIndentation: All
+DerivePointerAlignment: false
+# Deviates from Google (char* c): right-aligned pointers/references.
+PointerAlignment: Right
+# One parameter per line when a declaration wraps (matches the guide's
+# "wrap all params to new lines" rule); not the Google-base BinPack default.
+BinPackParameters: false
+SortIncludes: true
+# Encode the guide's include order: related header first (handled by
+# clang-format's "main include" detection), then C system / angle .h,
+# then C++ stdlib (extensionless), then other libs, then project headers.
+IncludeCategories:
+  - Regex: '^<.*\.h>$'
+    Priority: 2
+  - Regex: '^<.*>$'
+    Priority: 3
+  - Regex: '^".*"$'
+    Priority: 4

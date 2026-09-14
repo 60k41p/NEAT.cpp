@@ -31,460 +31,440 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 #include <map>
-//#include "Genes.h"
+// #include "Genes.h"
 #include "Traits.h"
-//#include "Species.h"
-
-namespace NEAT
-{
-
-// forward
-class Genome;
-
-//////////////////////////////////////////////
-// The NEAT Parameters class
-//////////////////////////////////////////////
-class Parameters
-{
-public:
-    /////////////////////
-    // Members
-    /////////////////////
-
-
-    ////////////////////
-    // Basic parameters
-    ////////////////////
-
-    // Size of population
-    unsigned int PopulationSize;
-    
-    // Controls the use of speciation. When off, the population will consist of only one species.
-    bool Speciation;
-
-    // If true, this enables dynamic compatibility thresholding
-    // It will keep the number of species between MinSpecies and MaxSpecies
-    bool DynamicCompatibility;
-
-    // Minimum number of species
-    unsigned int MinSpecies;
-
-    // Maximum number of species
-    unsigned int MaxSpecies;
-
-    // Don't wipe the innovation database each generation?
-    bool InnovationsForever;
-
-    // Allow clones or nearly identical genomes to exist simultaneously in the population.
-    // This is useful for non-deterministic environments,
-    // as the same individual will get more than one chance to prove himself, also
-    // there will be more chances the same individual to mutate in different ways.
-    // The drawback is greatly increased time for reproduction. If you want to
-    // search quickly, yet less efficient, leave this to true.
-    bool AllowClones;
-
-    // Keep an archive of genomes and don't allow any new genome to exist in the acrhive or the population
-    bool ArchiveEnforcement;
-    
-    // Normalize genome size when calculating compatibility
-    bool NormalizeGenomeSize;
-    
-    // Pointer to a function that specifies custom topology constraints
-    // Should return true if the genome FAILS to meet the constraints
-    bool (*CustomConstraints)(Genome& g);
-    
-    ////////////////////////////////
-    // GA Parameters
-    ////////////////////////////////
+// #include "Species.h"
 
-    // AgeGens treshold, meaning if a species is below it, it is considered young
-    unsigned int YoungAgeTreshold;
+namespace NEAT {
 
-    // Fitness boost multiplier for young species (1.0 means no boost)
-    // Make sure it is >= 1.0 to avoid confusion
-    double YoungAgeFitnessBoost;
+    // forward
+    class Genome;
 
-    // Number of generations without improvement (stagnation) allowed for a species
-    unsigned int SpeciesMaxStagnation;
+    //////////////////////////////////////////////
+    // The NEAT Parameters class
+    //////////////////////////////////////////////
+    class Parameters {
+       public:
+        /////////////////////
+        // Members
+        /////////////////////
 
-    // Minimum jump in fitness necessary to be considered as improvement.
-    // Setting this value to 0.0 makes the system to behave like regular NEAT.
-    double StagnationDelta;
+        ////////////////////
+        // Basic parameters
+        ////////////////////
 
-    // AgeGens threshold, meaning if a species if above it, it is considered old
-    unsigned int OldAgeTreshold;
+        // Size of population
+        unsigned int PopulationSize;
 
-    // Multiplier that penalizes old species.
-    // Make sure it is < 1.0 to avoid confusion.
-    double OldAgePenalty;
+        // Controls the use of speciation. When off, the population will consist of only one species.
+        bool Speciation;
 
-    // Detect competetive coevolution stagnation
-    // This kills the worst species of age >N (each X generations)
-    bool DetectCompetetiveCoevolutionStagnation;
+        // If true, this enables dynamic compatibility thresholding It will keep the number of species between MinSpecies and MaxSpecies
+        bool DynamicCompatibility;
 
-    // Each X generation..
-    int KillWorstSpeciesEach;
+        // Minimum number of species
+        unsigned int MinSpecies;
 
-    // Of age above..
-    int KillWorstAge;
+        // Maximum number of species
+        unsigned int MaxSpecies;
 
-    // Percent of best individuals that are allowed to reproduce. 1.0 = 100%
-    double SurvivalRate;
+        // Don't wipe the innovation database each generation?
+        bool InnovationsForever;
 
-    // Probability for a baby to result from sexual reproduction (crossover/mating). 1.0 = 100%
-    double CrossoverRate;
+        // Allow clones or nearly identical genomes to exist simultaneously in the population.
+        // This is useful for non-deterministic environments,
+        // as the same individual will get more than one chance to prove himself, also
+        // there will be more chances the same individual to mutate in different ways.
+        // The drawback is greatly increased time for reproduction. If you want to
+        // search quickly, yet less efficient, leave this to true.
+        bool AllowClones;
 
-    // If a baby results from sexual reproduction, this probability determines if mutation will
-    // be performed after crossover. 1.0 = 100% (always mutate after crossover)
-    double OverallMutationRate;
+        // Keep an archive of genomes and don't allow any new genome to exist in the acrhive or the population
+        bool ArchiveEnforcement;
 
-    // Probability for a baby to result from inter-species mating.
-    double InterspeciesCrossoverRate;
+        // Normalize genome size when calculating compatibility
+        bool NormalizeGenomeSize;
 
-    // Probability for a baby gene to result from Multipoint Crossover when mating. 1.0 = 100%
-    // The default if the Average mating.
-    double MultipointCrossoverRate;
-    
-    // Probability that when doing multipoint crossover,
-    // the gene of the fitter parent will be prefered, instead of choosing one at random
-    double PreferFitterParentRate;
-    
-    // Performing roulette wheel selection or not?
-    bool RouletteWheelSelection;
-    
-    // If true, will do tournament selection
-    bool TournamentSelection;
+        // Pointer to a function that specifies custom topology constraints Should return true if the genome FAILS to meet the constraints
+        bool (*CustomConstraints)(Genome &g);
 
-    // For tournament selection
-    unsigned int TournamentSize;
+        ////////////////////////////////
+        // GA Parameters
+        ////////////////////////////////
 
-    // Fraction of individuals to be copied unchanged
-    double EliteFraction;
+        // AgeGens treshold, meaning if a species is below it, it is considered young
+        unsigned int YoungAgeTreshold;
 
+        // Fitness boost multiplier for young species (1.0 means no boost)
+        // Make sure it is >= 1.0 to avoid confusion
+        double YoungAgeFitnessBoost;
 
+        // Number of generations without improvement (stagnation) allowed for a species
+        unsigned int SpeciesMaxStagnation;
 
-    ///////////////////////////////////
-    // Phased Search parameters   //
-    ///////////////////////////////////
+        // Minimum jump in fitness necessary to be considered as improvement. Setting this value to 0.0 makes the system to behave like regular NEAT.
+        double StagnationDelta;
 
-    // Using phased search or not
-    bool PhasedSearching;
+        // AgeGens threshold, meaning if a species if above it, it is considered old
+        unsigned int OldAgeTreshold;
 
-    // Using delta coding or not
-    bool DeltaCoding;
+        // Multiplier that penalizes old species.
+        // Make sure it is < 1.0 to avoid confusion.
+        double OldAgePenalty;
 
-    // What is the MPC + base MPC needed to begin simplifying phase
-    unsigned int SimplifyingPhaseMPCTreshold;
+        // Detect competetive coevolution stagnation
+        // This kills the worst species of age >N (each X generations)
+        bool DetectCompetetiveCoevolutionStagnation;
 
-    // How many generations of global stagnation should have passed to enter simplifying phase
-    unsigned int SimplifyingPhaseStagnationTreshold;
+        // Each X generation..
+        int KillWorstSpeciesEach;
 
-    // How many generations of MPC stagnation are needed to turn back on complexifying
-    unsigned int ComplexityFloorGenerations;
+        // Of age above..
+        int KillWorstAge;
 
+        // Percent of best individuals that are allowed to reproduce. 1.0 = 100%
+        double SurvivalRate;
 
-    /////////////////////////////////////
-    // Novelty Search parameters       //
-    /////////////////////////////////////
+        // Probability for a baby to result from sexual reproduction (crossover/mating). 1.0 = 100%
+        double CrossoverRate;
 
-    // the K constant
-    unsigned int NoveltySearch_K;
+        // If a baby results from sexual reproduction, this probability determines if mutation will be performed after crossover. 1.0 = 100% (always mutate
+        // after crossover)
+        double OverallMutationRate;
 
-    // Sparseness treshold. Add to the archive if above
-    double NoveltySearch_P_min;
+        // Probability for a baby to result from inter-species mating.
+        double InterspeciesCrossoverRate;
 
-    // Dynamic Pmin?
-    bool NoveltySearch_Dynamic_Pmin;
+        // Probability for a baby gene to result from Multipoint Crossover when mating. 1.0 = 100% The default if the Average mating.
+        double MultipointCrossoverRate;
 
-    // How many evaluations should pass without adding to the archive
-    // in order to lower Pmin
-    unsigned int NoveltySearch_No_Archiving_Stagnation_Treshold;
+        // Probability that when doing multipoint crossover,
+        // the gene of the fitter parent will be prefered, instead of choosing one at random
+        double PreferFitterParentRate;
 
-    // How should it be multiplied (make it less than 1.0)
-    double NoveltySearch_Pmin_lowering_multiplier;
+        // Performing roulette wheel selection or not?
+        bool RouletteWheelSelection;
 
-    // Not lower than this value
-    double NoveltySearch_Pmin_min;
+        // If true, will do tournament selection
+        bool TournamentSelection;
 
+        // For tournament selection
+        unsigned int TournamentSize;
 
-    // How many one-after-another additions to the archive should
-    // pass in order to raise Pmin
-    unsigned int NoveltySearch_Quick_Archiving_Min_Evaluations;
+        // Fraction of individuals to be copied unchanged
+        double EliteFraction;
 
-    // How should it be multiplied (make it more than 1.0)
-    double NoveltySearch_Pmin_raising_multiplier;
+        ///////////////////////////////////
+        // Phased Search parameters   //
+        ///////////////////////////////////
 
-    // Per how many evaluations to recompute the sparseness
-    unsigned int NoveltySearch_Recompute_Sparseness_Each;
+        // Using phased search or not
+        bool PhasedSearching;
 
+        // Using delta coding or not
+        bool DeltaCoding;
 
-    ///////////////////////////////////
-    // Mutation parameters
-    ///////////////////////////////////
+        // What is the MPC + base MPC needed to begin simplifying phase
+        unsigned int SimplifyingPhaseMPCTreshold;
 
-    // Probability for a baby to be mutated with the Add-Neuron mutation.
-    double MutateAddNeuronProb;
+        // How many generations of global stagnation should have passed to enter simplifying phase
+        unsigned int SimplifyingPhaseStagnationTreshold;
 
-    // Allow splitting of any recurrent links
-    bool SplitRecurrent;
+        // How many generations of MPC stagnation are needed to turn back on complexifying
+        unsigned int ComplexityFloorGenerations;
 
-    // Allow splitting of looped recurrent links
-    bool SplitLoopedRecurrent;
+        /////////////////////////////////////
+        // Novelty Search parameters       //
+        /////////////////////////////////////
 
-    // Maximum number of tries to find a link to split
-    int NeuronTries;
+        // the K constant
+        unsigned int NoveltySearch_K;
 
-    // Probability for a baby to be mutated with the Add-Link mutation
-    double MutateAddLinkProb;
+        // Sparseness treshold. Add to the archive if above
+        double NoveltySearch_P_min;
 
-    // Probability for a new incoming link to be from the bias neuron;
-    double MutateAddLinkFromBiasProb;
+        // Dynamic Pmin?
+        bool NoveltySearch_Dynamic_Pmin;
 
-    // Probability for a baby to be mutated with the Remove-Link mutation
-    double MutateRemLinkProb;
+        // How many evaluations should pass without adding to the archive in order to lower Pmin
+        unsigned int NoveltySearch_No_Archiving_Stagnation_Treshold;
 
-    // Probability for a baby that a simple neuron will be replaced with a link
-    double MutateRemSimpleNeuronProb;
+        // How should it be multiplied (make it less than 1.0)
+        double NoveltySearch_Pmin_lowering_multiplier;
 
-    // Maximum number of tries to find 2 neurons to add/remove a link
-    unsigned int LinkTries;
-    
-    // Maximum number of links in the genome (originals not counted). -1 is unlimited
-    int MaxLinks;
-    
-    // Maximum number of neurons in the genome (originals not counted). -1 is unlimited
-    int MaxNeurons;
-    
-    // Probability that a link mutation will be made recurrent
-    double RecurrentProb;
+        // Not lower than this value
+        double NoveltySearch_Pmin_min;
 
-    // Probability that a recurrent link mutation will be looped
-    double RecurrentLoopProb;
+        // How many one-after-another additions to the archive should
+        // pass in order to raise Pmin
+        unsigned int NoveltySearch_Quick_Archiving_Min_Evaluations;
 
-    // Probability for a baby's weights to be mutated
-    double MutateWeightsProb;
+        // How should it be multiplied (make it more than 1.0)
+        double NoveltySearch_Pmin_raising_multiplier;
 
-    // Probability for a severe (shaking) weight mutation
-    double MutateWeightsSevereProb;
+        // Per how many evaluations to recompute the sparseness
+        unsigned int NoveltySearch_Recompute_Sparseness_Each;
 
-    // Probability for a particular gene to be mutated. 1.0 = 100%
-    double WeightMutationRate;
-    
-    // Probability for a particular gene to be mutated via replacement of the weight. 1.0 = 100%
-    double WeightReplacementRate;
+        ///////////////////////////////////
+        // Mutation parameters
+        ///////////////////////////////////
 
-    // Maximum perturbation for a weight mutation
-    double WeightMutationMaxPower;
+        // Probability for a baby to be mutated with the Add-Neuron mutation.
+        double MutateAddNeuronProb;
 
-    // Maximum magnitude of a replaced weight
-    double WeightReplacementMaxPower;
+        // Allow splitting of any recurrent links
+        bool SplitRecurrent;
 
-    // Maximum weight
-    double MaxWeight;
-    
-    // Minimum weight
-    double MinWeight;
+        // Allow splitting of looped recurrent links
+        bool SplitLoopedRecurrent;
 
-    // Probability for a baby's A activation function parameters to be perturbed
-    double MutateActivationAProb;
+        // Maximum number of tries to find a link to split
+        int NeuronTries;
 
-    // Probability for a baby's B activation function parameters to be perturbed
-    double MutateActivationBProb;
+        // Probability for a baby to be mutated with the Add-Link mutation
+        double MutateAddLinkProb;
 
-    // Maximum magnitude for the A parameter perturbation
-    double ActivationAMutationMaxPower;
+        // Probability for a new incoming link to be from the bias neuron;
+        double MutateAddLinkFromBiasProb;
 
-    // Maximum magnitude for the B parameter perturbation
-    double ActivationBMutationMaxPower;
+        // Probability for a baby to be mutated with the Remove-Link mutation
+        double MutateRemLinkProb;
 
-    // Maximum magnitude for time costants perturbation
-    double TimeConstantMutationMaxPower;
+        // Probability for a baby that a simple neuron will be replaced with a link
+        double MutateRemSimpleNeuronProb;
 
-    // Maximum magnitude for biases perturbation
-    double BiasMutationMaxPower;
+        // Maximum number of tries to find 2 neurons to add/remove a link
+        unsigned int LinkTries;
 
-    // Activation parameter A min/max
-    double MinActivationA;
-    double MaxActivationA;
+        // Maximum number of links in the genome (originals not counted). -1 is unlimited
+        int MaxLinks;
 
-    // Activation parameter B min/max
-    double MinActivationB;
-    double MaxActivationB;
+        // Maximum number of neurons in the genome (originals not counted). -1 is unlimited
+        int MaxNeurons;
 
-    // Probability for a baby that an activation function type will be changed for a single neuron
-    // considered a structural mutation because of the large impact on fitness
-    double MutateNeuronActivationTypeProb;
+        // Probability that a link mutation will be made recurrent
+        double RecurrentProb;
 
-    // Probabilities for a particular activation function appearance
-    double ActivationFunction_SignedSigmoid_Prob;
-    double ActivationFunction_UnsignedSigmoid_Prob;
-    double ActivationFunction_Tanh_Prob;
-    double ActivationFunction_TanhCubic_Prob;
-    double ActivationFunction_SignedStep_Prob;
-    double ActivationFunction_UnsignedStep_Prob;
-    double ActivationFunction_SignedGauss_Prob;
-    double ActivationFunction_UnsignedGauss_Prob;
-    double ActivationFunction_Abs_Prob;
-    double ActivationFunction_SignedSine_Prob;
-    double ActivationFunction_UnsignedSine_Prob;
-    double ActivationFunction_Linear_Prob;
-    double ActivationFunction_Relu_Prob;
-    double ActivationFunction_Softplus_Prob;
+        // Probability that a recurrent link mutation will be looped
+        double RecurrentLoopProb;
 
-    // Probability for a baby's neuron time constant values to be mutated
-    double MutateNeuronTimeConstantsProb;
+        // Probability for a baby's weights to be mutated
+        double MutateWeightsProb;
 
-    // Probability for a baby's neuron bias values to be mutated
-    double MutateNeuronBiasesProb;
+        // Probability for a severe (shaking) weight mutation
+        double MutateWeightsSevereProb;
 
-    // Time constant range
-    double MinNeuronTimeConstant;
-    double MaxNeuronTimeConstant;
+        // Probability for a particular gene to be mutated. 1.0 = 100%
+        double WeightMutationRate;
 
-    // Bias range
-    double MinNeuronBias;
-    double MaxNeuronBias;
+        // Probability for a particular gene to be mutated via replacement of the weight. 1.0 = 100%
+        double WeightReplacementRate;
 
-    /////////////////////////////////////
-    // Speciation parameters
-    /////////////////////////////////////
+        // Maximum perturbation for a weight mutation
+        double WeightMutationMaxPower;
 
-    // Percent of disjoint genes importance
-    double DisjointCoeff;
+        // Maximum magnitude of a replaced weight
+        double WeightReplacementMaxPower;
 
-    // Percent of excess genes importance
-    double ExcessCoeff;
+        // Maximum weight
+        double MaxWeight;
 
-    // Node-specific activation parameter A difference importance
-    double ActivationADiffCoeff;
+        // Minimum weight
+        double MinWeight;
 
-    // Node-specific activation parameter B difference importance
-    double ActivationBDiffCoeff;
+        // Probability for a baby's A activation function parameters to be perturbed
+        double MutateActivationAProb;
 
-    // Average weight difference importance
-    double WeightDiffCoeff;
+        // Probability for a baby's B activation function parameters to be perturbed
+        double MutateActivationBProb;
 
-    // Average time constant difference importance
-    double TimeConstantDiffCoeff;
+        // Maximum magnitude for the A parameter perturbation
+        double ActivationAMutationMaxPower;
 
-    // Average bias difference importance
-    double BiasDiffCoeff;
+        // Maximum magnitude for the B parameter perturbation
+        double ActivationBMutationMaxPower;
 
-    // Activation function type difference importance
-    double ActivationFunctionDiffCoeff;
+        // Maximum magnitude for time costants perturbation
+        double TimeConstantMutationMaxPower;
 
-    // Compatibility treshold
-    double CompatTreshold;
+        // Maximum magnitude for biases perturbation
+        double BiasMutationMaxPower;
 
-    // Minumal value of the compatibility treshold
-    double MinCompatTreshold;
+        // Activation parameter A min/max
+        double MinActivationA;
+        double MaxActivationA;
 
-    // Modifier per generation for keeping the species stable
-    double CompatTresholdModifier;
+        // Activation parameter B min/max
+        double MinActivationB;
+        double MaxActivationB;
 
-    // Per how many generations to change the treshold
-    unsigned int CompatTreshChangeInterval_Generations;
+        // Probability for a baby that an activation function type will be changed for a single neuron considered a structural mutation because of the large
+        // impact on fitness
+        double MutateNeuronActivationTypeProb;
 
-    // Per how many evaluations to change the treshold
-    unsigned int CompatTreshChangeInterval_Evaluations;
-    
-    // What is the minimal difference needed for not to be a clone
-    double MinDeltaCompatEqualGenomes;
-    
-    // How many times to test a genome for constraint failure or being a clone (when AllowClones=False)
-    int ConstraintTrials;
-    
-    /////////////////////////////
-    // Genome properties params
-    /////////////////////////////
-    
-    // When true, don't have a special bias neuron and treat all inputs equal
-    bool DontUseBiasNeuron;
-    bool AllowLoops;
+        // Probabilities for a particular activation function appearance
+        double ActivationFunction_SignedSigmoid_Prob;
+        double ActivationFunction_UnsignedSigmoid_Prob;
+        double ActivationFunction_Tanh_Prob;
+        double ActivationFunction_TanhCubic_Prob;
+        double ActivationFunction_SignedStep_Prob;
+        double ActivationFunction_UnsignedStep_Prob;
+        double ActivationFunction_SignedGauss_Prob;
+        double ActivationFunction_UnsignedGauss_Prob;
+        double ActivationFunction_Abs_Prob;
+        double ActivationFunction_SignedSine_Prob;
+        double ActivationFunction_UnsignedSine_Prob;
+        double ActivationFunction_Linear_Prob;
+        double ActivationFunction_Relu_Prob;
+        double ActivationFunction_Softplus_Prob;
 
+        // Probability for a baby's neuron time constant values to be mutated
+        double MutateNeuronTimeConstantsProb;
 
-    /////////////////////////////
-    // ES HyperNEAT params
-    /////////////////////////////
+        // Probability for a baby's neuron bias values to be mutated
+        double MutateNeuronBiasesProb;
 
-    double DivisionThreshold;
+        // Time constant range
+        double MinNeuronTimeConstant;
+        double MaxNeuronTimeConstant;
 
-    double VarianceThreshold;
+        // Bias range
+        double MinNeuronBias;
+        double MaxNeuronBias;
 
-    // Used for Band prunning.
-    double BandThreshold;
+        /////////////////////////////////////
+        // Speciation parameters
+        /////////////////////////////////////
 
-    // Max and Min Depths of the quadtree
-    unsigned int InitialDepth;
+        // Percent of disjoint genes importance
+        double DisjointCoeff;
 
-    unsigned int MaxDepth;
+        // Percent of excess genes importance
+        double ExcessCoeff;
 
-    // How many hidden layers before connecting nodes to output. At 0 there is
-    // one hidden layer. At 1, there are two and so on.
-    unsigned int IterationLevel;
+        // Node-specific activation parameter A difference importance
+        double ActivationADiffCoeff;
 
-    // The Bias value for the CPPN queries.
-    double CPPN_Bias;
+        // Node-specific activation parameter B difference importance
+        double ActivationBDiffCoeff;
 
-    // Quadtree Dimensions
-    // The range of the tree. Typically set to 2,
-    double Width;
-    double Height;
+        // Average weight difference importance
+        double WeightDiffCoeff;
 
-    // The (x, y) coordinates of the tree
-    double Qtree_X;
+        // Average time constant difference importance
+        double TimeConstantDiffCoeff;
 
-    double Qtree_Y;
+        // Average bias difference importance
+        double BiasDiffCoeff;
 
-    // Use Link Expression output
-    bool Leo;
+        // Activation function type difference importance
+        double ActivationFunctionDiffCoeff;
 
-    // Threshold above which a connection is expressed
-    double LeoThreshold;
+        // Compatibility treshold
+        double CompatTreshold;
 
-    // Use geometric seeding. Currently only along the X axis. 1
-    bool LeoSeed;
-    bool GeometrySeed;
+        // Minumal value of the compatibility treshold
+        double MinCompatTreshold;
 
-    /////////////////////////////////////
-    // Universal traits
-    /////////////////////////////////////
-    std::map< std::string, TraitParameters > NeuronTraits;
-    std::map< std::string, TraitParameters > LinkTraits;
-    std::map< std::string, TraitParameters > GenomeTraits;
-    double MutateNeuronTraitsProb;
-    double MutateLinkTraitsProb;
-    double MutateGenomeTraitsProb;
+        // Modifier per generation for keeping the species stable
+        double CompatTresholdModifier;
 
-    /////////////////////////////////////
-    // Constructors
-    /////////////////////////////////////
+        // Per how many generations to change the treshold
+        unsigned int CompatTreshChangeInterval_Generations;
 
-    // Load defaults
-    Parameters();
+        // Per how many evaluations to change the treshold
+        unsigned int CompatTreshChangeInterval_Evaluations;
 
-    ////////////////////////////////////
-    // Methods
-    ////////////////////////////////////
+        // What is the minimal difference needed for not to be a clone
+        double MinDeltaCompatEqualGenomes;
 
-    // Load the parameters from a file
-    // returns 0 on success
-    int Load(const char* filename);
-    // Load the parameters from an already opened file for reading
-    int Load(std::ifstream& a_DataFile);
+        // How many times to test a genome for constraint failure or being a clone (when AllowClones=False)
+        int ConstraintTrials;
 
-    void Save(const char* filename);
-    // Saves the parameters to an already opened file for writing
-    void Save(FILE* a_fstream);
+        /////////////////////////////
+        // Genome properties params
+        /////////////////////////////
 
-    // resets the parameters to built-in defaults
-    void Reset();
-    
+        // When true, don't have a special bias neuron and treat all inputs equal
+        bool DontUseBiasNeuron;
+        bool AllowLoops;
+
+        /////////////////////////////
+        // ES HyperNEAT params
+        /////////////////////////////
+
+        double DivisionThreshold;
+
+        double VarianceThreshold;
+
+        // Used for Band prunning.
+        double BandThreshold;
+
+        // Max and Min Depths of the quadtree
+        unsigned int InitialDepth;
+
+        unsigned int MaxDepth;
+
+        // How many hidden layers before connecting nodes to output. At 0 there is one hidden layer. At 1, there are two and so on.
+        unsigned int IterationLevel;
+
+        // The Bias value for the CPPN queries.
+        double CPPN_Bias;
+
+        // Quadtree Dimensions
+        // The range of the tree. Typically set to 2,
+        double Width;
+        double Height;
+
+        // The (x, y) coordinates of the tree
+        double Qtree_X;
+
+        double Qtree_Y;
+
+        // Use Link Expression output
+        bool Leo;
+
+        // Threshold above which a connection is expressed
+        double LeoThreshold;
+
+        // Use geometric seeding. Currently only along the X axis. 1
+        bool LeoSeed;
+        bool GeometrySeed;
+
+        /////////////////////////////////////
+        // Universal traits
+        /////////////////////////////////////
+        std::map<std::string, TraitParameters> NeuronTraits;
+        std::map<std::string, TraitParameters> LinkTraits;
+        std::map<std::string, TraitParameters> GenomeTraits;
+        double MutateNeuronTraitsProb;
+        double MutateLinkTraitsProb;
+        double MutateGenomeTraitsProb;
+
+        /////////////////////////////////////
+        // Constructors
+        /////////////////////////////////////
+
+        // Load defaults
+        Parameters();
+
+        ////////////////////////////////////
+        // Methods
+        ////////////////////////////////////
+
+        // Load the parameters from a file returns 0 on success
+        int Load(const char *filename);
+        // Load the parameters from an already opened file for reading
+        int Load(std::ifstream &a_DataFile);
+
+        void Save(const char *filename);
+        // Saves the parameters to an already opened file for writing
+        void Save(FILE *a_fstream);
+
+        // resets the parameters to built-in defaults
+        void Reset();
     };
 
-
-} // namespace NEAT
-
-
+}  // namespace NEAT
 
 #endif

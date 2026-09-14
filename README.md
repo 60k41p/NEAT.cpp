@@ -16,8 +16,8 @@ MultiNEAT is a portable C++17 library for neuroevolution — training neural net
 
 ## Requirements
 
-* CMake 3.5 or later
 * A C++17 compiler
+* CMake 3.16 or later
 
 ## Building
 
