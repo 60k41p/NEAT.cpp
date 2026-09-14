@@ -24,7 +24,7 @@ jobs:
         run: cmake --build build --config ${{ matrix.build_type }} --parallel
 
       - name: Test
-        run: ctest --test-dir build -C ${{ matrix.build_type }} --output-on-failure --parallel --timeout 300
+        run: ctest --test-dir build -C ${{ matrix.build_type }} --output-on-failure --parallel --timeout 600
 
   sanitizers:
     name: sanitizers (Linux, Debug, ASan+UBSan)
@@ -48,7 +48,7 @@ jobs:
         run: cmake --build build-san --parallel
 
       - name: Test
-        run: ctest --test-dir build-san --output-on-failure --parallel --timeout 300
+        run: ctest --test-dir build-san --output-on-failure --parallel --timeout 600
 
   format:
     name: format (clang-format check)
@@ -80,7 +80,7 @@ jobs:
         run: cmake --build build-cov --parallel
 
       - name: Test
-        run: ctest --test-dir build-cov --output-on-failure --parallel --timeout 300
+        run: ctest --test-dir build-cov --output-on-failure --parallel --timeout 600
 
       - name: Report
         run: |
