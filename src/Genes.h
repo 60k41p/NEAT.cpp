@@ -325,8 +325,7 @@ namespace NEAT {
                 if (it->second.dep_key != "") {
                     // there is such trait..
                     if (m_Traits.count(it->second.dep_key) != 0) {
-                        // and it has the right value?
-                        // also the other genome has to have the trait turned on
+                        // and it has the right value? also the other genome has to have the trait turned on
                         for (int ix = 0; ix < it->second.dep_values.size(); ix++) {
                             if ((m_Traits[it->second.dep_key].value == it->second.dep_values[ix]) &&
                                 (other.at(it->second.dep_key).value == it->second.dep_values[ix])) {
@@ -380,8 +379,7 @@ namespace NEAT {
         /////////////////////
 
        public:
-        // These variables are initialized once and cannot be changed
-        // anymore
+        // These variables are initialized once and cannot be changed anymore
 
         // The IDs of the neurons that this link connects
         int m_FromNeuronID, m_ToNeuronID;
@@ -389,8 +387,7 @@ namespace NEAT {
         // The link's innovation ID
         int m_InnovationID;
 
-        // This variable is modified during evolution
-        // The weight of the connection
+        // This variable is modified during evolution The weight of the connection
         double m_Weight;
 
         // Is it recurrent?
@@ -469,8 +466,7 @@ namespace NEAT {
         /////////////////////
 
        public:
-        // These variables are initialized once and cannot be changed
-        // anymore
+        // These variables are initialized once and cannot be changed anymore
 
         // Its unique identification number
         int m_ID;
@@ -479,8 +475,7 @@ namespace NEAT {
         NeuronType m_Type;
 
        public:
-        // These variables are modified during evolution
-        // Safe to access directly
+        // These variables are modified during evolution Safe to access directly
 
         // useful for displaying the genome
         int x, y;
@@ -512,12 +507,10 @@ namespace NEAT {
         // Linear  : using B    (shift)
         double m_A, m_B;
 
-        // Time constant value used when
-        // the neuron is activating in leaky integrator mode
+        // Time constant value used when the neuron is activating in leaky integrator mode
         double m_TimeConstant;
 
-        // Bias value used when the neuron is activating in
-        // leaky integrator mode
+        // Bias value used when the neuron is activating in leaky integrator mode
         double m_Bias;
 
         // The type of activation function the neuron has

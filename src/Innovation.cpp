@@ -217,8 +217,7 @@ namespace NEAT {
         return t_ID;
     }
 
-    // Adds a new link innovation and returns its ID
-    // Increments the m_NextInnovationNum internally
+    // Adds a new link innovation and returns its ID Increments the m_NextInnovationNum internally
     int InnovationDatabase::AddLinkInnovation(int a_In, int a_Out) {
         ASSERT((a_In > 0) && (a_Out > 0));
 
@@ -228,10 +227,8 @@ namespace NEAT {
         return (m_NextInnovationNum - 1);
     }
 
-    // Adds a new neuron innovation and returns the new neuron ID
-    // in and out specify the connection that was split
-    // type specifies the type of neuron
-    // Increments the m_NextNeuronID and m_NextInnovationNum internally
+    // Adds a new neuron innovation and returns the new neuron ID in and out specify the connection that was split type specifies the type of neuron Increments
+    // the m_NextNeuronID and m_NextInnovationNum internally
     int InnovationDatabase::AddNeuronInnovation(int a_In, int a_Out, NeuronType a_NType) {
         ASSERT((a_In > 0) && (a_Out > 0));
         ASSERT(!((a_NType == INPUT) || (a_NType == BIAS) || (a_NType == OUTPUT)));

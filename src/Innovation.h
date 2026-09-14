@@ -165,13 +165,10 @@ namespace NEAT {
         int FindNeuronID(int a_in, int a_out) const;
         int FindLastNeuronID(int a_in, int a_out) const;
 
-        // Adds a new link innovation and returns its ID
-        // Increments the m_NextInnovationNum internally
+        // Adds a new link innovation and returns its ID Increments the m_NextInnovationNum internally
         int AddLinkInnovation(int a_in, int a_out);
 
-        // Adds a new neuron innovation and returns the new neuron ID
-        // in and out specify the connection that was split
-        // type specifies the type of neuron
+        // Adds a new neuron innovation and returns the new neuron ID in and out specify the connection that was split type specifies the type of neuron
         // Increments the m_NextNeuronID and m_NextInnovationNum internally
         int AddNeuronInnovation(int a_in, int a_out, NeuronType a_type);
 

@@ -206,8 +206,7 @@ namespace NEAT {
     // returns the leader (the member having the best fitness)
     Genome &Species::GetLeader()  // const
     {
-        // Don't store the leader any more
-        // Perform a search over the members and return the most fit member
+        // Don't store the leader any more Perform a search over the members and return the most fit member
 
         // if empty, return representative
         if (m_Individuals.size() == 0) {
@@ -250,8 +249,7 @@ namespace NEAT {
         }
     }
 
-    // this method performs fitness sharing
-    // it also boosts the fitness of the young and penalizes old species
+    // this method performs fitness sharing it also boosts the fitness of the young and penalizes old species
     void Species::AdjustFitness(Parameters &a_Parameters) {
         ASSERT(m_Individuals.size() > 0);
 
@@ -286,13 +284,11 @@ namespace NEAT {
                 t_fitness *= a_Parameters.OldAgePenalty;
             }
 
-            // extreme penalty if this species is stagnating for too long time
-            // one exception if this is the best species found so far
+            // extreme penalty if this species is stagnating for too long time one exception if this is the best species found so far
             if (m_GensNoImprovement > a_Parameters.SpeciesMaxStagnation) {
                 // the best species is always allowed to live
                 if (!m_BestSpecies) {
-                    // when the fitness is lowered that much, the species will
-                    // likely have 0 offspring and therefore will not survive
+                    // when the fitness is lowered that much, the species will likely have 0 offspring and therefore will not survive
                     t_fitness *= 0.0000001;
                 }
             }
@@ -378,8 +374,7 @@ namespace NEAT {
                     }
                     // else we can mate
                     else {
-                        // choose whether to mate at all
-                        // Do not allow crossover when in simplifying phase
+                        // choose whether to mate at all Do not allow crossover when in simplifying phase
                         if ((a_RNG.RandFloat() < a_Parameters.CrossoverRate) && (a_Pop.GetSearchMode() != SIMPLIFYING)) {
                             // get the father
                             Genome t_mom;
@@ -412,8 +407,7 @@ namespace NEAT {
                                 t_mom = GetIndividual(a_Parameters, a_RNG);
                                 t_dad = GetIndividual(a_Parameters, a_RNG);
 
-                                // The other parent should be a different one
-                                // number of tries to find different parent
+                                // The other parent should be a different one number of tries to find different parent
                                 int t_tries = 32;
                                 while (((t_mom.GetID() == t_dad.GetID())) && (t_tries--)) {
                                     t_mom = GetIndividual(a_Parameters, a_RNG);
@@ -423,8 +417,7 @@ namespace NEAT {
                                 t_interspecies = false;
                             }
 
-                            // OK we have both mom and dad so mate them
-                            // Choose randomly one of two types of crossover
+                            // OK we have both mom and dad so mate them Choose randomly one of two types of crossover
                             if (a_RNG.RandFloat() < a_Parameters.MultipointCrossoverRate) {
                                 t_baby = t_mom.Mate(t_dad, false, t_interspecies, a_RNG, a_Parameters);
                             } else {
@@ -452,8 +445,7 @@ namespace NEAT {
 
                     // std::cout << "mutated." << "\n";
 
-                    // Check if this baby is already present somewhere in the offspring
-                    // we don't want that
+                    // Check if this baby is already present somewhere in the offspring we don't want that
                     t_baby_exists_in_pop = false;
                     // Unless of course, we want clones to exist
                     if (!a_Parameters.AllowClones) {
@@ -488,8 +480,7 @@ namespace NEAT {
                 // std::cout << "fails constraints:" << t_baby.FailsConstraints(a_Parameters) << "\n\n";
             }
 
-            // We have a new offspring now
-            // give the offspring a new ID
+            // We have a new offspring now give the offspring a new ID
             t_baby.SetID(a_Pop.GetNextGenomeID());
             a_Pop.IncrementNextGenomeID();
 
@@ -619,8 +610,7 @@ namespace NEAT {
             }
             // else we can mate
             else {
-                // choose whether to mate at all
-                // Do not allow crossover when in simplifying phase
+                // choose whether to mate at all Do not allow crossover when in simplifying phase
                 if ((a_RNG.RandFloat() < a_Parameters.CrossoverRate) && (a_Pop.GetSearchMode() != SIMPLIFYING)) {
                     // get the mother and father
                     Genome t_mom;
@@ -653,9 +643,8 @@ namespace NEAT {
                         t_mom = GetIndividual(a_Parameters, a_RNG);
                         t_dad = GetIndividual(a_Parameters, a_RNG);
 
-                        // The other parent should be a different one
-                        // number of tries to find different parent
-                        // we can mate the same mom and dad and still get different baby
+                        // The other parent should be a different one number of tries to find different parent we can mate the same mom and dad and still get
+                        // different baby
                         int t_tries = 32;
                         while (((t_mom.GetID() == t_dad.GetID())) && (t_tries--)) {
                             t_mom = GetIndividual(a_Parameters, a_RNG);
@@ -664,8 +653,7 @@ namespace NEAT {
                         t_interspecies = false;
                     }
 
-                    // OK we have both mom and dad so mate them
-                    // Choose randomly one of two types of crossover
+                    // OK we have both mom and dad so mate them Choose randomly one of two types of crossover
                     if (a_RNG.RandFloat() < a_Parameters.MultipointCrossoverRate) {
                         t_baby = t_mom.Mate(t_dad, false, t_interspecies, a_RNG, a_Parameters);
                     } else {
@@ -694,8 +682,7 @@ namespace NEAT {
 #endif
             }
 
-            // Check if this baby is already present somewhere in the offspring
-            // we don't want that
+            // Check if this baby is already present somewhere in the offspring we don't want that
             t_baby_exists_in_pop = false;
             // Unless of course, we want clones to exist
             if (!a_Parameters.AllowClones) {
@@ -724,8 +711,7 @@ namespace NEAT {
             }
         } while ((t_baby_exists_in_pop || t_baby.FailsConstraints(a_Parameters)) && (t_constraint_trials--));  // end do
 
-        // We have a new offspring now
-        // give the offspring a new ID
+        // We have a new offspring now give the offspring a new ID
         t_baby.SetID(a_Pop.GetNextGenomeID());
         a_Pop.IncrementNextGenomeID();
 
@@ -788,8 +774,7 @@ namespace NEAT {
         }
         else if ((a_RNG.RandFloat() < a_Parameters.MutateRemLinkProb) && ((a_Pop.GetSearchMode() == SIMPLIFYING) || (a_Pop.GetSearchMode() == BLENDED)))
         {
-            // Keep doing this mutation until it is sure that the baby will not
-            // end up having dead ends or no links
+            // Keep doing this mutation until it is sure that the baby will not end up having dead ends or no links
             Genome t_saved_baby = t_baby;
             bool t_no_links = false, t_has_dead_ends = false;
 
@@ -867,8 +852,8 @@ namespace NEAT {
         }
 
 #else
-        // We will perform roulette wheel selection to choose the type of mutation and will mutate the baby
-        // This method guarantees that the baby will be mutated at least with one mutation
+        // We will perform roulette wheel selection to choose the type of mutation and will mutate the baby This method guarantees that the baby will be mutated
+        // at least with one mutation
         enum MutationTypes {
             ADD_NODE = 0,
             ADD_LINK,
@@ -958,8 +943,7 @@ namespace NEAT {
                     break;
 
                 case REMOVE_LINK: {
-                    // Keep doing this mutation until it is sure that the baby will not
-                    // end up having dead ends or no links
+                    // Keep doing this mutation until it is sure that the baby will not end up having dead ends or no links
                     Genome t_saved_baby = t_baby;
                     bool t_no_links = false, t_has_dead_ends = false;
 

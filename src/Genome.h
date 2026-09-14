@@ -122,8 +122,7 @@ namespace NEAT {
         // Removes the link with the specified innovation ID
         void RemoveLinkGene(int a_innovid);
 
-        // Remove node
-        // Links connected to this node are also removed
+        // Remove node Links connected to this node are also removed
         void RemoveNeuronGene(int a_id);
 
         // Returns the count of links inputting from the specified neuron ID
@@ -146,16 +145,14 @@ namespace NEAT {
         // To have traits that belong to the genome itself
         Gene m_GenomeGene;
 
-        // tells whether this genome was evaluated already
-        // used in steady state evolution
+        // tells whether this genome was evaluated already used in steady state evolution
         bool m_Evaluated;
 
         // the initial genome complexity
         int m_initial_num_neurons;
         int m_initial_num_links;
 
-        // A pointer to a class representing the phenotype's behavior
-        // Used in novelty searches
+        // A pointer to a class representing the phenotype's behavior Used in novelty searches
         PhenotypeBehavior *m_PhenotypeBehavior;
 
         ////////////////////////////
@@ -289,8 +286,7 @@ namespace NEAT {
         void DerivePhenotypicChanges(NeuralNetwork &a_Net);
 
         ////////////
-        // Other possible methods for building a phenotype go here
-        // Like CPPN/HyperNEAT stuff
+        // Other possible methods for building a phenotype go here Like CPPN/HyperNEAT stuff
         ////////////
         void BuildHyperNEATPhenotype(NeuralNetwork &net, Substrate &subst);
 
@@ -309,8 +305,7 @@ namespace NEAT {
         // returns the max innovation Id
         int GetLastInnovationID() const;
 
-        // Sorts the genes of the genome
-        // The neurons by IDs and the links by innovation numbers.
+        // Sorts the genes of the genome The neurons by IDs and the links by innovation numbers.
         void SortGenes();
 
         // overload '<' used for sorting. From fittest to poorest.
@@ -329,12 +324,10 @@ namespace NEAT {
         // Mutation
         ////////////
 
-        // Adds a new neuron to the genome
-        // returns true if succesful
+        // Adds a new neuron to the genome returns true if succesful
         bool Mutate_AddNeuron(InnovationDatabase &a_Innovs, const Parameters &a_Parameters, RNG &a_RNG);
 
-        // Adds a new link to the genome
-        // returns true if succesful
+        // Adds a new link to the genome returns true if succesful
         bool Mutate_AddLink(InnovationDatabase &a_Innovs, const Parameters &a_Parameters, RNG &a_RNG);
 
         // Remove a random link from the genome
@@ -342,8 +335,7 @@ namespace NEAT {
         // returns true if succesful
         bool Mutate_RemoveLink(RNG &a_RNG);
 
-        // Removes a hidden neuron having only one input and only one output with
-        // a direct link between them.
+        // Removes a hidden neuron having only one input and only one output with a direct link between them.
         bool Mutate_RemoveSimpleNeuron(InnovationDatabase &a_Innovs, const Parameters &a_Parameters, RNG &a_RNG);
 
         // Perturbs the weights
@@ -383,19 +375,16 @@ namespace NEAT {
         // Mating
         ///////////
 
-        // Mate this genome with dad and return the baby
-        // If this is multipoint mating, genes are inherited randomly
-        // If the a_averagemating bool is true, then the genes are averaged
-        // Disjoint and excess genes are inherited from the fittest parent
-        // If fitness is equal, the smaller genome is assumed to be the better one
+        // Mate this genome with dad and return the baby If this is multipoint mating, genes are inherited randomly If the a_averagemating bool is true, then
+        // the genes are averaged Disjoint and excess genes are inherited from the fittest parent If fitness is equal, the smaller genome is assumed to be the
+        // better one
         Genome Mate(Genome &a_dad, bool a_averagemating, bool a_interspecies, RNG &a_RNG, Parameters &a_Parameters);
 
         //////////
         // Utility
         //////////
 
-        // Search the genome for isolated structure and clean it up
-        // Returns true is something was removed
+        // Search the genome for isolated structure and clean it up Returns true is something was removed
         bool Cleanup();
 
         ////////////////////

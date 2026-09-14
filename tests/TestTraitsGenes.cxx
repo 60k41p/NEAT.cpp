@@ -201,8 +201,7 @@ int TestTraitsGenes(int argc, char *argv[]) {
         CHECK(threw);
     }
     {
-        // Dependency gating: distance is skipped unless both sides have the
-        // gate trait set to one of dep_values.
+        // Dependency gating: distance is skipped unless both sides have the gate trait set to one of dep_values.
         Gene a, b;
         Trait gate_a, gate_b, v_a, v_b;
         gate_a.value = std::string("on");

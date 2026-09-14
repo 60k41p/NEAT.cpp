@@ -136,8 +136,7 @@ inline int Rounded(const double a_Val) {
     }
 }
 
-// rounds a double up or down depending on whether its
-// mantissa is higher or lower than offset
+// rounds a double up or down depending on whether its mantissa is higher or lower than offset
 inline int RoundUnderOffset(const double a_Val, const double a_Offset) {
     // ASSERT(a_Offset < 1 && a_Offset > -1); ???!? Should this be a test for the offset
     const int t_Integral = static_cast<int>(a_Val);
@@ -150,8 +149,8 @@ inline int RoundUnderOffset(const double a_Val, const double a_Offset) {
     }
 }
 
-// Scales the value "a", that is in range [a_min .. a_max] into its relative value in the range [tr_min .. tr_max]
-// Example: A=2, in the range [0 .. 4] .. we want to scale it to the range [-12 .. 12] .. we get 0..
+// Scales the value "a", that is in range [a_min .. a_max] into its relative value in the range [tr_min .. tr_max] Example: A=2, in the range [0 .. 4] .. we
+// want to scale it to the range [-12 .. 12] .. we get 0..
 inline void Scale(double &a, const double a_min, const double a_max, const double a_tr_min, const double a_tr_max) {
     //        ASSERT((a >= a_min) && (a <= a_max));
     //        ASSERT(a_min <= a_max);
@@ -163,8 +162,8 @@ inline void Scale(double &a, const double a_min, const double a_max, const doubl
     a = a_tr_min + t_r * rel_a;
 }
 
-// Scales the value "a", that is in range [a_min .. a_max] into its relative value in the range [tr_min .. tr_max]
-// Example: A=2, in the range [0 .. 4] .. we want to scale it to the range [-12 .. 12] .. we get 0..
+// Scales the value "a", that is in range [a_min .. a_max] into its relative value in the range [tr_min .. tr_max] Example: A=2, in the range [0 .. 4] .. we
+// want to scale it to the range [-12 .. 12] .. we get 0..
 inline void Scale(float &a, const double a_min, const double a_max, const double a_tr_min, const double a_tr_max) {
     //        ASSERT((a >= a_min) && (a <= a_max));
     //        ASSERT(a_min <= a_max);

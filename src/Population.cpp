@@ -228,11 +228,9 @@ namespace NEAT {
         m_CurrentMPC /= m_Genomes.size();
     }
 
-    // Separates the population into species
-    // also adjusts the compatibility treshold if this feature is enabled
+    // Separates the population into species also adjusts the compatibility treshold if this feature is enabled
     void Population::Speciate() {
-        // iterate through the genome list and speciate
-        // at least 1 genome must be present
+        // iterate through the genome list and speciate at least 1 genome must be present
         ASSERT(m_Genomes.size() > 0);
 
         // first clear out the species
@@ -245,8 +243,7 @@ namespace NEAT {
         for (unsigned int i = 0; i < m_Genomes.size(); i++) {
             t_added = false;
 
-            // iterate through each species and check if compatible. If compatible, then add to the species.
-            // if not compatible, create a new species.
+            // iterate through each species and check if compatible. If compatible, then add to the species. if not compatible, create a new species.
             for (unsigned int j = 0; j < m_Species.size(); j++) {
                 if (m_Species[j].NumIndividuals() > 0) {
                     if (m_Genomes[i].IsCompatibleWith(m_Species[j].GetRepresentative(), m_Parameters)) {
@@ -378,11 +375,8 @@ namespace NEAT {
             }
         }
 
-        // This prevents the previous best species from sudden death
-        // If the best species happened to be another one, reset the old
-        // species age so it still will have a chance of survival and improvement
-        // if it grows old and stagnates again, it is no longer the best one
-        // so it will die off anyway.
+        // This prevents the previous best species from sudden death If the best species happened to be another one, reset the old species age so it still will
+        // have a chance of survival and improvement if it grows old and stagnates again, it is no longer the best one so it will die off anyway.
         if ((t_oldbestid != t_newbestid) && (t_oldbestid != -1)) {
             m_Species[t_oldbestidx].ResetAgeGens();
         }
@@ -600,9 +594,7 @@ namespace NEAT {
         // Increase generation number
         m_Generation++;
 
-        // At this point we may also empty our innovation database
-        // This is the place where we control whether we want to
-        // keep innovation numbers forever or not.
+        // At this point we may also empty our innovation database This is the place where we control whether we want to keep innovation numbers forever or not.
         if (!m_Parameters.InnovationsForever) {
             m_InnovationDatabase.Flush();
         }
@@ -1244,12 +1236,9 @@ namespace NEAT {
         return t_sparseness;
     }
 
-    // This is the main method performing novelty search.
-    // Performs one reproduction and assigns novelty scores
-    // based on the current population and the archive.
-    // If a successful behavior was encountered, returns true
-    // and the genome a_SuccessfulGenome is overwritten with the
-    // genome generating the successful behavior
+    // This is the main method performing novelty search. Performs one reproduction and assigns novelty scores based on the current population and the archive.
+    // If a successful behavior was encountered, returns true and the genome a_SuccessfulGenome is overwritten with the genome generating the successful
+    // behavior
     bool Population::NoveltySearchTick(Genome &a_SuccessfulGenome) {
         // Recompute the sparseness/fitness for all individuals in the population
         // This will introduce the constant pressure to do something new
@@ -1277,20 +1266,16 @@ namespace NEAT {
             return true;
         }
 
-        // We have the new behavior, now let's calculate the sparseness of
-        // the point in behavior space
+        // We have the new behavior, now let's calculate the sparseness of the point in behavior space
         double t_sparseness = ComputeSparseness(*t_new_baby);
 
-        // OK now we have the sparseness for this behavior
-        // if the sparseness is above Pmin, add this behavior to the archive
+        // OK now we have the sparseness for this behavior if the sparseness is above Pmin, add this behavior to the archive
         m_GensSinceLastArchiving++;
         if (t_sparseness > m_Parameters.NoveltySearch_P_min) {
-            // check to see if this behavior is already present in the archive
-            // if it is already present, abort addition
+            // check to see if this behavior is already present in the archive if it is already present, abort addition
             bool present = false;
 
-            // you can actually skip this code if the behavior comparison gets too slow
-            // maybe they don't repeat?
+            // you can actually skip this code if the behavior comparison gets too slow maybe they don't repeat?
             /*for(unsigned int i=0; i<(*m_BehaviorArchive).size(); i++)
             {
                 if ( (*(t_new_baby->m_PhenotypeBehavior)).m_Data == (*m_BehaviorArchive)[i].m_Data )

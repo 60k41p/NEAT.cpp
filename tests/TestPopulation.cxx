@@ -46,8 +46,7 @@ namespace {
         return NEAT::Genome(p, init);
     }
 
-    // Trivial evaluator: reward genomes with more links (exercises fitness flow
-    // without any domain code). Deterministic given the population state.
+    // Trivial evaluator: reward genomes with more links (exercises fitness flow without any domain code). Deterministic given the population state.
     void EvaluateByLinkCount(NEAT::Population &pop) {
         for (unsigned i = 0; i < pop.NumGenomes(); ++i) {
             NEAT::Genome &g = pop.AccessGenomeByIndex(static_cast<int>(i));

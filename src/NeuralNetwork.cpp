@@ -233,15 +233,13 @@ namespace NEAT {
         for (unsigned int i = 0; i < m_connections.size(); i++) {
             m_connections[i].m_signal = m_neurons[m_connections[i].m_source_neuron_idx].m_activation * m_connections[i].m_weight;
         }
-        // Loop the connections again. This time add the signals to the target neurons.
-        // This will largely require out of order memory writes. This is the one loop where
-        // this will happen.
+        // Loop the connections again. This time add the signals to the target neurons. This will largely require out of order memory writes. This is the one
+        // loop where this will happen.
         for (unsigned int i = 0; i < m_connections.size(); i++) {
             m_neurons[m_connections[i].m_target_neuron_idx].m_activesum += m_connections[i].m_signal;
         }
-        // Now loop nodes_activesums, pass the signals through the activation function
-        // and store the result back to nodes_activations
-        // also skip inputs since they do not get an activation
+        // Now loop nodes_activesums, pass the signals through the activation function and store the result back to nodes_activations also skip inputs since
+        // they do not get an activation
         for (unsigned int i = m_num_inputs; i < m_neurons.size(); i++) {
             double x = m_neurons[i].m_activesum;
             m_neurons[i].m_activesum = 0;
@@ -257,15 +255,13 @@ namespace NEAT {
         for (unsigned int i = 0; i < m_connections.size(); i++) {
             m_connections[i].m_signal = m_neurons[m_connections[i].m_source_neuron_idx].m_activation * m_connections[i].m_weight;
         }
-        // Loop the connections again. This time add the signals to the target neurons.
-        // This will largely require out of order memory writes. This is the one loop where
-        // this will happen.
+        // Loop the connections again. This time add the signals to the target neurons. This will largely require out of order memory writes. This is the one
+        // loop where this will happen.
         for (unsigned int i = 0; i < m_connections.size(); i++) {
             m_neurons[m_connections[i].m_target_neuron_idx].m_activesum += m_connections[i].m_signal;
         }
-        // Now loop nodes_activesums, pass the signals through the activation function
-        // and store the result back to nodes_activations
-        // also skip inputs since they do not get an activation
+        // Now loop nodes_activesums, pass the signals through the activation function and store the result back to nodes_activations also skip inputs since
+        // they do not get an activation
         for (unsigned int i = m_num_inputs; i < m_neurons.size(); i++) {
             double x = m_neurons[i].m_activesum;
             m_neurons[i].m_activesum = 0;
@@ -327,15 +323,13 @@ namespace NEAT {
         for (unsigned int i = 0; i < m_connections.size(); i++) {
             m_connections[i].m_signal = m_neurons[m_connections[i].m_source_neuron_idx].m_activation * m_connections[i].m_weight;
         }
-        // Loop the connections again. This time add the signals to the target neurons.
-        // This will largely require out of order memory writes. This is the one loop where
-        // this will happen.
+        // Loop the connections again. This time add the signals to the target neurons. This will largely require out of order memory writes. This is the one
+        // loop where this will happen.
         for (unsigned int i = 0; i < m_connections.size(); i++) {
             m_neurons[m_connections[i].m_target_neuron_idx].m_activesum += m_connections[i].m_signal;
         }
-        // Now loop nodes_activesums, pass the signals through the activation function
-        // and store the result back to nodes_activations
-        // also skip inputs since they do not get an activation
+        // Now loop nodes_activesums, pass the signals through the activation function and store the result back to nodes_activations also skip inputs since
+        // they do not get an activation
         for (unsigned int i = m_num_inputs; i < m_neurons.size(); i++) {
             double x = m_neurons[i].m_activesum + m_neurons[i].m_bias;
             m_neurons[i].m_activesum = 0;
@@ -397,9 +391,8 @@ namespace NEAT {
         for (unsigned int i = 0; i < m_connections.size(); i++) {
             m_connections[i].m_signal = m_neurons[m_connections[i].m_source_neuron_idx].m_activation * m_connections[i].m_weight;
         }
-        // Loop the connections again. This time add the signals to the target neurons.
-        // This will largely require out of order memory writes. This is the one loop where
-        // this will happen.
+        // Loop the connections again. This time add the signals to the target neurons. This will largely require out of order memory writes. This is the one
+        // loop where this will happen.
         for (unsigned int i = 0; i < m_connections.size(); i++) {
             m_neurons[m_connections[i].m_target_neuron_idx].m_activesum += m_connections[i].m_signal;
         }
@@ -408,9 +401,8 @@ namespace NEAT {
             double t_const = a_dtime / m_neurons[i].m_timeconst;
             m_neurons[i].m_membrane_potential = (1.0 - t_const) * m_neurons[i].m_membrane_potential + t_const * m_neurons[i].m_activesum;
         }
-        // Now loop nodes_activesums, pass the signals through the activation function
-        // and store the result back to nodes_activations
-        // also skip inputs since they do not get an activation
+        // Now loop nodes_activesums, pass the signals through the activation function and store the result back to nodes_activations also skip inputs since
+        // they do not get an activation
         for (unsigned int i = m_num_inputs; i < m_neurons.size(); i++) {
             double x = m_neurons[i].m_membrane_potential + m_neurons[i].m_bias;
             m_neurons[i].m_activesum = 0;
@@ -523,8 +515,7 @@ namespace NEAT {
                 m_connections[i].m_weight = (m_connections[i].m_weight + t_delta);
             } else if (m_connections[i].m_weight < 0)  // negative weight
             {
-                // In the inhibatory case, we strengthen the synapse when output is low and
-                // input is high
+                // In the inhibatory case, we strengthen the synapse when output is low and input is high
                 double t_delta = m_connections[i].m_hebb_pre_rate * (t_max_weight - m_connections[i].m_weight) * t_incoming_neuron_activation *
                                      (1.0 - t_outgoing_neuron_activation) -
                                  m_connections[i].m_hebb_rate * t_max_weight * t_incoming_neuron_activation * t_outgoing_neuron_activation;

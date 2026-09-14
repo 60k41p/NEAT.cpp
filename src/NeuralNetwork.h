@@ -46,8 +46,7 @@ namespace NEAT {
         bool m_recur_flag;  // recurrence flag for displaying purposes
         // can be ignored
 
-        // Hebbian learning parameters
-        // Ignored in case there is no lifetime learning
+        // Hebbian learning parameters Ignored in case there is no lifetime learning
         double m_hebb_rate;
         double m_hebb_pre_rate;
 

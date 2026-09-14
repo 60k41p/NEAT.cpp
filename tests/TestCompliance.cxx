@@ -106,8 +106,7 @@ int TestCompliance(int argc, char *argv[]) {
         std::filesystem::remove(tmp, ec);
     }
 
-    // Fresh seed genomes satisfy the default constraints (no dead ends that
-    // would make Population construction spin retrying).
+    // Fresh seed genomes satisfy the default constraints (no dead ends that would make Population construction spin retrying).
     {
         Parameters p;
         p.Reset();

@@ -59,8 +59,7 @@ namespace NEAT {
         // Controls the use of speciation. When off, the population will consist of only one species.
         bool Speciation;
 
-        // If true, this enables dynamic compatibility thresholding
-        // It will keep the number of species between MinSpecies and MaxSpecies
+        // If true, this enables dynamic compatibility thresholding It will keep the number of species between MinSpecies and MaxSpecies
         bool DynamicCompatibility;
 
         // Minimum number of species
@@ -86,8 +85,7 @@ namespace NEAT {
         // Normalize genome size when calculating compatibility
         bool NormalizeGenomeSize;
 
-        // Pointer to a function that specifies custom topology constraints
-        // Should return true if the genome FAILS to meet the constraints
+        // Pointer to a function that specifies custom topology constraints Should return true if the genome FAILS to meet the constraints
         bool (*CustomConstraints)(Genome &g);
 
         ////////////////////////////////
@@ -104,8 +102,7 @@ namespace NEAT {
         // Number of generations without improvement (stagnation) allowed for a species
         unsigned int SpeciesMaxStagnation;
 
-        // Minimum jump in fitness necessary to be considered as improvement.
-        // Setting this value to 0.0 makes the system to behave like regular NEAT.
+        // Minimum jump in fitness necessary to be considered as improvement. Setting this value to 0.0 makes the system to behave like regular NEAT.
         double StagnationDelta;
 
         // AgeGens threshold, meaning if a species if above it, it is considered old
@@ -131,15 +128,14 @@ namespace NEAT {
         // Probability for a baby to result from sexual reproduction (crossover/mating). 1.0 = 100%
         double CrossoverRate;
 
-        // If a baby results from sexual reproduction, this probability determines if mutation will
-        // be performed after crossover. 1.0 = 100% (always mutate after crossover)
+        // If a baby results from sexual reproduction, this probability determines if mutation will be performed after crossover. 1.0 = 100% (always mutate
+        // after crossover)
         double OverallMutationRate;
 
         // Probability for a baby to result from inter-species mating.
         double InterspeciesCrossoverRate;
 
-        // Probability for a baby gene to result from Multipoint Crossover when mating. 1.0 = 100%
-        // The default if the Average mating.
+        // Probability for a baby gene to result from Multipoint Crossover when mating. 1.0 = 100% The default if the Average mating.
         double MultipointCrossoverRate;
 
         // Probability that when doing multipoint crossover,
@@ -190,8 +186,7 @@ namespace NEAT {
         // Dynamic Pmin?
         bool NoveltySearch_Dynamic_Pmin;
 
-        // How many evaluations should pass without adding to the archive
-        // in order to lower Pmin
+        // How many evaluations should pass without adding to the archive in order to lower Pmin
         unsigned int NoveltySearch_No_Archiving_Stagnation_Treshold;
 
         // How should it be multiplied (make it less than 1.0)
@@ -303,8 +298,8 @@ namespace NEAT {
         double MinActivationB;
         double MaxActivationB;
 
-        // Probability for a baby that an activation function type will be changed for a single neuron
-        // considered a structural mutation because of the large impact on fitness
+        // Probability for a baby that an activation function type will be changed for a single neuron considered a structural mutation because of the large
+        // impact on fitness
         double MutateNeuronActivationTypeProb;
 
         // Probabilities for a particular activation function appearance
@@ -410,8 +405,7 @@ namespace NEAT {
 
         unsigned int MaxDepth;
 
-        // How many hidden layers before connecting nodes to output. At 0 there is
-        // one hidden layer. At 1, there are two and so on.
+        // How many hidden layers before connecting nodes to output. At 0 there is one hidden layer. At 1, there are two and so on.
         unsigned int IterationLevel;
 
         // The Bias value for the CPPN queries.
@@ -458,8 +452,7 @@ namespace NEAT {
         // Methods
         ////////////////////////////////////
 
-        // Load the parameters from a file
-        // returns 0 on success
+        // Load the parameters from a file returns 0 on success
         int Load(const char *filename);
         // Load the parameters from an already opened file for reading
         int Load(std::ifstream &a_DataFile);

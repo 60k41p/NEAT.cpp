@@ -69,8 +69,7 @@ namespace NEAT {
         // age of species (in evaluations)
         unsigned int m_AgeEvaluations;
 
-        // how many of this species should be spawned for
-        // the next population
+        // how many of this species should be spawned for the next population
         double m_OffspringRqd;
 
        public:
@@ -81,14 +80,12 @@ namespace NEAT {
         // Useful in co-evolution
         Genome m_BestGenome;
 
-        // generations since fitness has improved, we can use
-        // this info to kill off a species if required
+        // generations since fitness has improved, we can use this info to kill off a species if required
         unsigned int m_GensNoImprovement;
         // evaluations since fitness has improved
         unsigned int m_EvalsNoImprovement;
 
-        // Color. Useful for displaying
-        // Safe to access directly.
+        // Color. Useful for displaying Safe to access directly.
         int m_R, m_G, m_B;
 
         double m_AverageFitness;
@@ -193,9 +190,8 @@ namespace NEAT {
         // calculates how many babies this species will spawn in total
         void CountOffspring();
 
-        // this method performs fitness sharing
-        // it also boosts the fitness if young and penalizes if old
-        // applies extreme penalty for stagnating species over SpeciesDropoffAge generations.
+        // this method performs fitness sharing it also boosts the fitness if young and penalizes if old applies extreme penalty for stagnating species over
+        // SpeciesDropoffAge generations.
         void AdjustFitness(Parameters &a_Parameters);
 
         // Sorts the individuals

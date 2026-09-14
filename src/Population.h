@@ -258,8 +258,8 @@ namespace NEAT {
         // Returns the species index
         unsigned int ChooseParentSpecies();
 
-        // Removes worst member of the whole population that has been around for a minimum amount of time
-        // returns the genome that was just deleted (may be useful)
+        // Removes worst member of the whole population that has been around for a minimum amount of time returns the genome that was just deleted (may be
+        // useful)
         Genome RemoveWorstIndividual();
 
         void ClearEmptySpecies();
@@ -269,8 +269,7 @@ namespace NEAT {
         // and copies the genome that was deleted to a_geleted_genome
         Genome *Tick(Genome &a_deleted_genome);
 
-        // Takes an individual and puts it in its apropriate species
-        // Useful in realtime when the compatibility treshold changes
+        // Takes an individual and puts it in its apropriate species Useful in realtime when the compatibility treshold changes
         void ReassignSpecies(int a_genome_idx);
 
         unsigned int m_NumEvaluations;
@@ -278,20 +277,15 @@ namespace NEAT {
         ///////////////////////////////
         // Novelty search
 
-        // A pointer to the archive of PhenotypeBehaviors
-        // Necessary to contain derived custom classes.
+        // A pointer to the archive of PhenotypeBehaviors Necessary to contain derived custom classes.
         std::vector<PhenotypeBehavior> *m_BehaviorArchive;
 
-        // Call this function to allocate memory for your custom
-        // behaviors. This initializes everything.
+        // Call this function to allocate memory for your custom behaviors. This initializes everything.
         void InitPhenotypeBehaviorData(std::vector<PhenotypeBehavior> *a_population, std::vector<PhenotypeBehavior> *a_archive);
 
-        // This is the main method performing novelty search.
-        // Performs one reproduction and assigns novelty scores
-        // based on the current population and the archive.
-        // If a successful behavior was encountered, returns true
-        // and the genome a_SuccessfulGenome is overwritten with the
-        // genome generating the successful behavior
+        // This is the main method performing novelty search. Performs one reproduction and assigns novelty scores based on the current population and the
+        // archive. If a successful behavior was encountered, returns true and the genome a_SuccessfulGenome is overwritten with the genome generating the
+        // successful behavior
         bool NoveltySearchTick(Genome &a_SuccessfulGenome);
 
         double ComputeSparseness(Genome &genome);

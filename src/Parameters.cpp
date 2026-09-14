@@ -47,8 +47,7 @@ namespace NEAT {
         // Speciation on/off
         Speciation = true;
 
-        // If true, this enables dynamic compatibility thresholding
-        // It will keep the number of species between MinSpecies and MaxSpecies
+        // If true, this enables dynamic compatibility thresholding It will keep the number of species between MinSpecies and MaxSpecies
         DynamicCompatibility = true;
 
         // Minimum number of species
@@ -98,8 +97,7 @@ namespace NEAT {
         // Number of generations or evaluations without improvement (stagnation) allowed for a species
         SpeciesMaxStagnation = 25000;
 
-        // Minimum jump in fitness necessary to be considered as improvement.
-        // Setting this value to 0.0 makes the system to behave like regular NEAT.
+        // Minimum jump in fitness necessary to be considered as improvement. Setting this value to 0.0 makes the system to behave like regular NEAT.
         StagnationDelta = 0.0;
 
         // AgeGens threshold, meaning if a species is above it, it is considered old
@@ -124,15 +122,14 @@ namespace NEAT {
         // If asexual reprodiction is chosen, the baby will be mutated 100%
         CrossoverRate = 0.7;
 
-        // If a baby results from sexual reproduction, this probability determines if mutation will
-        // be performed after crossover. 1.0 = 100% (always mutate after crossover)
+        // If a baby results from sexual reproduction, this probability determines if mutation will be performed after crossover. 1.0 = 100% (always mutate
+        // after crossover)
         OverallMutationRate = 0.75;
 
         // Probability for a baby to result from inter-species mating.
         InterspeciesCrossoverRate = 0.0001;
 
-        // Probability for a baby to result from Multipoint Crossover when mating. 1.0 = 100%
-        // The default is the Average mating.
+        // Probability for a baby to result from Multipoint Crossover when mating. 1.0 = 100% The default is the Average mating.
         MultipointCrossoverRate = 0.75;
 
         // Probability that when doing multipoint crossover,
@@ -186,8 +183,7 @@ namespace NEAT {
         // Dynamic Pmin?
         NoveltySearch_Dynamic_Pmin = true;
 
-        // How many evaluations should pass without adding to the archive
-        // in order to lower Pmin
+        // How many evaluations should pass without adding to the archive in order to lower Pmin
         NoveltySearch_No_Archiving_Stagnation_Treshold = 150;
 
         // How should it be multiplied (make it less than 1.0)
@@ -315,8 +311,8 @@ namespace NEAT {
         MinNeuronBias = 0.0;
         MaxNeuronBias = 0.0;
 
-        // Probability for a baby that an activation function type will be changed for a single neuron
-        // considered a structural mutation because of the large impact on fitness
+        // Probability for a baby that an activation function type will be changed for a single neuron considered a structural mutation because of the large
+        // impact on fitness
         MutateNeuronActivationTypeProb = 0.0;
 
         // Probabilities for a particular activation function appearance
@@ -381,12 +377,10 @@ namespace NEAT {
         // Modifier per generation for keeping the species stable
         CompatTresholdModifier = 0.1;
 
-        // Per how many generations to change the treshold
-        // (used in generational mode)
+        // Per how many generations to change the treshold (used in generational mode)
         CompatTreshChangeInterval_Generations = 1;
 
-        // Per how many evaluations to change the treshold
-        // (used in steady state mode)
+        // Per how many evaluations to change the treshold (used in steady state mode)
         CompatTreshChangeInterval_Evaluations = 1;
 
         // Minimal distance for two individuals to be considered different (as in clones or not)
@@ -406,8 +400,7 @@ namespace NEAT {
         InitialDepth = 3;
         MaxDepth = 3;
 
-        // How many hidden layers before connecting nodes to output. At 0 there is
-        // one hidden layer. At 1, there are two and so on.
+        // How many hidden layers before connecting nodes to output. At 0 there is one hidden layer. At 1, there are two and so on.
         IterationLevel = 1;
 
         // The Bias value for the CPPN queries.
