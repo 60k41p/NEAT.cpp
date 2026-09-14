@@ -114,13 +114,13 @@ namespace NEAT {
             // build an XOR network
 
             // The input neurons are 3 // indexes 0 1 2
-            Neuron t_i1, t_i2, t_i3;
+            Neuron t_i1{}, t_i2{}, t_i3{};
 
             // The output neuron       // index 3
-            Neuron t_o1;
+            Neuron t_o1{};
 
             // The hidden neuron       // index 4
-            Neuron t_h1;
+            Neuron t_h1{};
 
             m_neurons.emplace_back(t_i1);
             m_neurons.emplace_back(t_i2);
@@ -129,7 +129,7 @@ namespace NEAT {
             m_neurons.emplace_back(t_h1);
 
             // The connections
-            Connection t_c;
+            Connection t_c{};
 
             t_c.m_source_neuron_idx = 0;
             t_c.m_target_neuron_idx = 3;

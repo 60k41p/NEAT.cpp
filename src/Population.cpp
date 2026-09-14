@@ -786,7 +786,7 @@ namespace NEAT {
             IncrementNextSpeciesID();
         } else {
             // try to find a compatible species
-            Genome &t_to_compare = t_cur_species->GetRepresentative();  // was GetRepresentative()
+            Genome t_to_compare = t_cur_species->GetRepresentative();
 
             t_found = false;
             while ((t_cur_species != m_Species.end()) && (!t_found)) {

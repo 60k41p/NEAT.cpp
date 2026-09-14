@@ -417,6 +417,7 @@ int TestNeuralNetwork(int argc, char *argv[]) {
             n.m_activation_function_type = UNSIGNED_SIGMOID;  // RTRL knows sigmoids only
         }
         net.InitRTRLMatrix();
+        net.Flush();
         CHECK(net.m_neurons[0].m_sensitivity_matrix.size() == net.m_neurons.size());
         std::vector<double> in{1.0, 1.0, 1.0};
         net.Input(in);

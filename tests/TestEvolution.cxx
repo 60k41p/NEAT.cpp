@@ -119,16 +119,14 @@ namespace {
     // best fitness exceeded 15.0 (summed error < ~0.13), or -1 if the budget ran out.
     int EvolveXor(unsigned long rng_seed, unsigned max_generations, double *best_fitness_out = nullptr) {
         Population pop(MakeXorSeed(), XorParams(), true, 1.0, static_cast<int>(rng_seed));
-        double prev_best = -1.0;
+        double best_seen = -1.0;
         for (unsigned gen = 0; gen < max_generations; ++gen) {
             EvaluateXOR(pop);
             double best = 0.0;
             for (unsigned i = 0; i < pop.NumGenomes(); ++i) {
                 best = std::max(best, pop.AccessGenomeByIndex(static_cast<int>(i)).GetFitness());
             }
-            // A solved population must never regress below its own record within the run.
-            CHECK(best >= prev_best - 1e-9);
-            prev_best = std::max(prev_best, best);
+            best_seen = std::max(best_seen, best);
             if (best > 15.0) {
                 if (best_fitness_out) {
                     *best_fitness_out = best;
@@ -136,9 +134,12 @@ namespace {
                 return static_cast<int>(gen);
             }
             pop.Epoch();
+            // The current leader can disappear when its species receives no
+            // offspring. The population's historical record must not regress.
+            CHECK(pop.GetBestFitnessEver() >= best_seen - 1e-9);
         }
         if (best_fitness_out) {
-            *best_fitness_out = prev_best;
+            *best_fitness_out = best_seen;
         }
         return -1;
     }
