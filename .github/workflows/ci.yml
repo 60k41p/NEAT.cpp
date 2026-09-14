@@ -21,10 +21,10 @@ jobs:
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DNEATCPP_ENABLE_TESTS=ON
 
       - name: Build
-        run: cmake --build build --config ${{ matrix.build_type }} -j 2
+        run: cmake --build build --config ${{ matrix.build_type }} --parallel
 
       - name: Test
-        run: ctest --test-dir build -C ${{ matrix.build_type }} --output-on-failure -j 2 --timeout 300
+        run: ctest --test-dir build -C ${{ matrix.build_type }} --output-on-failure --parallel --timeout 300
 
   sanitizers:
     name: sanitizers (Linux, Debug, ASan+UBSan)
@@ -45,10 +45,10 @@ jobs:
           -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
 
       - name: Build
-        run: cmake --build build-san -j 2
+        run: cmake --build build-san --parallel
 
       - name: Test
-        run: ctest --test-dir build-san --output-on-failure -j 2 --timeout 300
+        run: ctest --test-dir build-san --output-on-failure --parallel --timeout 300
 
   format:
     name: format (clang-format check)
@@ -77,10 +77,10 @@ jobs:
           -DCMAKE_SHARED_LINKER_FLAGS="--coverage"
 
       - name: Build
-        run: cmake --build build-cov -j 2
+        run: cmake --build build-cov --parallel
 
       - name: Test
-        run: ctest --test-dir build-cov --output-on-failure -j 2 --timeout 300
+        run: ctest --test-dir build-cov --output-on-failure --parallel --timeout 300
 
       - name: Report
         run: |
