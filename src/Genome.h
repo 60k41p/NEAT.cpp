@@ -27,7 +27,18 @@
 
 /*
  * File:        Genome.h
- * Description: Definition for the Genome class.
+ * Description: The NEAT genotype: innovation-numbered neuron/link gene lists with fitness bookkeeping,
+ *              plus the full operator set — phenotype construction (buildPhenotype/buildHyperNEATPhenotype),
+ *              structural and parametric mutation (mutate*), multipoint mating (mate), compatibility
+ *              measurement (compatibilityDistance/isCompatibleWith) and persistence (save/load).
+ *              Genomes are evaluated externally (setFitness), speciated by Population and activated as
+ *              NeuralNetwork phenotypes.
+ *
+ * References: Stanley & Miikkulainen, "Evolving Neural Networks through Augmenting Topologies" (2002),
+ *             Sections 2-5 (genotype, historical markings, speciation, complexification); see
+ *             references/Evolving Neural Networks through Augmenting Topologies.pdf.md. HyperNEAT decoding:
+ *             Stanley et al. (2009) with the substrate in src/Substrate.h. Intra-repo users: src/Population.h,
+ *             src/Species.h, src/Innovation.h, tests/TestGenome.cpp, tests/TestEvolution.cpp.
  */
 
 #pragma once
@@ -42,6 +53,7 @@
 #include "PhenotypeBehavior.h"
 #include "Random.h"
 #include "Substrate.h"
+#include "Types.h"
 
 namespace NEAT {
 
@@ -56,348 +68,329 @@ namespace NEAT {
 
     class PhenotypeBehavior;
 
-    extern ActivationFunction GetRandomActivation(Parameters &a_Parameters, RNG &a_RNG);
+    // Draws an activation function honoring the per-function probabilities in Parameters.
+    extern ActivationFunction getRandomActivation(Parameters &parameters, RNG &rng);
 
+    // Seed topologies for a fresh genome: perceptron-like minimal net, or a layered net with numHidden units.
     enum GenomeSeedType { PERCEPTRON = 0, LAYERED = 1 };
 
+    // Seed descriptor consumed by the Genome(parameters, init) constructor. Note: numInputs counts the bias
+    // input, so an XOR task with 2 problem inputs uses 3 (see tests/TestEvolution.cpp).
     class GenomeInitStruct {
        public:
-        int NumInputs;
-        int NumHidden;  // ignored for seed_type == 0, specifies number of hidden units if seed_type == 1
-        int NumOutputs;
-        bool FS_NEAT;
-        ActivationFunction OutputActType;
-        ActivationFunction HiddenActType;
-        GenomeSeedType SeedType;
-        int NumLayers;
-        int FS_NEAT_links;
+        // Input count including the bias neuron (unless Parameters::dontUseBiasNeuron).
+        int numInputs;
+        // Hidden-unit count, used only when seedType == LAYERED.
+        int numHidden;
+        // Output count.
+        int numOutputs;
+        // Feature-select start (minimal connectivity evolved upward); keep false for dense seeds.
+        bool fsNeat;
+        // Activation functions for created output/hidden neurons.
+        ActivationFunction outputActType;
+        ActivationFunction hiddenActType;
+        // Which seed topology to build.
+        GenomeSeedType seedType;
+        // Layer count for layered seeds.
+        int numLayers;
+        // Initial link count for FS-NEAT seeds.
+        int fsNeatLinks;
 
         GenomeInitStruct() {
-            NumInputs = 1;
-            NumHidden = 0;
-            NumOutputs = 1;
-            FS_NEAT = 0;
-            FS_NEAT_links = 1;
-            HiddenActType = UNSIGNED_SIGMOID;
-            OutputActType = UNSIGNED_SIGMOID;
-            SeedType = GenomeSeedType::PERCEPTRON;
-            NumLayers = 0;
+            numInputs = 1;
+            numHidden = 0;
+            numOutputs = 1;
+            fsNeat = 0;
+            fsNeatLinks = 1;
+            hiddenActType = UNSIGNED_SIGMOID;
+            outputActType = UNSIGNED_SIGMOID;
+            seedType = GenomeSeedType::PERCEPTRON;
+            numLayers = 0;
         }
     };
 
+    // The evolvable genotype. Gene lists are public for direct inspection; identity/fitness/depth go
+    // through accessors. Copyable and assignable (deep copy including traits and behavior pointer state).
     class Genome {
         /////////////////////
         // Members
         /////////////////////
        private:
-        // ID of genome
-        int m_ID;
+        // Unique genome identifier (see Population::nextGenomeID_).
+        int id_;
 
-        // How many inputs/outputs
-        int m_NumInputs;
-        int m_NumOutputs;
+        // Input/output counts including the bias neuron when enabled.
+        int numInputs_;
+        int numOutputs_;
 
-        // The genome's fitness score
-        double m_Fitness;
+        // Raw fitness assigned externally via setFitness().
+        Real fitness_;
 
-        // The genome's adjusted fitness score
-        double m_AdjustedFitness;
+        // Fitness after species sharing (see Species::adjustFitness()).
+        Real adjustedFitness_;
 
-        // The depth of the network
-        int m_Depth;
+        // Longest input-to-output path (see calculateDepth()).
+        int depth_;
 
-        // how many individuals this genome should spawn
-        double m_OffspringAmount;
+        // Offspring quota for the next generation (see Population::countOffspring()).
+        Real offspringAmount_;
 
         ////////////////////
-        // Private methods
+        // Structural queries (private helpers)
 
-        // Returns true if the specified neuron ID is present in the genome
-        bool HasNeuronID(int a_id) const;
+        // Whether a neuron ID exists in neuronGenes_.
+        bool hasNeuronID(int id) const;
 
-        // Returns true if the specified link is present in the genome
-        bool HasLink(int a_n1id, int a_n2id) const;
+        // Whether a directed link n1id -> n2id exists in linkGenes_.
+        bool hasLink(int n1id, int n2id) const;
 
-        // Returns true if the specified link is present in the genome
-        bool HasLinkByInnovID(int a_id) const;
+        // Whether a link with the given innovation ID exists.
+        bool hasLinkByInnovID(int id) const;
 
-        // Removes the link with the specified innovation ID
-        void RemoveLinkGene(int a_innovid);
+        // Deletes the link gene (plus orphaned structure on cleanup()).
+        void removeLinkGene(int innovid);
 
-        // Remove node Links connected to this node are also removed
-        void RemoveNeuronGene(int a_id);
+        // Deletes the neuron gene and all links touching it.
+        void removeNeuronGene(int id);
 
-        // Returns the count of links inputting from the specified neuron ID
-        int LinksInputtingFrom(int a_id) const;
+        // Number of links fed by / feeding into the given neuron ID.
+        int linksInputtingFrom(int id) const;
 
-        // Returns the count of links outputting to the specified neuron ID
-        int LinksOutputtingTo(int a_id) const;
+        // Number of links feeding into the given neuron ID.
+        int linksOutputtingTo(int id) const;
 
-        // A recursive function returning the max depth from the specified neuron to the inputs
-        unsigned int NeuronDepth(int a_NeuronID, unsigned int a_Depth);
+        // Longest backward path from the neuron to an input (cycle-unsafe; see hasLoops() guard).
+        unsigned int neuronDepth(int neuronID, unsigned int depth);
 
-        // Returns true is the specified neuron ID is a dead end or isolated
-        bool IsDeadEndNeuron(int a_id) const;
+        // Whether the neuron is isolated or feeds no output (cleanup target).
+        bool isDeadEndNeuron(int id) const;
 
        public:
-        // The two lists of genes
-        std::vector<NeuronGene> m_NeuronGenes;
-        std::vector<LinkGene> m_LinkGenes;
+        // Neuron/link gene lists (kept sorted by ID/innovation number; see sortGenes()).
+        std::vector<NeuronGene> neuronGenes_;
+        std::vector<LinkGene> linkGenes_;
 
-        // To have traits that belong to the genome itself
-        Gene m_GenomeGene;
+        // Genome-level traits (evolved via mutateGenomeTraits(); see src/Traits.h).
+        Gene genomeGene_;
 
-        // tells whether this genome was evaluated already used in steady state evolution
-        bool m_Evaluated;
+        // Whether fitness is current (steady-state evolution skips unevaluated members).
+        bool evaluated_;
 
-        // the initial genome complexity
-        int m_initial_num_neurons;
-        int m_initial_num_links;
+        // Complexity at seeding time (baseline for phased-search MPC comparisons).
+        int initialNumNeurons_;
+        int initialNumLinks_;
 
-        // A pointer to a class representing the phenotype's behavior Used in novelty searches
-        PhenotypeBehavior *m_PhenotypeBehavior;
+        // Behavior descriptor for novelty search (owned by the caller; may be nullptr otherwise).
+        PhenotypeBehavior *phenotypeBehavior_;
 
         ////////////////////////////
         // Constructors
         ////////////////////////////
 
+        // Builds an empty genome.
         Genome();
 
-        // copy constructor
-        Genome(const Genome &a_g);
+        // Deep-copy constructor.
+        Genome(const Genome &g);
 
-        // assignment operator
-        Genome &operator=(const Genome &a_g);
+        // Deep-copy assignment (self-assignment safe).
+        Genome &operator=(const Genome &g);
 
-        // comparison operator (nessesary for boost::python)
-        // todo: implement a better comparison technique
-        bool operator==(Genome const &other) const { return m_ID == other.m_ID; }
+        // Compares by genome ID (identity key; ignores topology and fitness).
+        bool operator==(Genome const &other) const { return id_ == other.id_; }
 
-        // Builds this genome from a file
-        Genome(const char *a_filename);
+        // Loads a genome from a saved file path.
+        Genome(const char *filename);
 
-        // Builds this genome from an opened file
-        Genome(std::ifstream &a_DataFile);
+        // Loads a genome from an open input stream positioned at a GenomeStart marker.
+        Genome(std::ifstream &dataFile);
 
-        // This creates a CTRNN fully-connected genome
-
-        // Genome(int a_ID, int a_NumInputs, int a_NumHidden, int a_NumOutputs,
-        //       ActivationFunction a_OutputActType, ActivationFunction a_HiddenActType, const Parameters &a_Parameters);
-
-        // Genome(unsigned int a_ID, unsigned int a_NumInputs, unsigned int a_NumHidden, unsigned int a_NumOutputs,
-        //        ActivationFunction a_OutputActType, ActivationFunction a_HiddenActType, const Parameters &a_Parameters);
-
-        // This creates a standart minimal genome - perceptron-like structure
-        Genome(const Parameters &a_Parameters, const GenomeInitStruct &init_struct);
-
-        /////////////
-        // Other possible constructors for different types of networks go here
-        // TODO
-
-        ////////////////////////////
-        // Destructor
-        ////////////////////////////
+        // Builds a minimal seed genome from the init descriptor (perceptron or layered).
+        Genome(const Parameters &parameters, const GenomeInitStruct &initStruct);
 
         ////////////////////////////
         // Methods
         ////////////////////////////
 
         ////////////////////
-        // Accessor methods
+        // Gene accessors (copies; use getNeuronIndex()/getLinkIndex() plus neuronGenes_/linkGenes_ to mutate in place)
 
-        NeuronGene GetNeuronByID(int a_ID) const;
+        // Copies out the neuron/link gene with the given ID/innovation number (throws when absent).
+        NeuronGene getNeuronByID(int id) const;
 
-        NeuronGene GetNeuronByIndex(int a_idx) const;
+        NeuronGene getNeuronByIndex(int index) const;
 
-        LinkGene GetLinkByInnovID(int a_ID) const;
+        LinkGene getLinkByInnovID(int id) const;
 
-        LinkGene GetLinkByIndex(int a_idx) const;
+        LinkGene getLinkByIndex(int index) const;
 
-        // A little helper function to find the index of a neuron, given its ID
-        int GetNeuronIndex(int a_id) const;
+        // Position of the neuron ID in neuronGenes_ (throws when absent).
+        int getNeuronIndex(int id) const;
 
-        // A little helper function to find the index of a link, given its innovation ID
-        int GetLinkIndex(int a_innovid) const;
+        // Position of the innovation ID in linkGenes_ (throws when absent).
+        int getLinkIndex(int innovid) const;
 
-        unsigned int NumNeurons() const { return static_cast<unsigned int>(m_NeuronGenes.size()); }
+        unsigned int numNeurons() const { return static_cast<unsigned int>(neuronGenes_.size()); }
 
-        unsigned int NumLinks() const { return static_cast<unsigned int>(m_LinkGenes.size()); }
+        unsigned int numLinks() const { return static_cast<unsigned int>(linkGenes_.size()); }
 
-        unsigned int NumInputs() const { return m_NumInputs; }
+        unsigned int numInputs() const { return static_cast<unsigned int>(numInputs_); }
 
-        unsigned int NumOutputs() const { return m_NumOutputs; }
+        unsigned int numOutputs() const { return static_cast<unsigned int>(numOutputs_); }
 
-        void SetNeuronXY(unsigned int a_idx, int a_x, int a_y);
+        // Display-coordinate setters by gene position.
+        void setNeuronXY(unsigned int index, int x, int y);
 
-        void SetNeuronX(unsigned int a_idx, int a_x);
+        void setNeuronX(unsigned int index, int x);
 
-        void SetNeuronY(unsigned int a_idx, int a_y);
+        void setNeuronY(unsigned int index, int y);
 
-        double GetFitness() const;
+        // Raw / shared fitness accessors (fitness is set externally after evaluation).
+        Real getFitness() const;
 
-        double GetAdjFitness() const;
+        Real getAdjFitness() const;
 
-        void SetFitness(double a_f);
+        void setFitness(Real f);
 
-        void SetAdjFitness(double a_af);
+        void setAdjFitness(Real af);
 
-        int GetID() const;
+        int getID() const;
 
-        void SetID(int a_id);
+        void setID(int id);
 
-        unsigned int GetDepth() const;
+        // Network depth (see calculateDepth()).
+        unsigned int getDepth() const;
 
-        void SetDepth(unsigned int a_d);
+        void setDepth(unsigned int d);
 
-        // Returns true if there is any dead end in the network
-        bool HasDeadEnds() const;
+        // Whether any neuron is isolated or feeds no output.
+        bool hasDeadEnds() const;
 
-        // Returns true if there is any looping path in the network
-        bool HasLoops();
+        // Whether any directed cycle exists.
+        bool hasLoops();
 
-        bool FailsConstraints(const Parameters &a_Parameters) {
-            bool fails = false;
+        // Whether the genome violates structural constraints: dead ends, empty nets, disallowed loops
+        // or the caller-supplied Parameters::customConstraints predicate. Defined in Genome.cpp.
+        bool failsConstraints(const Parameters &parameters);
 
-            if (HasDeadEnds() || (NumLinks() == 0)) {
-                return true;  // no reason to continue
-            }
+        // Offspring quota accessors (see Population::countOffspring()).
+        Real getOffspringAmount() const;
 
-            if ((HasLoops() && (a_Parameters.AllowLoops == false))) {
-                return true;
-            }
+        void setOffspringAmount(Real oa);
 
-            // Custom constraints
-            if (a_Parameters.CustomConstraints != NULL) {
-                if (a_Parameters.CustomConstraints(*this)) {
-                    return true;
-                }
-            }
+        // Decodes the genotype into a runnable phenotype (direct encoding).
+        void buildPhenotype(NeuralNetwork &net);
 
-            // add more constraints here
-            return false;
-        }
+        // Copies phenotype weight changes back into the genome's link genes.
+        void derivePhenotypicChanges(NeuralNetwork &net);
 
-        double GetOffspringAmount() const;
+        // Decodes via the CPPN over the given substrate (indirect HyperNEAT encoding).
+        void buildHyperNEATPhenotype(NeuralNetwork &net, Substrate &subst);
 
-        void SetOffspringAmount(double a_oa);
+        // Persists the genome in the text format understood by the Genome(path) constructor.
+        void save(const char *filename);
 
-        // This builds a fastnetwork structure out from the genome
-        void BuildPhenotype(NeuralNetwork &net);
+        // Appends the genome to an open file (used by Population::save()).
+        void save(FILE *fstream);
 
-        // Projects the phenotype's weights back to the genome
-        void DerivePhenotypicChanges(NeuralNetwork &a_Net);
+        // Dumps one trait map / all gene traits to stdout (diagnostics).
+        void printTraits(std::map<std::string, Trait> &traits);
+        void printAllTraits();
 
-        ////////////
-        // Other possible methods for building a phenotype go here Like CPPN/HyperNEAT stuff
-        ////////////
-        void BuildHyperNEATPhenotype(NeuralNetwork &net, Substrate &subst);
+        // Maximum neuron ID / innovation number in use (next-ID computation).
+        int getLastNeuronID() const;
 
-        // Saves this genome to a file
-        void Save(const char *a_filename);
+        // Maximum innovation number in use.
+        int getLastInnovationID() const;
 
-        // Saves this genome to an already opened file for writing
-        void Save(FILE *a_fstream);
+        // Orders neuron genes by ID and link genes by innovation number.
+        void sortGenes();
 
-        void PrintTraits(std::map<std::string, Trait> &traits);
-        void PrintAllTraits();
+        // Orders genomes fittest-first for sorting.
+        friend bool operator<(const Genome &lhs, const Genome &rhs) { return (lhs.fitness_ > rhs.fitness_); }
 
-        // returns the max neuron ID
-        int GetLastNeuronID() const;
+        // Whether the compatibility distance to g is within Parameters::compatTreshold.
+        bool isCompatibleWith(Genome &g, Parameters &parameters);
 
-        // returns the max innovation Id
-        int GetLastInnovationID() const;
+        // Weighted compatibility distance to g (disjoint/excess/weight/activation/trait terms).
+        Real compatibilityDistance(Genome &g, Parameters &parameters);
 
-        // Sorts the genes of the genome The neurons by IDs and the links by innovation numbers.
-        void SortGenes();
-
-        // overload '<' used for sorting. From fittest to poorest.
-        friend bool operator<(const Genome &a_lhs, const Genome &a_rhs) { return (a_lhs.m_Fitness > a_rhs.m_Fitness); }
-
-        // Returns true if this genome and a_G are compatible (belong in the same species)
-        bool IsCompatibleWith(Genome &a_G, Parameters &a_Parameters);
-
-        // returns the absolute compatibility distance between this genome and a_G
-        double CompatibilityDistance(Genome &a_G, Parameters &a_Parameters);
-
-        // Calculates the network depth
-        void CalculateDepth();
+        // Recomputes depth_ as the longest input-to-output path.
+        void calculateDepth();
 
         ////////////
-        // Mutation
+        // Mutation (each returns true when it changed the genome; rates come from Parameters)
         ////////////
 
-        // Adds a new neuron to the genome returns true if succesful
-        bool Mutate_AddNeuron(InnovationDatabase &a_Innovs, const Parameters &a_Parameters, RNG &a_RNG);
+        // Splits an existing link with a new neuron, registering both innovations.
+        bool mutateAddNeuron(InnovationDatabase &innovs, const Parameters &parameters, RNG &rng);
 
-        // Adds a new link to the genome returns true if succesful
-        bool Mutate_AddLink(InnovationDatabase &a_Innovs, const Parameters &a_Parameters, RNG &a_RNG);
+        // Adds a feed-forward (or, with Parameters::recurrentProb, recurrent) link between unconnected neurons.
+        bool mutateAddLink(InnovationDatabase &innovs, const Parameters &parameters, RNG &rng);
 
-        // Remove a random link from the genome
-        // A cleanup procedure is invoked so any dead-ends or stranded neurons are also deleted
-        // returns true if succesful
-        bool Mutate_RemoveLink(RNG &a_RNG);
+        // Deletes a random link, then removes newly orphaned neurons/links.
+        bool mutateRemoveLink(RNG &rng);
 
-        // Removes a hidden neuron having only one input and only one output with a direct link between them.
-        bool Mutate_RemoveSimpleNeuron(InnovationDatabase &a_Innovs, const Parameters &a_Parameters, RNG &a_RNG);
+        // Bypasses a 1-in/1-out hidden neuron with a direct link, then deletes the neuron.
+        bool mutateRemoveSimpleNeuron(InnovationDatabase &innovs, const Parameters &parameters, RNG &rng);
 
-        // Perturbs the weights
-        bool Mutate_LinkWeights(const Parameters &a_Parameters, RNG &a_RNG);
+        // Perturbs link weights (severe shake vs. per-gene perturbation per Parameters).
+        bool mutateLinkWeights(const Parameters &parameters, RNG &rng);
 
-        // Set all link weights to random values between [-R .. R]
-        void Randomize_LinkWeights(const Parameters &a_Parameters, RNG &a_RNG);
+        // Resets every link weight uniformly into [-R .. R] (see Parameters::weightReplacementMaxPower).
+        void randomizeLinkWeights(const Parameters &parameters, RNG &rng);
 
-        // Set all traits to random values
-        void Randomize_Traits(const Parameters &a_Parameters, RNG &a_RNG);
+        // Re-rolls every gene trait from its parameter definition.
+        void randomizeTraits(const Parameters &parameters, RNG &rng);
 
-        // Perturbs the A parameters of the neuron activation functions
-        bool Mutate_NeuronActivations_A(const Parameters &a_Parameters, RNG &a_RNG);
+        // Perturbs the activation slope (A) / shift (B) of random neurons.
+        bool mutateNeuronActivationsA(const Parameters &parameters, RNG &rng);
 
-        // Perturbs the B parameters of the neuron activation functions
-        bool Mutate_NeuronActivations_B(const Parameters &a_Parameters, RNG &a_RNG);
+        // Perturbs the activation shift (B) of random neurons.
+        bool mutateNeuronActivationsB(const Parameters &parameters, RNG &rng);
 
-        // Changes the activation function type for a random neuron
-        bool Mutate_NeuronActivation_Type(const Parameters &a_Parameters, RNG &a_RNG);
+        // Reassigns one random neuron's activation function (structural-scale change).
+        bool mutateNeuronActivationType(const Parameters &parameters, RNG &rng);
 
-        // Perturbs the neuron time constants
-        bool Mutate_NeuronTimeConstants(const Parameters &a_Parameters, RNG &a_RNG);
+        // Perturbs leaky-integrator time constants / biases of random neurons.
+        bool mutateNeuronTimeConstants(const Parameters &parameters, RNG &rng);
 
-        // Perturbs the neuron biases
-        bool Mutate_NeuronBiases(const Parameters &a_Parameters, RNG &a_RNG);
+        // Perturbs biases of random neurons.
+        bool mutateNeuronBiases(const Parameters &parameters, RNG &rng);
 
-        // Perturbs the neuron traits
-        bool Mutate_NeuronTraits(const Parameters &a_Parameters, RNG &a_RNG);
+        // Perturbs neuron / link / genome-level universal traits.
+        bool mutateNeuronTraits(const Parameters &parameters, RNG &rng);
 
-        // Perturbs the link traits
-        bool Mutate_LinkTraits(const Parameters &a_Parameters, RNG &a_RNG);
+        // Perturbs link universal traits.
+        bool mutateLinkTraits(const Parameters &parameters, RNG &rng);
 
-        // Perturbs the genome traits
-        bool Mutate_GenomeTraits(const Parameters &a_Parameters, RNG &a_RNG);
+        // Perturbs genome-level universal traits.
+        bool mutateGenomeTraits(const Parameters &parameters, RNG &rng);
 
         ///////////
         // Mating
         ///////////
 
-        // Mate this genome with dad and return the baby If this is multipoint mating, genes are inherited randomly If the a_averagemating bool is true, then
-        // the genes are averaged Disjoint and excess genes are inherited from the fittest parent If fitness is equal, the smaller genome is assumed to be the
-        // better one
-        Genome Mate(Genome &a_dad, bool a_averagemating, bool a_interspecies, RNG &a_RNG, Parameters &a_Parameters);
+        // Crosses this genome with dad, returning the offspring. Multipoint genes are picked randomly
+        // (or averaged when averagemating); disjoint/excess genes come from the fitter parent, or the
+        // smaller genome on tied fitness. Set interspecies to allow cross-species mating.
+        Genome mate(Genome &dad, bool averagemating, bool interspecies, RNG &rng, Parameters &parameters);
 
         //////////
         // Utility
         //////////
 
-        // Search the genome for isolated structure and clean it up Returns true is something was removed
-        bool Cleanup();
+        // Removes isolated/stranded structure. Returns true when anything was deleted.
+        bool cleanup();
 
-        ////////////////////
-        // new stuff
-        bool IsEvaluated() const;
+        // Evaluation-flag accessors for steady-state evolution.
+        bool isEvaluated() const;
 
-        void SetEvaluated();
+        void setEvaluated();
 
-        void ResetEvaluated();
+        void resetEvaluated();
 
-#if 0  // disabling because of errors I can't fix right now
+#if 0  // Intentionally inactive ES-HyperNEAT prototype (kept for reference; do not enable without porting off boost and fixing the quadtree code).
 
         /////////////////////////////////////////////
         // Evolvable Substrate HyperNEAT
@@ -407,9 +400,9 @@ namespace NEAT {
         // A connection between two points. Stores weight and the coordinates of the points
         struct TempConnection
         {
-            std::vector<double> source;
-            std::vector<double> target;
-            double weight;
+            std::vector<Real> source;
+            std::vector<Real> target;
+            Real weight;
 
             TempConnection()
             {
@@ -418,21 +411,21 @@ namespace NEAT {
                 weight = 0;
             }
 
-            TempConnection(std::vector<double> t_source, std::vector<double> t_target,
-                           double t_weight)
+            TempConnection(std::vector<Real> source, std::vector<Real> target,
+                           Real weight)
             {
-                source = t_source;
-                target = t_target;
-                weight = t_weight;
+                source = source;
+                target = target;
+                weight = weight;
                 source.reserve(3);
                 target.reserve(3);
             }
 
-            TempConnection(std::vector<double> t_source, std::vector<double> t_target, double t_weight, unsigned int coord_size)
+            TempConnection(std::vector<Real> source, std::vector<Real> target, Real weight, unsigned int coordSize)
             {
-                source = t_source;
-                target = t_target;
-                weight = t_weight;
+                source = source;
+                target = target;
+                weight = weight;
             }
 
             ~TempConnection()
@@ -452,16 +445,16 @@ namespace NEAT {
         // A quadpoint in the HyperCube.
         struct QuadPoint
         {
-            double x;
-            double y;
-            double z;
-            double width;
-            double weight;
-            double height;
-            double variance;
+            Real x;
+            Real y;
+            Real z;
+            Real width;
+            Real weight;
+            Real height;
+            Real variance;
             int level;
             // Do I use this?
-            double leo;
+            Real leo;
 
 
             std::vector<boost::shared_ptr<QuadPoint> > children;
@@ -473,14 +466,14 @@ namespace NEAT {
                 children.reserve(4);
             }
 
-            QuadPoint(double t_x, double t_y, double t_width, double t_height, int t_level)
+            QuadPoint(Real x, Real y, Real width, Real height, int level)
             {
-                x = t_x;
-                y = t_y;
+                x = x;
+                y = y;
                 z = 0.0;
-                width = t_width;
-                height = t_height;
-                level = t_level;
+                width = width;
+                height = height;
+                level = level;
                 weight = 0.0;
                 leo = 0.0;
                 variance = 0.0;
@@ -489,15 +482,15 @@ namespace NEAT {
             }
 
             // Mind the Z
-            QuadPoint(double t_x, double t_y, double t_z, double t_width, double t_height,
-                      int t_level)
+            QuadPoint(Real x, Real y, Real z, Real width, Real height,
+                      int level)
             {
-                x = t_x;
-                y = t_y;
-                z = t_z;
-                width = t_width;
-                height = t_height;
-                level = t_level;
+                x = x;
+                y = y;
+                z = z;
+                width = width;
+                height = height;
+                level = level;
                 weight = 0.0;
                 variance = 0.0;
                 leo = 0.0;
@@ -511,48 +504,48 @@ namespace NEAT {
         };
 
 
-        struct nTree
+        struct NTree
         {
-            std::vector<double> coord;
-            double weight;
-            double varience;
+            std::vector<Real> coord;
+            Real weight;
+            Real varience;
             int lvl;
-            double width;
-            double leo = 0.0;
-            std::vector<boost::shared_ptr<nTree> > children;
+            Real width;
+            Real leo = 0.0;
+            std::vector<boost::shared_ptr<NTree> > children;
 
-            nTree(std::vector<double> coord_in, double wdth, double level)
+            NTree(std::vector<Real> coordIn, Real wdth, Real level)
             {
                 width = wdth;
                 lvl = level;
-                coord = coord_in;
+                coord = coordIn;
             };
 
         public:
 
-            void set_children()
+            void setChildren()
             {
                 for(unsigned int ix = 0; ix < 2**coord.size(); ix++){
-                    std::string sum_permute = toBinary(ix, coord.size());
-                    std::vector<double> child_coords;
-                    int child_param_len = sum_permute.length();
-                    child_coords.reserve(child_param_len);
-                    for(unsigned int sign_ix = 0; sign_ix < child_param_len; sign_ix++)
+                    std::string sumPermute = toBinary(ix, coord.size());
+                    std::vector<Real> childCoords;
+                    int childParamLen = sumPermute.length();
+                    childCoords.reserve(childParamLen);
+                    for(unsigned int signIx = 0; signIx < childParamLen; signIx++)
                     {
-                        if(sum_permute[sign_ix] == "0")
+                        if(sumPermute[signIx] == "0")
                         {
-                            child_coords.push_back(coord[sign_ix] + width/2.0);
+                            childCoords.push_back(coord[signIx] + width/2.0);
                         }
                         else
                         {
-                            child_coords.push_back(coord[sign_ix] - width/2.0);
+                            childCoords.push_back(coord[signIx] - width/2.0);
                         }
-                        children.push_back(new nTree(child_coords, width/2.0, sslvl+1));
+                        children.push_back(new NTree(childCoords, width/2.0, sslvl+1));
                     }
                 }
             }
 
-            string toBinary(unsigned int n, int min_len)
+            string toBinary(unsigned int n, int minLen)
             {
                 std::string r;
                 while(n!=0)
@@ -560,9 +553,9 @@ namespace NEAT {
                     r=(n%2==0 ?"0":"1")+r; n/=2;
 
                 }
-                if(r.length() < min_len)
+                if(r.length() < minLen)
                 {
-                    int diff = min_len - r.length();
+                    int diff = minLen - r.length();
                     for(unsigned int x = 0; x < diff; x++)
                     {
                         r = '0' +r;
@@ -571,41 +564,36 @@ namespace NEAT {
                 return r;
             }
         };
-        void BuildESHyperNEATPhenotypeND(NeuralNetwork &a_net, Substrate &subst, Parameters &params);
-        void BuildESHyperNEATPhenotype(NeuralNetwork &a_net, Substrate &subst, Parameters &params);
+        void buildESHyperNEATPhenotypeND(NeuralNetwork &net, Substrate &subst, Parameters &params);
+        void buildESHyperNEATPhenotype(NeuralNetwork &net, Substrate &subst, Parameters &params);
 
-        void DivideInitialize(const std::vector<double> &node,
+        void divideInitialize(const std::vector<Real> &node,
                               boost::shared_ptr<QuadPoint> &root,
                               NeuralNetwork &cppn, Parameters &params,
-                              const bool &outgoing, const double &z_coord);
+                              const bool &outgoing, const Real &zCoord);
 
-        void PruneExpress(const std::vector<double> &node,
+        void pruneExpress(const std::vector<Real> &node,
                           boost::shared_ptr<QuadPoint> &root, NeuralNetwork &cppn,
                           Parameters &params, std::vector<Genome::TempConnection> &connections,
                           const bool &outgoing);
-        void DivideInitializeND(const std::vector<double> &node,
-                              boost::shared_ptr<nTree> &root,
+        void divideInitializeND(const std::vector<Real> &node,
+                              boost::shared_ptr<NTree> &root,
                               NeuralNetwork &cppn, Parameters &params,
-                              const bool &outgoing, const double &z_coord);
+                              const bool &outgoing, const Real &zCoord);
 
-        void PruneExpressND(const std::vector<double> &node,
-                          boost::shared_ptr<nTree> &root, NeuralNetwork &cppn,
+        void pruneExpressND(const std::vector<Real> &node,
+                          boost::shared_ptr<NTree> &root, NeuralNetwork &cppn,
                           Parameters &params, std::vector<Genome::TempConnection> &connections,
                           const bool &outgoing);
 
 
-        void CollectValues(std::vector<double> &vals, boost::shared_ptr<QuadPoint> &point);
+        void collectValues(std::vector<Real> &vals, boost::shared_ptr<QuadPoint> &point);
 
-        double Variance(boost::shared_ptr<QuadPoint> &point);
+        Real variance(boost::shared_ptr<QuadPoint> &point);
 
-        void Clean_Net(std::vector<Connection> &connections, unsigned int input_count,
-                       unsigned int output_count, unsigned int hidden_count);
+        void cleanNet(std::vector<Connection> &connections, unsigned int inputCount,
+                       unsigned int outputCount, unsigned int hiddenCount);
 #endif
     };
-
-#define DBG(x)                       \
-    {                                \
-        std::cerr << x << std::endl; \
-    }
 
 }  // namespace NEAT

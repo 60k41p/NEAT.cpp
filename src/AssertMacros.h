@@ -22,13 +22,17 @@
 
 /*
  * File:        AssertMacros.h
- * Description: ASSERT()/VERIFY() invariant macros, compiled in with DEBUG and optimised out otherwise.
+ * Description: Debug-only invariant macros. ASSERT(expr) throws std::runtime_error when expr is false;
+ *              VERIFY(expr) reports without throwing. Both compile to nothing without DEBUG defined, so
+ *              always build the Debug (or dbgassert) config after touching library code to exercise them.
+ *
+ * References: Google C++ Style Guide, "CHECK macros" discussion (diagnostics over bare assert);
+ *             intra-repo users: every .cpp file under src/ on the hot path (mutation, speciation, activation).
  */
 
 #pragma once
 
-#include <assert.h>
-
+#include <cassert>
 #include <exception>
 #include <iostream>
 #include <stdexcept>
@@ -45,6 +49,9 @@
 
 #ifdef DEBUG
 
+// The active (#if 1) branch throws runtime_error so catch sites behave identically in debug and release.
+// The #else branch (plain assert()) is kept as a documented fallback for hosted environments where
+// exceptions are unavailable; flip the switch locally if you need it.
 #if 1
 
 //--------------

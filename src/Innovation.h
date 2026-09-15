@@ -27,7 +27,15 @@
 
 /*
  * File:        Innovation.h
- * Description: Definitions for the Innovation and InnovationDatabase classes.
+ * Description: Historical-marking database for NEAT speciation and mating alignment. Each structural
+ *              mutation (new link / new neuron) registers an Innovation; genomes created by splitting the
+ *              same link share its neuron ID, so identical structures stay comparable forever and
+ *              compatibility distances remain meaningful across generations.
+ *
+ * References: Stanley & Miikkulainen, "Evolving Neural Networks through Augmenting Topologies" (2002),
+ *             Section 3 (historical markings, innovation numbers); see
+ *             references/Evolving Neural Networks through Augmenting Topologies.pdf.md. Intra-repo users:
+ *             src/Genome.h, src/Genome.cpp, src/Population.h, tests/TestInnovation.cpp.
  */
 
 #pragma once
@@ -42,50 +50,51 @@
 namespace NEAT {
 
     ////////////////////////////////////////////////
-    // Enumeration of all possible innovation types
+    // Structural mutation kinds tracked by the database.
     ////////////////////////////////////////////////
     enum InnovationType { NEW_NEURON, NEW_LINK };
 
     //////////////////////////////////////////////
-    // This class defines the innovation structure
+    // One historical marking: what structural change happened, between which neurons, and the IDs
+    // assigned to it. All fields are fixed at creation and read-only afterwards.
     //////////////////////////////////////////////
     class Innovation {
         /////////////////////
-        // Members
+        // Members (immutable after construction)
         /////////////////////
 
        private:
-        // This variables are initialized once and are all read-only
+        // Database-wide innovation number.
+        int id_;
 
-        // ID of innovation
-        int m_ID;
+        // Kind of structural change.
+        InnovationType innovType_;
 
-        // Type of innovation
-        InnovationType m_InnovType;
-
-        // Neuron/Link specific data
-        int m_FromNeuronID, m_ToNeuronID;
-        int m_NeuronID;
-        NeuronType m_NeuronType;
+        // For NEW_LINK: the connected neuron IDs. For NEW_NEURON: the split link's endpoints.
+        int fromNeuronID_, toNeuronID_;
+        // For NEW_NEURON: the ID assigned to the created neuron.
+        int neuronID_;
+        // For NEW_NEURON: the role assigned to the created neuron.
+        NeuronType neuronType_;
 
        public:
         ////////////////////////////
         // Constructors
         ////////////////////////////
-        Innovation(int a_ID, InnovationType a_InnovType, int a_From, int a_To, NeuronType a_NType, int a_NID) {
-            m_ID = a_ID;
-            m_InnovType = a_InnovType;
-            m_FromNeuronID = a_From;
-            m_ToNeuronID = a_To;
-            m_NeuronType = a_NType;
-            m_NeuronID = a_NID;
+        Innovation(int id, InnovationType innovType, int from, int to, NeuronType nType, int nid) {
+            id_ = id;
+            innovType_ = innovType;
+            fromNeuronID_ = from;
+            toNeuronID_ = to;
+            neuronType_ = nType;
+            neuronID_ = nid;
         }
 
         Innovation() {
-            m_ID = 0;
-            m_FromNeuronID = 0;
-            m_ToNeuronID = 0;
-            m_NeuronID = 0;
+            id_ = 0;
+            fromNeuronID_ = 0;
+            toNeuronID_ = 0;
+            neuronID_ = 0;
         }
 
         ////////////////////////////
@@ -96,90 +105,85 @@ namespace NEAT {
         // Methods
         ////////////////////////////
 
-        // Access
-        int ID() const { return m_ID; }
-        InnovationType InnovType() const { return m_InnovType; }
-        int FromNeuronID() const { return m_FromNeuronID; }
-        int ToNeuronID() const { return m_ToNeuronID; }
-        int NeuronID() const { return m_NeuronID; }
-        NeuronType GetNeuronType() const { return m_NeuronType; }
+        // Accessors (all read-only; the database assigns the values at creation).
+        int id() const { return id_; }
+        InnovationType innovType() const { return innovType_; }
+        int fromNeuronID() const { return fromNeuronID_; }
+        int toNeuronID() const { return toNeuronID_; }
+        int neuronID() const { return neuronID_; }
+        NeuronType getNeuronType() const { return neuronType_; }
     };
 
     // forward
     class Genome;
 
     ////////////////////////////////////////////////////////
-    // This class defines the innovation database structure
+    // The population-wide registry of structural innovations plus the next-ID counters. Query it before
+    // creating structure (checkInnovation/findNeuronID) and register through it (addLinkInnovation/
+    // addNeuronInnovation) so parallel lineages share numbering.
     ////////////////////////////////////////////////////////
     class InnovationDatabase {
        private:
         /////////////////////
-        // Members
+        // Next free IDs (bumped by the add*() calls)
         /////////////////////
 
-        // The list of innovations
-
-        int m_NextNeuronID;
-        int m_NextInnovationNum;
+        int nextNeuronID_;
+        int nextInnovationNum_;
 
        public:
         ////////////////////////////
         // Constructors
         ////////////////////////////
-        std::vector<Innovation> m_Innovations;
-        // Creates an empty database
+        // All registered innovations, in registration order.
+        std::vector<Innovation> innovations_;
+        // Creates an empty database.
         InnovationDatabase();
 
-        // Creates an empty database but this time sets the next innov number and neuron ID
-        InnovationDatabase(int a_LastInnovationNum, int a_LastNeuronID);
-
-        ////////////////////////////
-        // Destructor
-        ////////////////////////////
+        // Creates an empty database resuming after the given innovation/neuron IDs (load path).
+        InnovationDatabase(int lastInnovationNum, int lastNeuronID);
 
         ////////////////////////////
         // Methods
         ////////////////////////////
 
-        // Initializes an empty database
-        void Init(int a_LastInnovationNum, int a_LastNeuronID);
+        // Resets to empty, resuming after the given IDs.
+        void init(int lastInnovationNum, int lastNeuronID);
 
-        // Initializes a database from a given genome
-        void Init(const Genome &a_Genome);
+        // Rebuilds the registry from one genome's genes.
+        void init(const Genome &genome);
 
-        // Initializes a database from saved data
-        // File is assumed to be already opened!
-        void Init(std::ifstream &a_file);
+        // Loads from an open stream positioned at an InnovationDatabaseStart marker.
+        void init(std::ifstream &file);
 
-        // Checks the database if the innovation has already occured
-        // Returns the innovation id if true or -1 if false
-        // If it is a NEW_LINK innovation, in & out specify the neuron IDs being connected
-        // If it is a NEW_NEURON innovation, in & out specify the connection that was split
-        int CheckInnovation(int a_in, int a_out, InnovationType a_type) const;
-        int CheckLastInnovation(int a_in, int a_out, InnovationType a_type) const;
+        // Innovation number for the (in, out, type) change, or -1 when unseen. For NEW_LINK, in/out are
+        // the connected neurons; for NEW_NEURON they are the split link's endpoints.
+        int checkInnovation(int in, int out, InnovationType type) const;
+        // Same query restricted to the most recent matching entry.
+        int checkLastInnovation(int in, int out, InnovationType type) const;
 
-        // returns a list of indexes in the database of identical innovations
-        std::vector<int> CheckAllInnovations(int a_In, int a_Out, InnovationType a_Type) const;
+        // Positions of every matching innovation in innovations_.
+        std::vector<int> checkAllInnovations(int in, int out, InnovationType type) const;
 
-        // Returns the neuron ID given the in and out neurons
-        // If not found, returns -1
-        int FindNeuronID(int a_in, int a_out) const;
-        int FindLastNeuronID(int a_in, int a_out) const;
+        // Neuron ID created by splitting (in, out), or -1 when no such split is registered.
+        int findNeuronID(int in, int out) const;
+        // Same query restricted to the most recent matching split.
+        int findLastNeuronID(int in, int out) const;
 
-        // Adds a new link innovation and returns its ID Increments the m_NextInnovationNum internally
-        int AddLinkInnovation(int a_in, int a_out);
+        // Registers a link innovation, returning its new innovation number.
+        int addLinkInnovation(int in, int out);
 
-        // Adds a new neuron innovation and returns the new neuron ID in and out specify the connection that was split type specifies the type of neuron
-        // Increments the m_NextNeuronID and m_NextInnovationNum internally
-        int AddNeuronInnovation(int a_in, int a_out, NeuronType a_type);
+        // Registers a neuron innovation for the split of (in, out), returning the new neuron ID.
+        int addNeuronInnovation(int in, int out, NeuronType type);
 
-        // Clears all innovations in the database
-        void Flush();
+        // Drops all entries (counters are preserved).
+        void flush();
 
-        Innovation GetInnovationByIdx(int idx) const { return m_Innovations[idx]; };
+        // Copies out the innovation at the given position.
+        Innovation getInnovationByIndex(int index) const { return innovations_[static_cast<size_t>(index)]; };
 
-        // Saves the database to an already opened file
-        void Save(FILE *a_file);
+        // Appends the database to an open file (used by Population::save()).
+        void save(FILE *file);
     };
 
 }  // namespace NEAT

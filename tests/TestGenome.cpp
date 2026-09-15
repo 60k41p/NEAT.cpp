@@ -16,6 +16,8 @@
 #include "Parameters.h"
 #include "Random.h"
 
+using NEAT::Real;
+
 namespace {
 
     int g_failures = 0;
@@ -28,20 +30,20 @@ namespace {
         }                                                                                   \
     } while (0)
 
-    bool Near(double a, double b, double eps = 1e-9) { return std::fabs(a - b) <= eps; }
+    bool near(Real a, Real b, Real eps = 1e-9) { return std::fabs(a - b) <= eps; }
 
-    NEAT::Parameters DefaultParams() {
+    NEAT::Parameters defaultParams() {
         NEAT::Parameters p;
-        p.Reset();
+        p.reset();
         return p;
     }
 
-    NEAT::Genome MakeSeed(int num_inputs = 3, int num_outputs = 1) {
-        NEAT::Parameters p = DefaultParams();
+    NEAT::Genome makeSeed(int numInputs = 3, int numOutputs = 1) {
+        NEAT::Parameters p = defaultParams();
         NEAT::GenomeInitStruct init;
-        init.NumInputs = num_inputs;
-        init.NumOutputs = num_outputs;
-        init.SeedType = NEAT::PERCEPTRON;
+        init.numInputs = numInputs;
+        init.numOutputs = numOutputs;
+        init.seedType = NEAT::PERCEPTRON;
         return NEAT::Genome(p, init);
     }
 
@@ -54,30 +56,30 @@ int TestGenome(int argc, char *argv[]) {
 
     // Seed structure: fully connected perceptron, deterministic counts.
     {
-        Genome g = MakeSeed(3, 2);
-        CHECK(g.NumInputs() == 3);
-        CHECK(g.NumOutputs() == 2);
-        CHECK(g.NumNeurons() == 5);  // 3 in/bias + 2 out
-        CHECK(g.NumLinks() == 6);    // 3*2
+        Genome g = makeSeed(3, 2);
+        CHECK(g.numInputs() == 3);
+        CHECK(g.numOutputs() == 2);
+        CHECK(g.numNeurons() == 5);  // 3 in/bias + 2 out
+        CHECK(g.numLinks() == 6);    // 3*2
         // GetLast* return the next free ID (max + 1), not the max itself.
-        CHECK(g.GetLastNeuronID() == 6);
-        CHECK(g.GetLastInnovationID() == 7);
-        CHECK(!g.HasDeadEnds());
-        CHECK(!g.HasLoops());
-        Parameters p = DefaultParams();
-        CHECK(!g.FailsConstraints(p));
-        g.CalculateDepth();
-        CHECK(g.GetDepth() >= 1);
+        CHECK(g.getLastNeuronID() == 6);
+        CHECK(g.getLastInnovationID() == 7);
+        CHECK(!g.hasDeadEnds());
+        CHECK(!g.hasLoops());
+        Parameters p = defaultParams();
+        CHECK(!g.failsConstraints(p));
+        g.calculateDepth();
+        CHECK(g.getDepth() >= 1);
     }
 
     // Copy/assign preserve structure; == compares ID only.
     {
-        Genome a = MakeSeed();
+        Genome a = makeSeed();
         Genome b = a;
-        CHECK(b.NumNeurons() == a.NumNeurons());
-        CHECK(b.NumLinks() == a.NumLinks());
+        CHECK(b.numNeurons() == a.numNeurons());
+        CHECK(b.numLinks() == a.numLinks());
         CHECK(b == a);
-        b.SetID(a.GetID() + 100);
+        b.setID(a.getID() + 100);
         CHECK(!(b == a));
         Genome c;
         c = a;
@@ -86,118 +88,118 @@ int TestGenome(int argc, char *argv[]) {
 
     // Compatibility: clone distance is 0 and compatible; fitness accessors work.
     {
-        Parameters p = DefaultParams();
-        Genome a = MakeSeed();
+        Parameters p = defaultParams();
+        Genome a = makeSeed();
         Genome b = a;
-        CHECK(Near(a.CompatibilityDistance(b, p), 0.0));
-        CHECK(a.IsCompatibleWith(b, p));
-        a.SetFitness(2.5);
-        CHECK(Near(a.GetFitness(), 2.5));
-        a.SetAdjFitness(1.25);
-        CHECK(Near(a.GetAdjFitness(), 1.25));
-        CHECK(!a.IsEvaluated());
-        a.SetEvaluated();
-        CHECK(a.IsEvaluated());
-        a.ResetEvaluated();
-        CHECK(!a.IsEvaluated());
+        CHECK(near(a.compatibilityDistance(b, p), 0.0));
+        CHECK(a.isCompatibleWith(b, p));
+        a.setFitness(2.5);
+        CHECK(near(a.getFitness(), 2.5));
+        a.setAdjFitness(1.25);
+        CHECK(near(a.getAdjFitness(), 1.25));
+        CHECK(!a.isEvaluated());
+        a.setEvaluated();
+        CHECK(a.isEvaluated());
+        a.resetEvaluated();
+        CHECK(!a.isEvaluated());
     }
 
     // BuildPhenotype mirrors genome size and runs.
     {
-        Genome g = MakeSeed(3, 1);
+        Genome g = makeSeed(3, 1);
         NeuralNetwork net;
-        g.BuildPhenotype(net);
-        CHECK(net.NumInputs() == 3 && net.NumOutputs() == 1);
-        CHECK(net.m_neurons.size() == g.NumNeurons());
-        CHECK(net.m_connections.size() == g.NumLinks());
-        std::vector<double> in{0.5, -0.5, 1.0};
-        net.Flush();
-        net.Input(in);
-        net.Activate();
-        CHECK(net.Output().size() == 1);
-        CHECK(!std::isnan(net.Output()[0]));
+        g.buildPhenotype(net);
+        CHECK(net.numInputs() == 3 && net.numOutputs() == 1);
+        CHECK(net.neurons_.size() == g.numNeurons());
+        CHECK(net.connections_.size() == g.numLinks());
+        std::vector<Real> in{0.5, -0.5, 1.0};
+        net.flush();
+        net.input(in);
+        net.activate();
+        CHECK(net.output().size() == 1);
+        CHECK(!std::isnan(net.output()[0]));
     }
 
     // SortGenes orders links by innovation ID; Cleanup on a healthy seed is a no-op.
     {
-        Genome g = MakeSeed();
-        g.SortGenes();
-        for (unsigned i = 1; i < g.NumLinks(); ++i) {
-            CHECK(g.GetLinkByIndex(i - 1).InnovationID() <= g.GetLinkByIndex(i).InnovationID());
+        Genome g = makeSeed();
+        g.sortGenes();
+        for (unsigned i = 1; i < g.numLinks(); ++i) {
+            CHECK(g.getLinkByIndex(i - 1).innovationID() <= g.getLinkByIndex(i).innovationID());
         }
-        const unsigned nn = g.NumNeurons(), nl = g.NumLinks();
-        (void)g.Cleanup();
-        CHECK(g.NumNeurons() <= nn && g.NumLinks() <= nl);
+        const unsigned nn = g.numNeurons(), nl = g.numLinks();
+        (void)g.cleanup();
+        CHECK(g.numNeurons() <= nn && g.numLinks() <= nl);
         // Lookup helpers agree.
-        CHECK(g.GetNeuronIndex(g.GetNeuronByIndex(0).ID()) == 0);
-        CHECK(g.GetLinkIndex(g.GetLinkByIndex(0).InnovationID()) == 0);
-        CHECK(g.GetLastNeuronID() > 0 && g.GetLastInnovationID() > 0);
+        CHECK(g.getNeuronIndex(g.getNeuronByIndex(0).id()) == 0);
+        CHECK(g.getLinkIndex(g.getLinkByIndex(0).innovationID()) == 0);
+        CHECK(g.getLastNeuronID() > 0 && g.getLastInnovationID() > 0);
     }
 
     // Seeded structural mutations: AddNeuron / AddLink succeed given retries.
     {
-        Parameters p = DefaultParams();
+        Parameters p = defaultParams();
         RNG rng;
-        rng.Seed(123);
+        rng.seed(123);
         InnovationDatabase innovs;
-        innovs.Init(1, 1000);
-        Genome g = MakeSeed();
-        const unsigned nn0 = g.NumNeurons(), nl0 = g.NumLinks();
-        bool added_neuron = false;
-        for (int i = 0; i < 50 && !added_neuron; ++i) {
-            added_neuron = g.Mutate_AddNeuron(innovs, p, rng);
+        innovs.init(1, 1000);
+        Genome g = makeSeed();
+        const unsigned nn0 = g.numNeurons(), nl0 = g.numLinks();
+        bool addedNeuron = false;
+        for (int i = 0; i < 50 && !addedNeuron; ++i) {
+            addedNeuron = g.mutateAddNeuron(innovs, p, rng);
         }
-        CHECK(added_neuron);
-        CHECK(g.NumNeurons() == nn0 + 1);
-        CHECK(g.NumLinks() > nl0);
+        CHECK(addedNeuron);
+        CHECK(g.numNeurons() == nn0 + 1);
+        CHECK(g.numLinks() > nl0);
 
-        bool added_link = false;
-        for (int i = 0; i < 50 && !added_link; ++i) {
-            added_link = g.Mutate_AddLink(innovs, p, rng);
+        bool addedLink = false;
+        for (int i = 0; i < 50 && !addedLink; ++i) {
+            addedLink = g.mutateAddLink(innovs, p, rng);
         }
-        CHECK(added_link);
+        CHECK(addedLink);
 
         // Weight perturbation keeps weights finite.
-        CHECK(g.Mutate_LinkWeights(p, rng) || true);  // may no-op; just must not crash
-        for (unsigned i = 0; i < g.NumLinks(); ++i) {
-            CHECK(std::isfinite(g.GetLinkByIndex(i).GetWeight()));
+        CHECK(g.mutateLinkWeights(p, rng) || true);  // may no-op; just must not crash
+        for (unsigned i = 0; i < g.numLinks(); ++i) {
+            CHECK(std::isfinite(g.getLinkByIndex(i).getWeight()));
         }
     }
 
     // Mate of two clones with seeded RNG yields a valid baby.
     {
-        Parameters p = DefaultParams();
+        Parameters p = defaultParams();
         RNG rng;
-        rng.Seed(7);
-        Genome mom = MakeSeed();
-        Genome dad = MakeSeed();
-        mom.SetFitness(2.0);
-        dad.SetFitness(1.0);
-        Genome baby = mom.Mate(dad, false, false, rng, p);
-        CHECK(baby.NumNeurons() > 0 && baby.NumLinks() > 0);
-        CHECK(baby.NumInputs() == mom.NumInputs() && baby.NumOutputs() == mom.NumOutputs());
+        rng.seed(7);
+        Genome mom = makeSeed();
+        Genome dad = makeSeed();
+        mom.setFitness(2.0);
+        dad.setFitness(1.0);
+        Genome baby = mom.mate(dad, false, false, rng, p);
+        CHECK(baby.numNeurons() > 0 && baby.numLinks() > 0);
+        CHECK(baby.numInputs() == mom.numInputs() && baby.numOutputs() == mom.numOutputs());
     }
 
     // Save/Load round-trip preserves topology, weights, and ID.
     {
-        Genome g = MakeSeed(3, 1);
-        g.SetID(4242);
+        Genome g = makeSeed(3, 1);
+        g.setID(4242);
         // NOTE: named RNG required here; binding a temporary to the
         // non-const RNG& parameter is an MSVC extension GCC rejects.
         RNG rng;
-        rng.Seed(3);
-        g.Randomize_LinkWeights(DefaultParams(), rng);
-        const auto tmp = std::filesystem::temp_directory_path() / "multineat_test_genome.txt";
-        g.Save(tmp.string().c_str());
+        rng.seed(3);
+        g.randomizeLinkWeights(defaultParams(), rng);
+        const std::filesystem::path tmp = std::filesystem::temp_directory_path() / "multineat_test_genome.txt";
+        g.save(tmp.string().c_str());
 
         Genome loaded(tmp.string().c_str());
-        CHECK(loaded.GetID() == 4242);
-        CHECK(loaded.NumNeurons() == g.NumNeurons());
-        CHECK(loaded.NumLinks() == g.NumLinks());
-        for (unsigned i = 0; i < g.NumLinks(); ++i) {
-            CHECK(loaded.GetLinkByIndex(i).InnovationID() == g.GetLinkByIndex(i).InnovationID());
+        CHECK(loaded.getID() == 4242);
+        CHECK(loaded.numNeurons() == g.numNeurons());
+        CHECK(loaded.numLinks() == g.numLinks());
+        for (unsigned i = 0; i < g.numLinks(); ++i) {
+            CHECK(loaded.getLinkByIndex(i).innovationID() == g.getLinkByIndex(i).innovationID());
             // Genome::Save uses %3.8f, so allow float-printing tolerance.
-            CHECK(Near(loaded.GetLinkByIndex(i).GetWeight(), g.GetLinkByIndex(i).GetWeight(), 1e-6));
+            CHECK(near(loaded.getLinkByIndex(i).getWeight(), g.getLinkByIndex(i).getWeight(), 1e-6));
         }
         std::error_code ec;
         std::filesystem::remove(tmp, ec);
@@ -219,7 +221,7 @@ int TestGenome(int argc, char *argv[]) {
 
     // Regression: a file without markers must throw instead of spinning on EOF forever.
     {
-        const auto tmp = std::filesystem::temp_directory_path() / "neatcpp_test_garbage_genome.txt";
+        const std::filesystem::path tmp = std::filesystem::temp_directory_path() / "neatcpp_test_garbage_genome.txt";
         {
             std::ofstream out(tmp);
             out << "this file has no markers at all\n";
@@ -238,10 +240,10 @@ int TestGenome(int argc, char *argv[]) {
 
     // Regression: truncated genome (GenomeStart but no GenomeEnd) must throw.
     {
-        Genome g = MakeSeed();
-        const auto src = std::filesystem::temp_directory_path() / "neatcpp_test_good_genome.txt";
-        const auto trunc = std::filesystem::temp_directory_path() / "neatcpp_test_trunc_genome.txt";
-        g.Save(src.string().c_str());
+        Genome g = makeSeed();
+        const std::filesystem::path src = std::filesystem::temp_directory_path() / "neatcpp_test_good_genome.txt";
+        const std::filesystem::path trunc = std::filesystem::temp_directory_path() / "neatcpp_test_trunc_genome.txt";
+        g.save(src.string().c_str());
         std::ifstream in(src);
         std::string body((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
         body.erase(body.find("GenomeEnd"));
@@ -268,58 +270,58 @@ int TestGenome(int argc, char *argv[]) {
     // could erase unrelated entries.
     {
         RNG rng;
-        rng.Seed(11);
-        Genome g = MakeSeed(3, 2);
-        const unsigned n0 = g.NumLinks();
+        rng.seed(11);
+        Genome g = makeSeed(3, 2);
+        const unsigned n0 = g.numLinks();
         std::vector<int> before;
-        for (unsigned i = 0; i < g.NumLinks(); ++i) {
-            before.push_back(g.GetLinkByIndex(static_cast<int>(i)).InnovationID());
+        for (unsigned i = 0; i < g.numLinks(); ++i) {
+            before.push_back(g.getLinkByIndex(static_cast<int>(i)).innovationID());
         }
-        CHECK(g.Mutate_RemoveLink(rng));
-        CHECK(g.NumLinks() == n0 - 1);
+        CHECK(g.mutateRemoveLink(rng));
+        CHECK(g.numLinks() == n0 - 1);
         // Remaining links are the original ones minus exactly one, order preserved.
         size_t j = 0;
         int missing = -1;
         for (int id : before) {
-            if (j < g.NumLinks() && g.GetLinkByIndex(static_cast<int>(j)).InnovationID() == id) {
+            if (j < g.numLinks() && g.getLinkByIndex(static_cast<int>(j)).innovationID() == id) {
                 ++j;
             } else {
                 missing = id;
             }
         }
         CHECK(missing != -1);
-        CHECK(j == static_cast<size_t>(g.NumLinks()));
-        CHECK(!g.HasDeadEnds());
+        CHECK(j == static_cast<size_t>(g.numLinks()));
+        CHECK(!g.hasDeadEnds());
     }
 
     // Regression: Mutate_RemoveSimpleNeuron drops the hidden neuron and its
     // links without erasing wrong positions or leaving dangling links.
     {
-        Parameters p = DefaultParams();
+        Parameters p = defaultParams();
         RNG rng;
-        rng.Seed(7);
+        rng.seed(7);
         InnovationDatabase innovs;
-        innovs.Init(1, 1000);
-        Genome g = MakeSeed();
-        for (int i = 0; i < 50 && g.NumNeurons() == 4; ++i) {
-            g.Mutate_AddNeuron(innovs, p, rng);
+        innovs.init(1, 1000);
+        Genome g = makeSeed();
+        for (int i = 0; i < 50 && g.numNeurons() == 4; ++i) {
+            g.mutateAddNeuron(innovs, p, rng);
         }
-        CHECK(g.NumNeurons() > 4);
+        CHECK(g.numNeurons() > 4);
         bool removed = false;
         for (int i = 0; i < 50 && !removed; ++i) {
-            removed = g.Mutate_RemoveSimpleNeuron(innovs, p, rng);
+            removed = g.mutateRemoveSimpleNeuron(innovs, p, rng);
         }
         CHECK(removed);
-        CHECK(g.NumNeurons() == 4);
+        CHECK(g.numNeurons() == 4);
         // Every link still references existing neurons.
-        std::vector<int> neuron_ids;
-        for (unsigned i = 0; i < g.NumNeurons(); ++i) {
-            neuron_ids.push_back(g.GetNeuronByIndex(static_cast<int>(i)).ID());
+        std::vector<int> neuronIds;
+        for (unsigned i = 0; i < g.numNeurons(); ++i) {
+            neuronIds.push_back(g.getNeuronByIndex(static_cast<int>(i)).id());
         }
-        for (unsigned i = 0; i < g.NumLinks(); ++i) {
-            const LinkGene &l = g.GetLinkByIndex(static_cast<int>(i));
-            CHECK(std::find(neuron_ids.begin(), neuron_ids.end(), l.FromNeuronID()) != neuron_ids.end());
-            CHECK(std::find(neuron_ids.begin(), neuron_ids.end(), l.ToNeuronID()) != neuron_ids.end());
+        for (unsigned i = 0; i < g.numLinks(); ++i) {
+            const LinkGene &l = g.getLinkByIndex(static_cast<int>(i));
+            CHECK(std::find(neuronIds.begin(), neuronIds.end(), l.fromNeuronID()) != neuronIds.end());
+            CHECK(std::find(neuronIds.begin(), neuronIds.end(), l.toNeuronID()) != neuronIds.end());
         }
     }
 
@@ -327,33 +329,33 @@ int TestGenome(int argc, char *argv[]) {
     // matching genes must come from the *fitter* parent (was inverted: picked
     // the weaker one).
     {
-        Parameters p = DefaultParams();
-        p.MultipointCrossoverRate = 1.0;
-        p.PreferFitterParentRate = 1.0;
+        Parameters p = defaultParams();
+        p.multipointCrossoverRate = 1.0;
+        p.preferFitterParentRate = 1.0;
         RNG rng;
-        rng.Seed(31);
-        Genome mom = MakeSeed(3, 2);
-        Genome dad = MakeSeed(3, 2);
+        rng.seed(31);
+        Genome mom = makeSeed(3, 2);
+        Genome dad = makeSeed(3, 2);
         for (int i = 0; i < 10; ++i) {
-            mom.Mutate_LinkWeights(p, rng);
-            dad.Mutate_LinkWeights(p, rng);
+            mom.mutateLinkWeights(p, rng);
+            dad.mutateLinkWeights(p, rng);
         }
-        bool any_differ = false;
-        for (unsigned i = 0; i < mom.NumLinks(); ++i) {
-            if (mom.GetLinkByIndex(static_cast<int>(i)).GetWeight() != dad.GetLinkByIndex(static_cast<int>(i)).GetWeight()) {
-                any_differ = true;
+        bool anyDiffer = false;
+        for (unsigned i = 0; i < mom.numLinks(); ++i) {
+            if (mom.getLinkByIndex(static_cast<int>(i)).getWeight() != dad.getLinkByIndex(static_cast<int>(i)).getWeight()) {
+                anyDiffer = true;
             }
         }
-        CHECK(any_differ);
-        mom.SetFitness(10.0);
-        dad.SetFitness(1.0);
-        Genome baby = mom.Mate(dad, false, false, rng, p);
-        CHECK(baby.NumLinks() == mom.NumLinks());
-        for (unsigned i = 0; i < baby.NumLinks(); ++i) {
-            const double wm = mom.GetLinkByIndex(static_cast<int>(i)).GetWeight();
-            const double wd = dad.GetLinkByIndex(static_cast<int>(i)).GetWeight();
+        CHECK(anyDiffer);
+        mom.setFitness(10.0);
+        dad.setFitness(1.0);
+        Genome baby = mom.mate(dad, false, false, rng, p);
+        CHECK(baby.numLinks() == mom.numLinks());
+        for (unsigned i = 0; i < baby.numLinks(); ++i) {
+            const Real wm = mom.getLinkByIndex(static_cast<int>(i)).getWeight();
+            const Real wd = dad.getLinkByIndex(static_cast<int>(i)).getWeight();
             if (wm != wd) {
-                CHECK(Near(baby.GetLinkByIndex(static_cast<int>(i)).GetWeight(), wm));
+                CHECK(near(baby.getLinkByIndex(static_cast<int>(i)).getWeight(), wm));
             }
         }
     }
@@ -361,60 +363,60 @@ int TestGenome(int argc, char *argv[]) {
     // Compatibility distance: zero to self, grows with disjoint genes, and
     // IsCompatibleWith agrees with the threshold.
     {
-        Parameters p = DefaultParams();
+        Parameters p = defaultParams();
         RNG rng;
-        rng.Seed(99);
-        Genome a = MakeSeed(3, 2);
-        Genome b = MakeSeed(3, 2);
-        CHECK(Near(a.CompatibilityDistance(a, p), 0.0));
-        CHECK(Near(a.CompatibilityDistance(b, p), 0.0));  // identical topology
-        CHECK(a.IsCompatibleWith(b, p));
+        rng.seed(99);
+        Genome a = makeSeed(3, 2);
+        Genome b = makeSeed(3, 2);
+        CHECK(near(a.compatibilityDistance(a, p), 0.0));
+        CHECK(near(a.compatibilityDistance(b, p), 0.0));  // identical topology
+        CHECK(a.isCompatibleWith(b, p));
 
         // Remove links from b only: each removal makes b missing a gene that a
         // has, i.e. adds disjoint genes to the pair, so the distance strictly grows.
-        double prev = 0.0;
+        Real prev = 0.0;
         int removed = 0;
-        for (int i = 0; i < 3 && b.NumLinks() > 0; ++i) {
-            if (b.Mutate_RemoveLink(rng)) {
+        for (int i = 0; i < 3 && b.numLinks() > 0; ++i) {
+            if (b.mutateRemoveLink(rng)) {
                 ++removed;
-                const double d = a.CompatibilityDistance(b, p);
+                const Real d = a.compatibilityDistance(b, p);
                 CHECK(d > prev);
                 prev = d;
             }
         }
         CHECK(removed == 3);
-        CHECK(a.IsCompatibleWith(b, p) == (prev <= p.CompatTreshold));
+        CHECK(a.isCompatibleWith(b, p) == (prev <= p.compatTreshold));
     }
 
     // DerivePhenotypicChanges copies network weights back into the genome.
     {
-        Parameters p = DefaultParams();
-        Genome g = MakeSeed(3, 2);
+        Parameters p = defaultParams();
+        Genome g = makeSeed(3, 2);
         NeuralNetwork net;
-        g.BuildPhenotype(net);
-        CHECK(net.m_connections.size() == static_cast<size_t>(g.NumLinks()));
-        for (unsigned i = 0; i < net.m_connections.size(); ++i) {
-            net.m_connections[i].m_weight = 0.25 * static_cast<double>(i) - 1.0;
+        g.buildPhenotype(net);
+        CHECK(net.connections_.size() == static_cast<size_t>(g.numLinks()));
+        for (unsigned i = 0; i < net.connections_.size(); ++i) {
+            net.connections_[i].weight_ = 0.25 * static_cast<Real>(i) - 1.0;
         }
-        g.DerivePhenotypicChanges(net);
-        for (unsigned i = 0; i < net.m_connections.size(); ++i) {
-            CHECK(Near(g.GetLinkByIndex(static_cast<int>(i)).GetWeight(), net.m_connections[i].m_weight));
+        g.derivePhenotypicChanges(net);
+        for (unsigned i = 0; i < net.connections_.size(); ++i) {
+            CHECK(near(g.getLinkByIndex(static_cast<int>(i)).getWeight(), net.connections_[i].weight_));
         }
     }
 
     // Phenotype outputs are deterministic and match a freshly built network.
     {
-        Parameters p = DefaultParams();
-        Genome g = MakeSeed(3, 1);
+        Parameters p = defaultParams();
+        Genome g = makeSeed(3, 1);
         NeuralNetwork net1, net2;
-        g.BuildPhenotype(net1);
-        g.BuildPhenotype(net2);
-        std::vector<double> in{0.3, 0.6, 0.9};
-        net1.Input(in);
-        net1.Activate();
-        net2.Input(in);
-        net2.Activate();
-        CHECK(Near(net1.Output()[0], net2.Output()[0]));
+        g.buildPhenotype(net1);
+        g.buildPhenotype(net2);
+        std::vector<Real> in{0.3, 0.6, 0.9};
+        net1.input(in);
+        net1.activate();
+        net2.input(in);
+        net2.activate();
+        CHECK(near(net1.output()[0], net2.output()[0]));
     }
 
     if (g_failures != 0) {

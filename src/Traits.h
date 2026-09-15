@@ -22,7 +22,17 @@
 
 /*
  * File:        Traits.h
- * Description: Definitions for the trait parameter types (int, float, string and set variants) built on std::variant.
+ * Description: Universal-trait system: typed, evolvable per-gene parameters (this file) consumed by
+ *              the gene classes in src/Genes.h. A TraitParameters entry declares one named trait and its
+ *              mutation behavior; each Gene then carries a concrete Trait value for it. Traits participate
+ *              in mating (averaged or picked), mutation (replace vs. perturb) and speciation (weighted by
+ *              importanceCoeff_ into the compatibility distance in src/Genome.cpp).
+ *
+ * References: Stanley & Miikkulainen, "Evolving Neural Networks through Augmenting Topologies" (2002),
+ *             Section 4 (compatibility distance extended here with trait terms); see
+ *             references/Evolving Neural Networks through Augmenting Topologies.pdf.md. Intra-repo users:
+ *             src/Genes.h (Gene::initTraits/mateTraits/mutateTraits/getTraitDistances),
+ *             src/Parameters.h (neuronTraits/linkTraits/genomeTraits maps), tests/TestTraitsGenes.cpp.
  */
 
 #pragma once
@@ -32,185 +42,232 @@
 #include <variant>
 #include <vector>
 
+#include "Types.h"
+
 namespace NEAT {
-    class intsetelement {
+    // A single selectable integer of a discrete trait set (e.g. a "loid" selector). Compared by value.
+    class IntSetElement {
        public:
+        // The selected integer.
         int value;
 
-        // Comparison operator
-        bool operator==(const intsetelement &rhs) const { return rhs.value == value; }
+        // Comparison operator (compares by value).
+        bool operator==(const IntSetElement &rhs) const { return rhs.value == value; }
 
-        // Assignment operator
-        intsetelement &operator=(const intsetelement &a_g) {
-            if (this != &a_g) {
-                value = a_g.value;
+        // Assignment operator.
+        IntSetElement &operator=(const IntSetElement &g) {
+            if (this != &g) {
+                value = g.value;
             }
 
             return *this;
         }
     };
-    class floatsetelement {
+    // A single selectable float of a discrete trait set. Compared by value.
+    class FloatSetElement {
        public:
-        double value;
+        // The selected float.
+        Real value;
 
-        // Comparison operator
-        bool operator==(const floatsetelement &rhs) const { return rhs.value == value; }
+        // Comparison operator (compares by value).
+        bool operator==(const FloatSetElement &rhs) const { return rhs.value == value; }
 
-        floatsetelement &operator=(const floatsetelement &a_g) {
-            if (this != &a_g) {
-                value = a_g.value;
+        // Assignment operator.
+        FloatSetElement &operator=(const FloatSetElement &g) {
+            if (this != &g) {
+                value = g.value;
             }
 
             return *this;
         }
     };
 
-    typedef std::variant<int, double, std::string, intsetelement, floatsetelement> TraitType;
+    // The runtime value of any trait: plain int/Real/string or one discrete-set element.
+    using TraitType = std::variant<int, Real, std::string, IntSetElement, FloatSetElement>;
 
+    // Mutation parameters for an integer trait: uniform init/mutation inside [min .. max].
     class IntTraitParameters {
        public:
+        // Inclusive value range.
         int min, max;
-        int mut_power;            // magnitude of max change up/down
-        double mut_replace_prob;  // probability to replace when mutating
+        // Maximum perturbation up/down applied by a "modify" (non-replace) mutation.
+        int mutPower;
+        // Probability that a mutation replaces the value instead of perturbing it.
+        Real mutReplaceProb;
 
+        // Builds a zeroed parameter set.
         IntTraitParameters() {
             min = 0;
             max = 0;
-            mut_power = 0;
-            mut_replace_prob = 0;
+            mutPower = 0;
+            mutReplaceProb = 0;
         }
 
-        IntTraitParameters &operator=(const IntTraitParameters &a_g) {
-            if (this != &a_g) {
-                min = a_g.min;
-                max = a_g.max;
-                mut_power = a_g.mut_power;
-                mut_replace_prob = a_g.mut_replace_prob;
+        // Assignment operator.
+        IntTraitParameters &operator=(const IntTraitParameters &g) {
+            if (this != &g) {
+                min = g.min;
+                max = g.max;
+                mutPower = g.mutPower;
+                mutReplaceProb = g.mutReplaceProb;
             }
 
             return *this;
         }
     };
+    // Mutation parameters for a floating-point trait: uniform init/mutation inside [min .. max].
     class FloatTraitParameters {
        public:
-        double min, max;
-        double mut_power;         // magnitude of max change up/down
-        double mut_replace_prob;  // probability to replace when mutating
+        // Inclusive value range.
+        Real min, max;
+        // Maximum perturbation up/down applied by a "modify" (non-replace) mutation.
+        Real mutPower;
+        // Probability that a mutation replaces the value instead of perturbing it.
+        Real mutReplaceProb;
 
+        // Builds a zeroed parameter set.
         FloatTraitParameters() {
             min = 0;
             max = 0;
-            mut_power = 0;
-            mut_replace_prob = 0;
+            mutPower = 0;
+            mutReplaceProb = 0;
         }
 
-        FloatTraitParameters &operator=(const FloatTraitParameters &a_g) {
-            if (this != &a_g) {
-                min = a_g.min;
-                max = a_g.max;
-                mut_power = a_g.mut_power;
-                mut_replace_prob = a_g.mut_replace_prob;
+        // Assignment operator.
+        FloatTraitParameters &operator=(const FloatTraitParameters &g) {
+            if (this != &g) {
+                min = g.min;
+                max = g.max;
+                mutPower = g.mutPower;
+                mutReplaceProb = g.mutReplaceProb;
             }
 
             return *this;
         }
     };
+    // Selection-set parameters for a string trait: values are drawn with the given probabilities.
     class StringTraitParameters {
        public:
-        std::vector<std::string> set;  // the set of possible strings
-        std::vector<double> probs;     // their respective probabilities for appearance
-        StringTraitParameters &operator=(const StringTraitParameters &a_g) {
-            if (this != &a_g) {
-                set = a_g.set;
-                probs = a_g.probs;
+        // The admissible strings.
+        std::vector<std::string> set;
+        // Per-entry selection probabilities (resized to the set; see Gene::pickSetIndex in src/Genes.h).
+        std::vector<Real> probs;
+        // Assignment operator.
+        StringTraitParameters &operator=(const StringTraitParameters &g) {
+            if (this != &g) {
+                set = g.set;
+                probs = g.probs;
             }
 
             return *this;
         }
     };
+    // Selection-set parameters for an integer trait.
     class IntSetTraitParameters {
        public:
-        std::vector<intsetelement> set;  // the set of possible ints
-        std::vector<double> probs;       // their respective probabilities for appearance
+        // The admissible integers.
+        std::vector<IntSetElement> set;
+        // Per-entry selection probabilities (resized to the set; see Gene::pickSetIndex in src/Genes.h).
+        std::vector<Real> probs;
 
-        IntSetTraitParameters &operator=(const IntSetTraitParameters &a_g) {
-            if (this != &a_g) {
-                set = a_g.set;
-                probs = a_g.probs;
+        // Assignment operator.
+        IntSetTraitParameters &operator=(const IntSetTraitParameters &g) {
+            if (this != &g) {
+                set = g.set;
+                probs = g.probs;
             }
 
             return *this;
         }
     };
+    // Selection-set parameters for a float trait.
     class FloatSetTraitParameters {
        public:
-        std::vector<floatsetelement> set;  // the set of possible floats
-        std::vector<double> probs;         // their respective probabilities for appearance
+        // The admissible floats.
+        std::vector<FloatSetElement> set;
+        // Per-entry selection probabilities (resized to the set; see Gene::pickSetIndex in src/Genes.h).
+        std::vector<Real> probs;
 
-        FloatSetTraitParameters &operator=(const FloatSetTraitParameters &a_g) {
-            if (this != &a_g) {
-                set = a_g.set;
-                probs = a_g.probs;
+        // Assignment operator.
+        FloatSetTraitParameters &operator=(const FloatSetTraitParameters &g) {
+            if (this != &g) {
+                set = g.set;
+                probs = g.probs;
             }
 
             return *this;
         }
     };
 
+    // Declares one named evolvable trait: its type tag, type-specific details, mutation rate,
+    // compatibility weight and optional dependency gating. The type tag selects the active
+    // details_ alternative: "int", "float", "str" (alias "string"), "intset" or "floatset".
     class TraitParameters {
        public:
-        double m_ImportanceCoeff;
-        double m_MutationProb;
+        // Weight of this trait's distance in the genome compatibility calculation.
+        Real importanceCoeff_;
+        // Per-reproduction probability that this trait is mutated.
+        Real mutationProb_;
 
-        std::string type;  // can be "int", "float", "string", "intset", "floatset", "pyobject"
-        std::variant<IntTraitParameters, FloatTraitParameters, StringTraitParameters, IntSetTraitParameters, FloatSetTraitParameters> m_Details;
+        // Type tag: "int", "float", "str", "intset" or "floatset" (legacy files may say "string"/"pyobject"; only the five above are honored).
+        std::string type;
+        // Type-specific parameters selected by type.
+        std::variant<IntTraitParameters, FloatTraitParameters, StringTraitParameters, IntSetTraitParameters, FloatSetTraitParameters> details_;
 
-        std::string dep_key;                // counts only if this other trait exists..
-        std::vector<TraitType> dep_values;  // and has one of these values
+        // Optional gating: the trait only counts (distance/mutation) when the named other trait exists...
+        std::string depKey;
+        // ...and holds one of these values. Keep depKey empty and no conditional logic will apply.
+        std::vector<TraitType> depValues;
 
-        // keep dep_key empty and no conditional logic will apply
-
+        // Builds a default integer-trait declaration with no gating.
         TraitParameters() {
-            m_ImportanceCoeff = 0;
-            m_MutationProb = 0;
+            importanceCoeff_ = 0;
+            mutationProb_ = 0;
             type = "int";
-            m_Details = IntTraitParameters();
-            dep_key = "";
-            dep_values.emplace_back(std::string(""));
+            details_ = IntTraitParameters();
+            depKey = "";
+            depValues.emplace_back(std::string(""));
         }
 
-        TraitParameters &operator=(const TraitParameters &a_g) {
-            if (this != &a_g) {
-                m_ImportanceCoeff = a_g.m_ImportanceCoeff;
-                m_MutationProb = a_g.m_MutationProb;
-                type = a_g.type;
-                m_Details = a_g.m_Details;
-                dep_key = a_g.dep_key;
-                dep_values = a_g.dep_values;
+        // Assignment operator.
+        TraitParameters &operator=(const TraitParameters &g) {
+            if (this != &g) {
+                importanceCoeff_ = g.importanceCoeff_;
+                mutationProb_ = g.mutationProb_;
+                type = g.type;
+                details_ = g.details_;
+                depKey = g.depKey;
+                depValues = g.depValues;
             }
 
             return *this;
         }
     };
 
+    // A concrete per-gene trait value: the runtime value plus the gating copy inherited at init/mate time.
     class Trait {
        public:
+        // The current value.
         TraitType value;
 
+        // Builds a zero integer trait with no gating.
         Trait() {
             value = 0;
-            dep_values.emplace_back(0);
-            dep_key = "";
+            depValues.emplace_back(0);
+            depKey = "";
         }
 
-        std::string dep_key;                // counts only if this other trait exists..
-        std::vector<TraitType> dep_values;  // and has this value
+        // Gating key copied from the declaration (see TraitParameters::depKey).
+        std::string depKey;
+        // Gating values copied from the declaration (see TraitParameters::depValues).
+        std::vector<TraitType> depValues;
 
-        Trait &operator=(const Trait &a_g) {
-            if (this != &a_g) {
-                value = a_g.value;
-                dep_values = a_g.dep_values;
-                dep_key = a_g.dep_key;
+        // Assignment operator.
+        Trait &operator=(const Trait &g) {
+            if (this != &g) {
+                value = g.value;
+                depValues = g.depValues;
+                depKey = g.depKey;
             }
 
             return *this;

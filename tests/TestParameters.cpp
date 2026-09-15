@@ -16,6 +16,8 @@
 
 #include "Parameters.h"
 
+using NEAT::Real;
+
 namespace {
 
     int g_failures = 0;
@@ -28,9 +30,9 @@ namespace {
         }                                                                                   \
     } while (0)
 
-    bool Near(double a, double b, double eps = 1e-9) { return std::fabs(a - b) <= eps; }
+    bool near(Real a, Real b, Real eps = 1e-9) { return std::fabs(a - b) <= eps; }
 
-    std::string ReadWholeFile(const std::filesystem::path &p) {
+    std::string readWholeFile(const std::filesystem::path &p) {
         std::ifstream in(p, std::ios::binary);
         return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
     }
@@ -45,28 +47,28 @@ int TestParameters(int argc, char *argv[]) {
     // Reset() establishes documented defaults.
     {
         Parameters p;
-        p.Reset();
-        CHECK(p.PopulationSize == 300);
-        CHECK(p.Speciation == true);
-        CHECK(p.DynamicCompatibility == true);
-        CHECK(p.MinSpecies == 5);
-        CHECK(p.MaxSpecies == 10);
-        CHECK(p.AllowClones == true);
-        CHECK(p.SurvivalRate > 0.0 && p.SurvivalRate <= 1.0);
-        CHECK(p.CrossoverRate >= 0.0 && p.CrossoverRate <= 1.0);
-        CHECK(p.CompatTreshold > 0.0);
-        CHECK(p.MutateAddNeuronProb >= 0.0 && p.MutateAddNeuronProb <= 1.0);
-        CHECK(p.MutateAddLinkProb >= 0.0 && p.MutateAddLinkProb <= 1.0);
-        CHECK(p.CustomConstraints == nullptr);
+        p.reset();
+        CHECK(p.populationSize == 300);
+        CHECK(p.speciation == true);
+        CHECK(p.dynamicCompatibility == true);
+        CHECK(p.minSpecies == 5);
+        CHECK(p.maxSpecies == 10);
+        CHECK(p.allowClones == true);
+        CHECK(p.survivalRate > 0.0 && p.survivalRate <= 1.0);
+        CHECK(p.crossoverRate >= 0.0 && p.crossoverRate <= 1.0);
+        CHECK(p.compatTreshold > 0.0);
+        CHECK(p.mutateAddNeuronProb >= 0.0 && p.mutateAddNeuronProb <= 1.0);
+        CHECK(p.mutateAddLinkProb >= 0.0 && p.mutateAddLinkProb <= 1.0);
+        CHECK(p.customConstraints == nullptr);
     }
 
     // Save emits the framing markers (compliance-relevant contract).
     {
         Parameters p;
-        p.Reset();
-        const auto tmp = std::filesystem::temp_directory_path() / "multineat_test_params.neat";
-        p.Save(tmp.string().c_str());
-        const std::string body = ReadWholeFile(tmp);
+        p.reset();
+        const std::filesystem::path tmp = std::filesystem::temp_directory_path() / "multineat_test_params.neat";
+        p.save(tmp.string().c_str());
+        const std::string body = readWholeFile(tmp);
         CHECK(body.find("NEAT_ParametersStart") != std::string::npos);
         CHECK(body.find("NEAT_ParametersEnd") != std::string::npos);
         CHECK(body.find("PopulationSize") != std::string::npos);
@@ -77,39 +79,39 @@ int TestParameters(int argc, char *argv[]) {
     // Save/Load round-trip preserves edited values.
     {
         Parameters p;
-        p.Reset();
-        p.PopulationSize = 42;
-        p.Speciation = false;
-        p.CompatTreshold = 3.5;
-        p.MutateAddNeuronProb = 0.123;
-        p.MutateWeightsProb = 0.9;
-        p.SurvivalRate = 0.33;
-        p.TournamentSize = 7;
+        p.reset();
+        p.populationSize = 42;
+        p.speciation = false;
+        p.compatTreshold = 3.5;
+        p.mutateAddNeuronProb = 0.123;
+        p.mutateWeightsProb = 0.9;
+        p.survivalRate = 0.33;
+        p.tournamentSize = 7;
 
-        const auto tmp = std::filesystem::temp_directory_path() / "multineat_test_params_rt.neat";
-        p.Save(tmp.string().c_str());
+        const std::filesystem::path tmp = std::filesystem::temp_directory_path() / "multineat_test_params_rt.neat";
+        p.save(tmp.string().c_str());
 
         Parameters q;
-        q.Reset();
+        q.reset();
         // ifstream overload
         {
             std::ifstream in(tmp.string());
             CHECK(in.is_open());
-            CHECK(q.Load(in) == 0);
+            CHECK(q.load(in) == 0);
         }
-        CHECK(q.PopulationSize == 42);
-        CHECK(q.Speciation == false);
-        CHECK(Near(q.CompatTreshold, 3.5));
-        CHECK(Near(q.MutateAddNeuronProb, 0.123));
-        CHECK(Near(q.MutateWeightsProb, 0.9));
-        CHECK(Near(q.SurvivalRate, 0.33));
-        CHECK(q.TournamentSize == 7);
+        CHECK(q.populationSize == 42);
+        CHECK(q.speciation == false);
+        CHECK(near(q.compatTreshold, 3.5));
+        CHECK(near(q.mutateAddNeuronProb, 0.123));
+        CHECK(near(q.mutateWeightsProb, 0.9));
+        CHECK(near(q.survivalRate, 0.33));
+        CHECK(q.tournamentSize == 7);
 
         // const char* overload on the same file.
         Parameters r;
-        r.Reset();
-        CHECK(r.Load(tmp.string().c_str()) == 0);
-        CHECK(r.PopulationSize == 42);
+        r.reset();
+        CHECK(r.load(tmp.string().c_str()) == 0);
+        CHECK(r.populationSize == 42);
 
         std::error_code ec;
         std::filesystem::remove(tmp, ec);
@@ -120,33 +122,33 @@ int TestParameters(int argc, char *argv[]) {
         const std::filesystem::path fixture = std::filesystem::path(NEATCPP_TEST_DATA_DIR) / "minimal.NEAT";
         CHECK(std::filesystem::exists(fixture));
         Parameters p;
-        p.Reset();
-        CHECK(p.Load(fixture.string().c_str()) == 0);
-        CHECK(p.PopulationSize == 20);
-        CHECK(p.Speciation == true);
-        CHECK(Near(p.CompatTreshold, 4.25));
+        p.reset();
+        CHECK(p.load(fixture.string().c_str()) == 0);
+        CHECK(p.populationSize == 20);
+        CHECK(p.speciation == true);
+        CHECK(near(p.compatTreshold, 4.25));
     }
 
     // Missing file is a silent no-op returning 0 (documented behavior).
     {
         Parameters p;
-        p.Reset();
-        p.PopulationSize = 77;
-        CHECK(p.Load("/nonexistent/path/that/should/not/exist.NEAT") == 0);
-        CHECK(p.PopulationSize == 77);  // untouched
+        p.reset();
+        p.populationSize = 77;
+        CHECK(p.load("/nonexistent/path/that/should/not/exist.NEAT") == 0);
+        CHECK(p.populationSize == 77);  // untouched
     }
 
     // Regression: an existing file without the NEAT_ParametersStart marker must
     // return non-zero quickly (it used to loop forever on EOF).
     {
-        const auto tmp = std::filesystem::temp_directory_path() / "neatcpp_test_garbage_params.NEAT";
+        const std::filesystem::path tmp = std::filesystem::temp_directory_path() / "neatcpp_test_garbage_params.NEAT";
         {
             std::ofstream out(tmp);
             out << "no markers here at all\n";
         }
         Parameters p;
-        p.Reset();
-        CHECK(p.Load(tmp.string().c_str()) != 0);
+        p.reset();
+        CHECK(p.load(tmp.string().c_str()) != 0);
         std::error_code ec;
         std::filesystem::remove(tmp, ec);
     }
@@ -155,10 +157,10 @@ int TestParameters(int argc, char *argv[]) {
     // must return non-zero instead of spinning on EOF.
     {
         Parameters q;
-        q.Reset();
-        const auto src = std::filesystem::temp_directory_path() / "neatcpp_test_good_params.NEAT";
-        const auto trunc = std::filesystem::temp_directory_path() / "neatcpp_test_trunc_params.NEAT";
-        q.Save(src.string().c_str());
+        q.reset();
+        const std::filesystem::path src = std::filesystem::temp_directory_path() / "neatcpp_test_good_params.NEAT";
+        const std::filesystem::path trunc = std::filesystem::temp_directory_path() / "neatcpp_test_trunc_params.NEAT";
+        q.save(src.string().c_str());
         std::ifstream in(src);
         std::string body((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
         body.erase(body.find("NEAT_ParametersEnd"));
@@ -167,8 +169,8 @@ int TestParameters(int argc, char *argv[]) {
             out << body;
         }
         Parameters p;
-        p.Reset();
-        CHECK(p.Load(trunc.string().c_str()) != 0);
+        p.reset();
+        CHECK(p.load(trunc.string().c_str()) != 0);
         std::error_code ec;
         std::filesystem::remove(src, ec);
         std::filesystem::remove(trunc, ec);

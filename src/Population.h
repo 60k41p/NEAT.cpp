@@ -32,8 +32,7 @@
 
 #pragma once
 
-#include <float.h>
-
+#include <cfloat>
 #include <vector>
 
 #include "Genes.h"
@@ -43,258 +42,215 @@
 #include "PhenotypeBehavior.h"
 #include "Random.h"
 #include "Species.h"
+#include "Types.h"
 
 namespace NEAT {
 
     //////////////////////////////////////////////
-    // The Population class
+    // Phased-search mode: complexifying grows structure, simplifying prunes it, blended mixes both.
+    // See Parameters::phasedSearching and Population::epoch().
     //////////////////////////////////////////////
-
     enum SearchMode { COMPLEXIFYING, SIMPLIFYING, BLENDED };
 
     class Species;
 
+    // The evolving population: species list, innovation registry, best-genome tracking and the
+    // generational (epoch()) plus real-time (tick()) and novelty-search (noveltySearchTick()) drivers.
+    // Construct from a seed genome, evaluate fitness externally each generation, then call epoch().
     class Population {
         /////////////////////
         // Members
         /////////////////////
 
        private:
-        // The innovation database
-        InnovationDatabase m_InnovationDatabase;
+        // Registry of structural innovations shared by all members (see src/Innovation.h).
+        InnovationDatabase innovationDatabase_;
 
-        // next genome ID
-        unsigned int m_NextGenomeID;
+        // Next genome/species identifiers to assign.
+        unsigned int nextGenomeID_;
 
-        // next species ID
-        unsigned int m_NextSpeciesID;
+        // Next species identifier.
+        unsigned int nextSpeciesID_;
 
         ////////////////////////////
         // Phased searching members
 
-        // The current mode of search
-        SearchMode m_SearchMode;
+        // Current complexify/simplify phase.
+        SearchMode searchMode_;
 
-        // The current Mean Population Complexity
-        double m_CurrentMPC;
+        // Current mean population complexity (average genome size metric).
+        Real currentMPC_;
 
-        // The MPC from the previous generation (for comparison)
-        double m_OldMPC;
+        // Previous generation's MPC, for phase-change detection.
+        Real oldMPC_;
 
-        // The base MPC (for switching between complexifying/simplifying phase)
-        double m_BaseMPC;
+        // MPC baseline that the simplifying phase returns toward.
+        Real baseMPC_;
 
-        // Separates the population into species based on compatibility distance
-        void Speciate();
+        // Groups all members into species by compatibility distance.
+        void speciate();
 
-        // Adjusts each species's fitness
-        void AdjustFitness();
+        // Shares fitness within each species (see Species::adjustFitness()).
+        void adjustFitness();
 
-        // Calculates how many offspring each genome should have
-        void CountOffspring();
+        // Assigns offspring quotas to genomes and species.
+        void countOffspring();
 
-        // Empties all species
-        void ResetSpecies();
+        // Clears every species' member list (keeps the species shells).
+        void resetSpecies();
 
-        // Updates the species
-        void UpdateSpecies();
+        // Refreshes best/worst markers, ages and stagnation counters.
+        void updateSpecies();
 
-        // Calculates the current mean population complexity
-        void CalculateMPC();
+        // Recomputes currentMPC_ from member genome sizes.
+        void calculateMPC();
 
-        // best fitness ever achieved
-        double m_BestFitnessEver;
+        // Best fitness ever observed in this run.
+        Real bestFitnessEver_;
 
-        // Keep a local copy of the best ever genome found in the run
-        Genome m_BestGenome;
-        Genome m_BestGenomeEver;
+        // Best genome of the current generation and of the whole run.
+        Genome bestGenome_;
+        Genome bestGenomeEver_;
 
-        // Number of generations since the best fitness changed
-        unsigned int m_GensSinceBestFitnessLastChanged;
+        // Generations since the run-best fitness improved (drives stagnation handling).
+        unsigned int gensSinceBestFitnessLastChanged_;
 
-        // Number of evaluations since the best fitness changed
-        unsigned int m_EvalsSinceBestFitnessLastChanged;
+        // Evaluations since the run-best fitness improved (real-time evolution).
+        unsigned int evalsSinceBestFitnessLastChanged_;
 
-        // How many generations passed until the last change of MPC
-        unsigned int m_GensSinceMPCLastChanged;
+        // Generations since the MPC last changed (drives phase switching).
+        unsigned int gensSinceMPCLastChanged_;
 
-        // The initial list of genomes
-        std::vector<Genome> m_Genomes;
+        // Seed genomes used at construction (kept for re-seeding checks).
+        std::vector<Genome> genomes_;
 
        public:
-        // The archive
-        std::vector<Genome> m_GenomeArchive;
+        // Archive of past champions enforced by Parameters::archiveEnforcement.
+        std::vector<Genome> genomeArchive_;
 
-        // Random number generator
-        RNG m_RNG;
+        // Population-owned RNG stream.
+        RNG rng_;
 
-        // Evolution parameters
-        Parameters m_Parameters;
+        // Active evolution knobs (see src/Parameters.h).
+        Parameters parameters_;
 
-        // Current generation
-        unsigned int m_Generation;
+        // Current generation counter.
+        unsigned int generation_;
 
-        // The list of species
-        std::vector<Species> m_Species;
+        // The live species list.
+        std::vector<Species> species_;
 
-        int m_ID;
+        // Population identifier (file/load bookkeeping).
+        int id_;
 
         ////////////////////////////
         // Constructors
         ////////////////////////////
 
-        // Initializes a population from a seed genome G. Then it initializes all weights
-        // To small numbers between -R and R.
-        // The population size is determined by GlobalParameters.PopulationSize
-        Population(const Genome &a_G, const Parameters &a_Parameters, bool a_RandomizeWeights, double a_RandomRange, int a_RNG_seed);
+        // Clones the seed genome into a full population; randomizes link weights into [-randomRange .. randomRange]
+        // when randomizeWeights is set. The size comes from parameters.populationSize.
+        Population(const Genome &g, const Parameters &parameters, bool randomizeWeights, Real randomRange, int rngSeed);
 
-        // Loads a population from a file.
-        Population(const std::string a_FileName);
+        // Loads a population from a saved file (see save()).
+        Population(const std::string fileName);
 
         Population() {};
-
-        ////////////////////////////
-        // Destructor
-        ////////////////////////////
-
-        // TODO: move all header code into the source file,
-        // make as much private members as possible
 
         ////////////////////////////
         // Methods
         ////////////////////////////
 
-        // Access
-        SearchMode GetSearchMode() const { return m_SearchMode; }
-        double GetCurrentMPC() const { return m_CurrentMPC; }
-        double GetBaseMPC() const { return m_BaseMPC; }
+        // Current phased-search state (see SearchMode).
+        SearchMode getSearchMode() const { return searchMode_; }
+        Real getCurrentMPC() const { return currentMPC_; }
+        Real getBaseMPC() const { return baseMPC_; }
 
-        unsigned int NumGenomes() const {
+        // Total member count across all species.
+        unsigned int numGenomes() const {
             unsigned int num = 0;
-            for (unsigned int i = 0; i < m_Species.size(); i++) {
-                num += m_Species[i].m_Individuals.size();
+            for (unsigned int i = 0; i < species_.size(); i++) {
+                num += static_cast<unsigned int>(species_[i].individuals_.size());
             }
             return num;
         }
 
-        unsigned int GetGeneration() const { return m_Generation; }
-        double GetBestFitnessEver() const { return m_BestFitnessEver; }
-        Genome GetBestGenome() const {
-            double best = std::numeric_limits<double>::min();
-            int idx_species = 0;
-            int idx_genome = 0;
-            for (unsigned int i = 0; i < m_Species.size(); i++) {
-                for (unsigned int j = 0; j < m_Species[i].m_Individuals.size(); j++) {
-                    if (m_Species[i].m_Individuals[j].GetFitness() > best) {
-                        best = m_Species[i].m_Individuals[j].GetFitness();
-                        idx_species = i;
-                        idx_genome = j;
-                    }
-                }
-            }
+        unsigned int getGeneration() const { return generation_; }
+        Real getBestFitnessEver() const { return bestFitnessEver_; }
+        // Copies out the fittest genome across all species (defined in Population.cpp).
+        Genome getBestGenome() const;
 
-            return m_Species[idx_species].m_Individuals[idx_genome];
-        }
+        // Generations/evaluations since the run-best fitness improved.
+        unsigned int getStagnation() const { return gensSinceBestFitnessLastChanged_; }
+        unsigned int getMPCStagnation() const { return gensSinceMPCLastChanged_; }
 
-        unsigned int GetStagnation() const { return m_GensSinceBestFitnessLastChanged; }
-        unsigned int GetMPCStagnation() const { return m_GensSinceMPCLastChanged; }
+        unsigned int getNextGenomeID() const { return nextGenomeID_; }
+        unsigned int getNextSpeciesID() const { return nextSpeciesID_; }
+        void incrementNextGenomeID() { nextGenomeID_++; }
+        void incrementNextSpeciesID() { nextSpeciesID_++; }
 
-        unsigned int GetNextGenomeID() const { return m_NextGenomeID; }
-        unsigned int GetNextSpeciesID() const { return m_NextSpeciesID; }
-        void IncrementNextGenomeID() { m_NextGenomeID++; }
-        void IncrementNextSpeciesID() { m_NextSpeciesID++; }
+        // Throws std::runtime_error when any genome ID occurs more than once (defined in Population.cpp).
+        void sameGenomeIDCheck();
 
-        // Make sure no same genome IDs exist in the population
-        void SameGenomeIDCheck() {
-            // count how much each ID found has occured
-            std::map<int, int> ids;
-            for (unsigned int i = 0; i < m_Species.size(); i++) {
-                for (unsigned int j = 0; j < m_Species[i].m_Individuals.size(); j++) {
-                    ids[m_Species[i].m_Individuals[j].GetID()] = 0;
-                }
-            }
-            for (unsigned int i = 0; i < m_Species.size(); i++) {
-                for (unsigned int j = 0; j < m_Species[i].m_Individuals.size(); j++) {
-                    ids[m_Species[i].m_Individuals[j].GetID()] += 1;
-                }
-            }
+        // Mutable access to a member by position/ID (throws std::runtime_error when absent).
+        Genome &accessGenomeByIndex(int const index);
+        Genome &accessGenomeByID(int const id);
 
-            for (auto it = ids.begin(); it != ids.end(); it++) {
-                if (it->second > 1) {
-                    char s[256];
-                    sprintf(s, "Genome ID %d appears %d times in the population\n", it->first, it->second);
-                    throw std::runtime_error(s);
-                }
-            }
-        }
+        InnovationDatabase &accessInnovationDatabase() { return innovationDatabase_; }
 
-        Genome &AccessGenomeByIndex(int const a_idx);
-        Genome &AccessGenomeByID(int const a_id);
+        // Sorts every species' members fittest-first.
+        void sort();
 
-        InnovationDatabase &AccessInnovationDatabase() { return m_InnovationDatabase; }
+        // Runs speciation, fitness sharing, offspring allocation and reproduction for one generation.
+        void epoch();
 
-        // Sorts each species's genomes by fitness
-        void Sort();
+        // Persists the whole population including species and innovation state.
+        void save(const char *fileName);
 
-        // Performs one generation and reproduces the genomes
-        void Epoch();
-
-        // Saves the whole population to a file
-        void Save(const char *a_FileName);
-
-        //////////////////////
-        // NEW STUFF
-        std::vector<Species> m_TempSpecies;  // useful in reproduction
+        // Staging area for offspring during reproduction.
+        std::vector<Species> tempSpecies_;
 
         //////////////////////
         // Real-Time methods
 
-        // Estimates the estimated average fitness for all species
-        // void EstimateAllAverages();
+        // Samples the parent species for steady-state reproduction (fitness-proportionate).
+        unsigned int chooseParentSpecies();
 
-        // Reproduce the population champ only
-        // Genome ReproduceChamp();
+        // Removes and returns the worst long-lived member (used by tick()).
+        Genome removeWorstIndividual();
 
-        // Choose the parent species that will reproduce
-        // This is a real-time version of fitness sharing
-        // Returns the species index
-        unsigned int ChooseParentSpecies();
+        // Drops species left without members.
+        void clearEmptySpecies();
 
-        // Removes worst member of the whole population that has been around for a minimum amount of time returns the genome that was just deleted (may be
-        // useful)
-        Genome RemoveWorstIndividual();
+        // Steady-state step: replaces the worst evaluated member with one offspring. Returns a pointer
+        // into the population storage (do not retain across further ticks) and copies the replaced
+        // genome into deletedGenome.
+        Genome *tick(Genome &deletedGenome);
 
-        void ClearEmptySpecies();
+        // Moves one member to its compatible species (used when the compatibility threshold shifts).
+        void reassignSpecies(int genomeIndex);
 
-        // The main reaitime tick. Analog to Epoch(). Replaces the worst evaluated individual with a new one.
-        // Returns a pointer to the new baby.
-        // and copies the genome that was deleted to a_geleted_genome
-        Genome *Tick(Genome &a_deleted_genome);
-
-        // Takes an individual and puts it in its apropriate species Useful in realtime when the compatibility treshold changes
-        void ReassignSpecies(int a_genome_idx);
-
-        unsigned int m_NumEvaluations;
+        // Lifetime evaluation counter.
+        unsigned int numEvaluations_;
 
         ///////////////////////////////
-        // Novelty search
+        // Novelty search (see Lehman & Stanley 2011; descriptors derive from PhenotypeBehavior)
 
-        // A pointer to the archive of PhenotypeBehaviors Necessary to contain derived custom classes.
-        std::vector<PhenotypeBehavior> *m_BehaviorArchive;
+        // External behavior archive (owned by the caller; see initPhenotypeBehaviorData()).
+        std::vector<PhenotypeBehavior> *behaviorArchive_;
 
-        // Call this function to allocate memory for your custom behaviors. This initializes everything.
-        void InitPhenotypeBehaviorData(std::vector<PhenotypeBehavior> *a_population, std::vector<PhenotypeBehavior> *a_archive);
+        // Wires caller-owned behavior storage for the population and the archive.
+        void initPhenotypeBehaviorData(std::vector<PhenotypeBehavior> *population, std::vector<PhenotypeBehavior> *archive);
 
-        // This is the main method performing novelty search. Performs one reproduction and assigns novelty scores based on the current population and the
-        // archive. If a successful behavior was encountered, returns true and the genome a_SuccessfulGenome is overwritten with the genome generating the
-        // successful behavior
-        bool NoveltySearchTick(Genome &a_SuccessfulGenome);
+        // Performs one novelty reproduction and sparseness assignment. Returns true when a successful
+        // behavior was found, overwriting successfulGenome with the genome that produced it.
+        bool noveltySearchTick(Genome &successfulGenome);
 
-        double ComputeSparseness(Genome &genome);
+        // Mean behavioral distance of the genome to its K nearest neighbors (population + archive).
+        Real computeSparseness(Genome &genome);
 
-        // counters for archive stagnation
-        unsigned int m_GensSinceLastArchiving;
-        unsigned int m_QuickAddCounter;
+        // Generations since the last archive addition / consecutive quick additions (Pmin adaptation).
+        unsigned int gensSinceLastArchiving_;
+        unsigned int quickAddCounter_;
     };
 
 }  // namespace NEAT
