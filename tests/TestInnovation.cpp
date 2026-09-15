@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <limits>
 
 #include "Genome.h"
 #include "Innovation.h"
@@ -144,6 +145,43 @@ int TestInnovation(int argc, char *argv[]) {
         CHECK(threw);
         std::error_code ec;
         std::filesystem::remove(tmp, ec);
+    }
+
+    // Index heals after external edits; Serialize round-trips; out-of-range access throws.
+    {
+        InnovationDatabase db;
+        db.Init(1, 1);
+        db.AddLinkInnovation(1, 2);
+        db.AddNeuronInnovation(1, 2, HIDDEN);
+        CHECK(db.CheckInnovation(1, 2, NEW_LINK) != -1);
+        const std::string data = db.Serialize();
+        const InnovationDatabase db2 = InnovationDatabase::Deserialize(data);
+        CHECK(db2.m_Innovations.size() == db.m_Innovations.size());
+        CHECK(db2.CheckInnovation(1, 2, NEW_LINK) == db.CheckInnovation(1, 2, NEW_LINK));
+        CHECK(db2.ValidateInnovationState());
+        // External edit bypassing Add*: lookups still work via lazy rebuild.
+        db.m_Innovations.emplace_back(Innovation(999, NEW_LINK, 5, 6, NONE, -1));
+        CHECK(db.CheckInnovation(5, 6, NEW_LINK) == 999);
+        CHECK(db.CheckAllInnovations(5, 6, NEW_LINK).size() == 1);
+        CHECK(!db.ValidateInnovationState());  // synthetic ID exceeds counters
+        bool threw = false;
+        try {
+            (void)db2.GetInnovationByIdx(1000000);
+        } catch (const std::out_of_range &) {
+            threw = true;
+        }
+        CHECK(threw);
+        // Counters overflow-guard at INT_MAX.
+        InnovationDatabase full;
+        full.Init(std::numeric_limits<int>::max() - 1, 1);
+        (void)full.AddLinkInnovation(1, 2);
+        threw = false;
+        try {
+            (void)full.AddLinkInnovation(3, 4);
+        } catch (const std::overflow_error &) {
+            threw = true;
+        }
+        CHECK(threw);
     }
 
     if (g_failures != 0) {

@@ -14,6 +14,7 @@
 #include <iostream>
 #include <string>
 
+#include "Genome.h"
 #include "Parameters.h"
 
 namespace {
@@ -172,6 +173,106 @@ int TestParameters(int argc, char *argv[]) {
         std::error_code ec;
         std::filesystem::remove(src, ec);
         std::filesystem::remove(trunc, ec);
+    }
+
+    // v2 defaults: retuned evolution dynamics and new algorithm controls.
+    {
+        Parameters p;
+        p.Reset();
+        CHECK(p.YoungAgeTreshold == 15);
+        CHECK(p.OldAgeTreshold == 80);
+        CHECK(Near(p.OldAgePenalty, 0.75));
+        CHECK(Near(p.PreferFitterParentRate, 0.5));
+        CHECK(p.TruncationSelection == true);
+        CHECK(p.TournamentSelection == false);
+        CHECK(Near(p.EliteFraction, 0.0001));
+        CHECK(Near(p.MutateAddLinkFromBiasProb, 0.01));
+        CHECK(Near(p.RecurrentProb, 0.2));
+        CHECK(Near(p.RecurrentLoopProb, 0.5));
+        CHECK(Near(p.MutateWeightsProb, 0.8));
+        CHECK(Near(p.WeightMutationMaxPower, 1.5));
+        CHECK(Near(p.WeightReplacementMaxPower, 3.0));
+        CHECK(Near(p.MinActivationA, 4.9) && Near(p.MaxActivationA, 4.9));
+        CHECK(Near(p.WeightDiffCoeff, 0.1));
+        CHECK(Near(p.MinCompatTreshold, 0.1));
+        CHECK(Near(p.CompatTresholdModifier, 0.2));
+        CHECK(p.NeuronTries == 64);
+        CHECK(p.ParentSelectionMode == LEGACY_SELECTION);
+        CHECK(p.WeightMutationDistribution == UNIFORM_MUTATION);
+        CHECK(p.SpeciesRepresentativeSelection == FIRST_REPRESENTATIVE);
+        CHECK(p.OffspringAllocation == LARGEST_REMAINDER);
+        CHECK(p.CompatibilityThresholdControl == LEGACY_COMPATIBILITY_THRESHOLD);
+        CHECK(p.FitnessScaling == SHIFTED_FITNESS_SCALING);
+        CHECK(Near(p.MutationOperatorsPerOffspring, 1.0));
+        CHECK(p.RequireEvaluatedGenomes == false);
+        CHECK(p.RejectNonFiniteFitness == false);
+        std::string error;
+        CHECK(p.Validate(&error));
+        CHECK(error.empty());
+    }
+
+    // Validate rejects broken configurations with a message.
+    {
+        Parameters p;
+        p.Reset();
+        p.PopulationSize = 0;
+        std::string error;
+        CHECK(!p.Validate(&error));
+        CHECK(!error.empty());
+        p.Reset();
+        p.RankSelectionPressure = 5.0;
+        CHECK(!p.Validate());
+        p.Reset();
+        p.MultipointCrossoverRate = 0.8;
+        p.SinglePointCrossoverRate = 0.5;
+        CHECK(!p.Validate());
+    }
+
+    // ConfigureSpiking / ConfigureMcCullochPitts presets.
+    {
+        Parameters p;
+        p.Reset();
+        CHECK(Near(p.ActivationFunction_SpikingLIF_Prob, 0.0));
+        p.ConfigureSpiking(false);
+        CHECK(Near(p.ActivationFunction_SpikingLIF_Prob, 0.65));
+        CHECK(Near(p.MutateNeuronSpikingParametersProb, 0.25));
+        CHECK(p.Validate());
+        p.ConfigureMcCullochPitts(true, false);
+        CHECK(Near(p.ActivationFunction_McCullochPitts_Prob, 1.0));
+        CHECK(Near(p.ActivationFunction_SpikingLIF_Prob, 0.0));
+        CHECK(p.Validate());
+    }
+
+    // Serialize/Deserialize round-trips the full field set.
+    {
+        Parameters p;
+        p.Reset();
+        p.PopulationSize = 64;
+        p.ParentSelectionMode = TOURNAMENT;
+        p.WeightMutationDistribution = GAUSSIAN_MUTATION;
+        p.MutateNeuronSpikingParametersProb = 0.3;
+        const std::string data = p.Serialize();
+        const Parameters q = Parameters::Deserialize(data);
+        CHECK(q.PopulationSize == 64);
+        CHECK(q.ParentSelectionMode == TOURNAMENT);
+        CHECK(q.WeightMutationDistribution == GAUSSIAN_MUTATION);
+        CHECK(Near(q.MutateNeuronSpikingParametersProb, 0.3));
+        CHECK(q.Validate());
+    }
+
+    // Custom-constraints callables (legacy pointer and std::function).
+    {
+        Parameters p;
+        p.Reset();
+        GenomeInitStruct init;
+        init.NumInputs = 2;
+        init.NumOutputs = 1;
+        init.SeedType = PERCEPTRON;
+        Genome g(p, init);
+        CHECK(!p.FailsCustomConstraints(g));
+        p.SetCustomConstraintsFunction([](Genome &) { return true; });
+        CHECK(p.FailsCustomConstraints(g));
+        CHECK(p.CustomConstraints == nullptr);
     }
 
     if (g_failures != 0) {

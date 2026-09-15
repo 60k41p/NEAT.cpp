@@ -15,6 +15,7 @@
 #include "NeuralNetwork.h"
 #include "Parameters.h"
 #include "Random.h"
+#include "Substrate.h"
 
 namespace {
 
@@ -59,9 +60,9 @@ int TestGenome(int argc, char *argv[]) {
         CHECK(g.NumOutputs() == 2);
         CHECK(g.NumNeurons() == 5);  // 3 in/bias + 2 out
         CHECK(g.NumLinks() == 6);    // 3*2
-        // GetLast* return the next free ID (max + 1), not the max itself.
-        CHECK(g.GetLastNeuronID() == 6);
-        CHECK(g.GetLastInnovationID() == 7);
+        // GetLast* return the max used ID (v2 semantics); the next free ID is max + 1.
+        CHECK(g.GetLastNeuronID() == 5);
+        CHECK(g.GetLastInnovationID() == 6);
         CHECK(!g.HasDeadEnds());
         CHECK(!g.HasLoops());
         Parameters p = DefaultParams();
@@ -415,6 +416,149 @@ int TestGenome(int argc, char *argv[]) {
         net2.Input(in);
         net2.Activate();
         CHECK(Near(net1.Output()[0], net2.Output()[0]));
+    }
+
+    // Serialize/Deserialize round-trips state, traits and spiking parameters.
+    {
+        Parameters p = DefaultParams();
+        RNG rng;
+        rng.Seed(11);
+        Genome g = MakeSeed(3, 2);
+        g.SetID(777);
+        g.SetFitness(3.5);
+        g.Randomize_SpikingParameters(p, rng);
+        const std::string data = g.Serialize();
+        CHECK(data.find("GenomeFormat 4") != std::string::npos);
+        Genome h = Genome::Deserialize(data);
+        CHECK(h.GetID() == 777);
+        CHECK(Near(h.GetFitness(), 3.5));
+        CHECK(g.IsIdenticalTo(h));
+        CHECK(h.Validate());
+        // Legacy file Save/Load preserves topology and spiking state
+        // (weights keep %3.8f file precision; exact state needs Serialize).
+        const auto tmp = std::filesystem::temp_directory_path() / "multineat_test_genome_spiking.txt";
+        g.Save(tmp.string().c_str());
+        Genome file_loaded(tmp.string().c_str());
+        CHECK(file_loaded.GetID() == g.GetID());
+        CHECK(file_loaded.NumNeurons() == g.NumNeurons());
+        CHECK(file_loaded.NumLinks() == g.NumLinks());
+        for (unsigned i = 0; i < g.NumLinks(); ++i) {
+            CHECK(Near(file_loaded.GetLinkByIndex(static_cast<int>(i)).GetWeight(), g.GetLinkByIndex(static_cast<int>(i)).GetWeight(), 1e-6));
+            CHECK(Near(file_loaded.GetLinkByIndex(static_cast<int>(i)).m_SynapticDelay, g.GetLinkByIndex(static_cast<int>(i)).m_SynapticDelay, 1e-12));
+        }
+        for (unsigned i = 0; i < g.NumNeurons(); ++i) {
+            CHECK(Near(file_loaded.GetNeuronByIndex(static_cast<int>(i)).m_SpikeThreshold, g.GetNeuronByIndex(static_cast<int>(i)).m_SpikeThreshold, 1e-12));
+        }
+        std::error_code ec;
+        std::filesystem::remove(tmp, ec);
+    }
+
+    // Validate rejects structural violations with a message.
+    {
+        Genome g = MakeSeed(2, 1);
+        std::string error;
+        CHECK(g.Validate(&error));
+        CHECK(error.empty());
+        // Duplicate neuron IDs fail validation.
+        Genome bad = g;
+        bad.m_NeuronGenes.push_back(bad.m_NeuronGenes.front());
+        CHECK(!bad.Validate(&error));
+        CHECK(!error.empty());
+    }
+
+    // MateWithMode: all crossover modes produce valid babies.
+    {
+        Parameters p = DefaultParams();
+        RNG rng;
+        rng.Seed(21);
+        InnovationDatabase innovs;
+        innovs.Init(1, 1000);
+        Genome mom = MakeSeed(3, 1);
+        Genome dad = MakeSeed(3, 1);
+        for (int i = 0; i < 10; ++i) {
+            (void)mom.Mutate_AddNeuron(innovs, p, rng);
+            (void)dad.Mutate_AddLink(innovs, p, rng);
+        }
+        mom.SetFitness(5.0);
+        dad.SetFitness(4.0);
+        const CrossoverMode modes[] = {MULTIPOINT, AVERAGE, SINGLE_POINT, BLEND, SIMULATED_BINARY};
+        for (CrossoverMode mode : modes) {
+            Genome baby = mom.MateWithMode(dad, mode, false, rng, p);
+            CHECK(baby.NumInputs() == mom.NumInputs());
+            CHECK(baby.NumOutputs() == mom.NumOutputs());
+            CHECK(baby.Validate());
+        }
+        // Mismatched I/O counts throw.
+        Genome other = MakeSeed(4, 1);
+        bool threw = false;
+        try {
+            (void)mom.MateWithMode(other, MULTIPOINT, false, rng, p);
+        } catch (const std::invalid_argument &) {
+            threw = true;
+        }
+        CHECK(threw);
+    }
+
+    // Spiking mutators stay in range and report honestly.
+    {
+        Parameters p = DefaultParams();
+        p.ConfigureSpiking(false);
+        RNG rng;
+        rng.Seed(31);
+        Genome g = MakeSeed(2, 1);
+        for (unsigned i = 0; i < g.NumNeurons(); ++i) {
+            if (g.m_NeuronGenes[i].Type() == OUTPUT) g.m_NeuronGenes[i].m_ActFunction = SPIKING_LIF;
+        }
+        g.Randomize_SpikingParameters(p, rng);
+        (void)g.Mutate_NeuronSpikingParameters(p, rng);
+        (void)g.Mutate_LinkSpikingParameters(p, rng);
+        CHECK(g.Validate());
+        for (unsigned i = 0; i < g.NumLinks(); ++i) {
+            const LinkGene &l = g.GetLinkByIndex(static_cast<int>(i));
+            CHECK(l.m_SynapticDelay >= p.MinSynapticDelay && l.m_SynapticDelay <= p.MaxSynapticDelay);
+        }
+    }
+
+    // HyperNEAT and ES-HyperNEAT build phenotypes from substrates.
+    {
+        Parameters p = DefaultParams();
+        // CPPN needs 2*2+1 inputs (2D coords x2 + bias) and 2 outputs.
+        GenomeInitStruct cppn_init;
+        cppn_init.NumInputs = 5;
+        cppn_init.NumOutputs = 2;
+        cppn_init.SeedType = PERCEPTRON;
+        Genome cppn(p, cppn_init);
+        CHECK(cppn.NumInputs() == 5 && cppn.NumOutputs() == 2);
+
+        std::vector<std::vector<double>> inputs{{0.0, 0.0}, {1.0, 0.0}};
+        std::vector<std::vector<double>> hidden;
+        std::vector<std::vector<double>> outputs{{0.5, 1.0}};
+        Substrate subst(inputs, hidden, outputs);
+        NeuralNetwork net;
+        cppn.BuildHyperNEATPhenotype(net, subst);
+        CHECK(net.NumInputs() == 2 && net.NumOutputs() == 1);
+
+        // Empty substrate is rejected.
+        Substrate empty;
+        bool threw = false;
+        try {
+            cppn.BuildHyperNEATPhenotype(net, empty);
+        } catch (const std::invalid_argument &) {
+            threw = true;
+        }
+        CHECK(threw);
+
+        // ES-HyperNEAT runs on the same substrate and validates its inputs.
+        NeuralNetwork es_net;
+        cppn.BuildESHyperNEATPhenotype(es_net, subst, p);
+        CHECK(es_net.NumInputs() == 2 && es_net.NumOutputs() == 1);
+        threw = false;
+        try {
+            cppn.BuildESHyperNEATPhenotype(es_net, empty, p);
+        } catch (const std::invalid_argument &) {
+            threw = true;
+        }
+        CHECK(threw);
     }
 
     if (g_failures != 0) {

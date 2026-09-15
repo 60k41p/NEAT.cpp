@@ -25,25 +25,27 @@
  * Gökalp Özcan <gokalp@mail.com>
  */
 
-/*
- * File:        Utils.cpp
- * Description: Utility methods
- */
+/* File: FileIO.h Description: Portable C file opening helper (fopen_s on MSVC, fopen elsewhere) with null-argument guard. */
 
-#include "Utils.h"
+#pragma once
 
-void Scale(vector<double> &a_Values, const double a_tr_min, const double a_tr_max) {
-    if (a_Values.empty()) return;
+#include <cstdio>
 
-    double t_max = 0.0, t_min = 0.0;
-    GetMaxMin(a_Values, t_min, t_max);
-    vector<double> t_ValuesScaled;
-    t_ValuesScaled.reserve(a_Values.size());
-    for (vector<double>::const_iterator t_It = a_Values.begin(); t_It != a_Values.end(); ++t_It) {
-        double t_ValueToBeScaled = (*t_It);
-        Scale(t_ValueToBeScaled, t_min, t_max, a_tr_min, a_tr_max);
-        t_ValuesScaled.push_back(t_ValueToBeScaled);
-    }
+namespace NEAT {
+    namespace detail {
 
-    a_Values = t_ValuesScaled;
-}
+        inline std::FILE *OpenFile(const char *filename, const char *mode) {
+            if (filename == nullptr || mode == nullptr) {
+                return nullptr;
+            }
+
+#ifdef _MSC_VER
+            std::FILE *file = nullptr;
+            return fopen_s(&file, filename, mode) == 0 ? file : nullptr;
+#else
+            return std::fopen(filename, mode);
+#endif
+        }
+
+    }  // namespace detail
+}  // namespace NEAT

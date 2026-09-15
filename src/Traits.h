@@ -35,7 +35,7 @@
 namespace NEAT {
     class intsetelement {
        public:
-        int value;
+        int value = 0;
 
         // Comparison operator
         bool operator==(const intsetelement &rhs) const { return rhs.value == value; }
@@ -51,7 +51,7 @@ namespace NEAT {
     };
     class floatsetelement {
        public:
-        double value;
+        double value = 0.0;
 
         // Comparison operator
         bool operator==(const floatsetelement &rhs) const { return rhs.value == value; }
@@ -215,6 +215,10 @@ namespace NEAT {
 
             return *this;
         }
+
+        bool operator==(const Trait &rhs) const { return value == rhs.value && dep_key == rhs.dep_key && dep_values == rhs.dep_values; }
+
+        bool operator!=(const Trait &rhs) const { return !(*this == rhs); }
     };
 
 }  // namespace NEAT

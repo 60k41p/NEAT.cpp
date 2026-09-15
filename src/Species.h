@@ -47,8 +47,6 @@ namespace NEAT {
     // The Species class
     //////////////////////////////////////////////
 
-    enum SelectionMode { TRUNCATION, ROULETTE, RANK_LINEAR, RANK_EXP, TOURNAMENT, STOCHASTIC, BOLTZMANN };
-
     class Species {
         /////////////////////
         // Members
@@ -156,20 +154,27 @@ namespace NEAT {
         void IncreaseEvalsNoImprovement() { m_EvalsNoImprovement++; }
         void SetOffspringRqd(double a_ofs) { m_OffspringRqd = a_ofs; }
         double GetOffspringRqd() const { return m_OffspringRqd; }
-        unsigned int NumIndividuals() { return m_Individuals.size(); }
+        unsigned int NumIndividuals() const { return m_Individuals.size(); }
         void ClearIndividuals() { m_Individuals.clear(); }
-        int ID() { return m_ID; }
+        int ID() const { return m_ID; }
         int GensNoImprovement() { return m_GensNoImprovement; }
         int EvalsNoImprovement() { return m_EvalsNoImprovement; }
         int AgeGens() { return m_AgeGenerations; }
         int AgeEvals() { return m_AgeEvaluations; }
-        Genome GetIndividualByIdx(int a_idx) const { return (m_Individuals[a_idx]); }
+        Genome GetIndividualByIdx(int a_idx) const { return (m_Individuals.at(a_idx)); };
         bool IsBestSpecies() const { return m_BestSpecies; }
         bool IsWorstSpecies() const { return m_WorstSpecies; }
         // void SetRepresentative(Genome& a_G) { m_Representative = a_G; }
         int NumEvaluated() {
             int x = 0;
-            for (int i = 0; i < m_Individuals.size(); i++) {
+            for (unsigned int i = 0; i < m_Individuals.size(); i++) {
+                if (m_Individuals[i].IsEvaluated()) x++;
+            }
+            return x;
+        }
+        int NumEvaluated() const {
+            int x = 0;
+            for (unsigned int i = 0; i < m_Individuals.size(); i++) {
                 if (m_Individuals[i].IsEvaluated()) x++;
             }
             return x;
@@ -195,6 +200,10 @@ namespace NEAT {
         // this method performs fitness sharing it also boosts the fitness if young and penalizes if old applies extreme penalty for stagnating species over
         // SpeciesDropoffAge generations.
         void AdjustFitness(Parameters &a_Parameters);
+        // Fitness sharing with an explicit shift applied before age adjustment.
+        void AdjustFitness(Parameters &a_Parameters, double a_FitnessOffset);
+        // Fitness sharing with population-wide transformed values (see Population::TransformFitnessValues).
+        void AdjustFitness(Parameters &a_Parameters, const std::vector<double> &a_TransformedFitness);
 
         // Sorts the individuals
         void SortIndividuals();
@@ -223,6 +232,10 @@ namespace NEAT {
         Genome ReproduceOne(Population &a_Pop, Parameters &a_Parameters, RNG &a_RNG);
 
         void RemoveIndividual(unsigned int a_idx);
+
+        // Complete string persistence (format 2 with best genome and members).
+        std::string Serialize() const;
+        static Species Deserialize(const std::string &data);
     };
 
 }  // namespace NEAT

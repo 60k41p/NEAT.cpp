@@ -66,7 +66,7 @@ clang-format -i src/*.h src/*.cpp tests/*.cpp benchmarks/*.cpp
 
 ## Codebase gotchas
 
-- Dead/disabled code: ES-HyperNEAT is `#if 0`'d in `src/Genome.cpp`; an old MutateGenome path is `#if 0`'d in `src/Species.cpp` — don't "fix" these; they are intentionally inactive.
-- Some `Parameters` fields are parsed/saved but never read by the evolution loop (e.g. `EliteFraction`, competitive coevolution knobs, unimplemented `SelectionMode` values). README documents each; verify a knob is actually consumed before assuming it works.
+- Dead/disabled code: an old MutateGenome path is `#if 0`'d in `src/Species.cpp` — don't "fix" it; it is intentionally inactive. (ES-HyperNEAT was formerly `#if 0`'d as well; the MultiNEAT v2 port replaced it with a live implementation.)
+- Most `Parameters` knobs are consumed by the evolution loop (selection/crossover/weight-mutation/representative/offspring/threshold/scaling modes, `EliteFraction`, `StagnationPenalty`, adaptive mutation). Still-unimplemented knobs: competitive-coevolution `DetectCompetetiveCoevolutionStagnation`/`KillWorst*` (validated but never read) and the 2D-loop `Depth`/`Qtree_Z` (used only by the 3D octree path). README documents each; verify a knob is actually consumed before assuming it works.
 - Single flat namespace `NEAT`, headers in `src/` (public API: Genome, Population, NeuralNetwork, Parameters, Substrate, Traits).
-- Serialization (`.NEAT` files) is hand-rolled text parsing in Save/Load methods — format changes break `tests/data/minimal.NEAT` fixtures and backward compat.
+- Serialization (`.NEAT` files) is hand-rolled text parsing in Save/Load methods — format changes break `tests/data/minimal.NEAT` fixtures and backward compat. Versioned string checkpoints (`GenomeFormat 4`, `SpeciesFormat 2`, `PopulationFormat 2` via `Serialize`/`Deserialize`) are the forward-compatible path.

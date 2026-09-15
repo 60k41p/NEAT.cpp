@@ -34,6 +34,7 @@
 
 #include <float.h>
 
+#include <string>
 #include <vector>
 
 #include "Genes.h"
@@ -180,18 +181,37 @@ namespace NEAT {
         unsigned int GetGeneration() const { return m_Generation; }
         double GetBestFitnessEver() const { return m_BestFitnessEver; }
         Genome GetBestGenome() const {
-            double best = std::numeric_limits<double>::min();
-            int idx_species = 0;
-            int idx_genome = 0;
+            if (m_Species.empty()) throw std::runtime_error("Cannot get the best genome of an empty population");
+            double best = std::numeric_limits<double>::lowest();
+            int idx_species = -1;
+            int idx_genome = -1;
             for (unsigned int i = 0; i < m_Species.size(); i++) {
                 for (unsigned int j = 0; j < m_Species[i].m_Individuals.size(); j++) {
-                    if (m_Species[i].m_Individuals[j].GetFitness() > best) {
-                        best = m_Species[i].m_Individuals[j].GetFitness();
+                    if (!m_Species[i].m_Individuals[j].IsEvaluated()) continue;
+                    const double fitness = m_Species[i].m_Individuals[j].GetFitness();
+                    if (!std::isfinite(fitness)) continue;
+                    if (idx_species < 0 || fitness > best) {
+                        best = fitness;
                         idx_species = i;
                         idx_genome = j;
                     }
                 }
             }
+            // No evaluated member: fall back to raw fitness over all members.
+            if (idx_species < 0) {
+                for (unsigned int i = 0; i < m_Species.size(); i++) {
+                    for (unsigned int j = 0; j < m_Species[i].m_Individuals.size(); j++) {
+                        const double fitness = m_Species[i].m_Individuals[j].GetFitness();
+                        if (!std::isfinite(fitness)) continue;
+                        if (idx_species < 0 || fitness > best) {
+                            best = fitness;
+                            idx_species = i;
+                            idx_genome = j;
+                        }
+                    }
+                }
+            }
+            if (idx_species < 0) throw std::runtime_error("Cannot get the best genome of an empty population");
 
             return m_Species[idx_species].m_Individuals[idx_genome];
         }
@@ -201,8 +221,14 @@ namespace NEAT {
 
         unsigned int GetNextGenomeID() const { return m_NextGenomeID; }
         unsigned int GetNextSpeciesID() const { return m_NextSpeciesID; }
-        void IncrementNextGenomeID() { m_NextGenomeID++; }
-        void IncrementNextSpeciesID() { m_NextSpeciesID++; }
+        void IncrementNextGenomeID() {
+            if (m_NextGenomeID == static_cast<unsigned int>(std::numeric_limits<int>::max())) throw std::overflow_error("Genome ID space is exhausted");
+            ++m_NextGenomeID;
+        }
+        void IncrementNextSpeciesID() {
+            if (m_NextSpeciesID == static_cast<unsigned int>(std::numeric_limits<int>::max())) throw std::overflow_error("Species ID space is exhausted");
+            ++m_NextSpeciesID;
+        }
 
         // Make sure no same genome IDs exist in the population
         void SameGenomeIDCheck() {
@@ -221,9 +247,8 @@ namespace NEAT {
 
             for (auto it = ids.begin(); it != ids.end(); it++) {
                 if (it->second > 1) {
-                    char s[256];
-                    sprintf(s, "Genome ID %d appears %d times in the population\n", it->first, it->second);
-                    throw std::runtime_error(s);
+                    throw std::runtime_error("Genome ID " + std::to_string(it->first) + " appears " + std::to_string(it->second) +
+                                             " times in the population\n");
                 }
             }
         }
@@ -241,6 +266,15 @@ namespace NEAT {
 
         // Saves the whole population to a file
         void Save(const char *a_FileName);
+
+        // Population checkpointing (text format with parameters, innovation
+        // database, RNG state and all genomes).
+        void SaveState(const char *a_FileName) const;
+        std::string Serialize() const;
+        static Population Deserialize(const std::string &data);
+
+        // Checks population invariants (size match, valid parameters, valid genomes).
+        bool Validate(std::string *error = nullptr) const;
 
         //////////////////////
         // NEW STUFF

@@ -302,7 +302,8 @@ int TestNeuralNetwork(int argc, char *argv[]) {
         }
     }
 
-    // ActivateFast assumes unsigned sigmoid regardless of the neuron's type.
+    // ActivateFast applies each neuron's own activation function through the
+    // unchecked hot path (no topology validation; use Activate() to validate).
     {
         NeuralNetwork net;
         Neuron in_n, out_n;
@@ -313,7 +314,7 @@ int TestNeuralNetwork(int argc, char *argv[]) {
         in_n.m_type = INPUT;
         out_n = in_n;
         out_n.m_type = OUTPUT;
-        out_n.m_activation_function_type = LINEAR;  // ActivateFast must still apply unsigned sigmoid
+        out_n.m_activation_function_type = LINEAR;  // linear passes the sum through
         Connection conn;
         conn.m_source_neuron_idx = 0;
         conn.m_target_neuron_idx = 1;
@@ -328,7 +329,17 @@ int TestNeuralNetwork(int argc, char *argv[]) {
         std::vector<double> in{5.0};
         net.Input(in);
         net.ActivateFast();
-        CHECK(Near(net.Output()[0], 0.5));  // sigmoid(0) — linear would give 0.0
+        CHECK(Near(net.Output()[0], 0.0));  // linear passes 5.0 * 0.0 through
+        // An unsigned-sigmoid neuron still squashes through the fast path.
+        out_n.m_activation_function_type = UNSIGNED_SIGMOID;
+        NeuralNetwork net2;
+        net2.AddNeuron(in_n);
+        net2.AddNeuron(out_n);
+        net2.AddConnection(conn);
+        net2.SetInputOutputDimentions(1, 1);
+        net2.Input(in);
+        net2.ActivateFast();
+        CHECK(Near(net2.Output()[0], 0.5));  // sigmoid(0)
     }
 
     // ActivateUseInternalBias adds m_bias to the activation sum.
@@ -474,6 +485,139 @@ int TestNeuralNetwork(int argc, char *argv[]) {
         net.Activate();
         net.Adapt(p);
         CHECK(net.m_connections[0].m_weight <= p.MaxWeight);
+    }
+
+    // InputExact requires exactly NumInputs values.
+    {
+        NeuralNetwork net;
+        Neuron in_n, out_n;
+        in_n.m_type = INPUT;
+        out_n.m_type = OUTPUT;
+        out_n.m_activation_function_type = LINEAR;
+        net.AddNeuron(in_n);
+        net.AddNeuron(out_n);
+        Connection conn;
+        conn.m_source_neuron_idx = 0;
+        conn.m_target_neuron_idx = 1;
+        conn.m_weight = 1.0;
+        net.AddConnection(conn);
+        net.SetInputOutputDimentions(1, 1);
+        net.InputExact({2.0});
+        net.Activate();
+        CHECK(Near(net.Output()[0], 2.0));
+        bool threw = false;
+        try {
+            net.InputExact({1.0, 2.0});
+        } catch (const std::invalid_argument &) {
+            threw = true;
+        }
+        CHECK(threw);
+    }
+
+    // Connection geometry: Euclidean length, true total, delay conversion.
+    {
+        NeuralNetwork net;
+        Neuron a, b;
+        a.m_x = 0.0;
+        a.m_y = 0.0;
+        a.m_z = 0.0;
+        b.m_x = 3.0;
+        b.m_y = 4.0;
+        b.m_z = 0.0;
+        CHECK(Near(net.GetConnectionLenght(a, b), 5.0));
+        CHECK(Near(net.GetConnectionLength(a, b), 5.0));
+        a.m_type = INPUT;
+        b.m_type = OUTPUT;
+        net.AddNeuron(a);
+        net.AddNeuron(b);
+        Connection conn;
+        conn.m_source_neuron_idx = 0;
+        conn.m_target_neuron_idx = 1;
+        conn.m_weight = 1.0;
+        net.AddConnection(conn);
+        net.SetInputOutputDimentions(1, 1);
+        CHECK(Near(net.GetTotalConnectionLength(), 5.0));
+        net.UpdateConnectionGeometry(true, 5.0);
+        CHECK(Near(net.m_connections[0].m_length, 5.0));
+        CHECK(Near(net.m_connections[0].m_synaptic_delay, 1.0));
+    }
+
+    // ActivateSteps repeats activation; ActivateBatch evaluates samples independently.
+    {
+        NeuralNetwork net;
+        Neuron in_n, out_n;
+        in_n.m_type = INPUT;
+        out_n.m_type = OUTPUT;
+        out_n.m_activation_function_type = LINEAR;
+        net.AddNeuron(in_n);
+        net.AddNeuron(out_n);
+        Connection conn;
+        conn.m_source_neuron_idx = 0;
+        conn.m_target_neuron_idx = 1;
+        conn.m_weight = 2.0;
+        net.AddConnection(conn);
+        net.SetInputOutputDimentions(1, 1);
+        net.Flush();
+        std::vector<double> in{1.5};
+        net.Input(in);
+        net.ActivateSteps(3);
+        CHECK(Near(net.Output()[0], 3.0));
+        const auto batch = net.ActivateBatch({{1.0}, {2.0}});
+        CHECK(batch.size() == 2);
+        CHECK(Near(batch[0][0], 2.0));
+        CHECK(Near(batch[1][0], 4.0));
+    }
+
+    // Sparse RTRL initializes indexed sensitivities; Flush clears spiking state.
+    {
+        NeuralNetwork net;
+        Neuron in_n, out_n;
+        in_n.m_type = INPUT;
+        out_n.m_type = OUTPUT;
+        out_n.m_activation_function_type = UNSIGNED_SIGMOID;
+        net.AddNeuron(in_n);
+        net.AddNeuron(out_n);
+        Connection conn;
+        conn.m_source_neuron_idx = 0;
+        conn.m_target_neuron_idx = 1;
+        conn.m_weight = 0.5;
+        net.AddConnection(conn);
+        net.SetInputOutputDimentions(1, 1);
+        net.InitSparseRTRLMatrix();
+        CHECK(net.SparseRTRLStateSize() == 2);  // neurons x connections
+        net.RTRL_update_gradients_sparse();
+        net.RTRL_update_error_sparse(0.5);
+        net.RTRL_update_weights();
+        net.Flush();
+        CHECK(Near(net.m_connections[0].m_signal, 0.0));
+        CHECK(Near(net.m_connections[0].m_source_activation, 0.0));
+    }
+
+    // Serialize/Deserialize round-trips topology, weights and spiking state.
+    {
+        NeuralNetwork net;
+        Neuron in_n, out_n;
+        in_n.m_type = INPUT;
+        out_n.m_type = OUTPUT;
+        out_n.m_activation_function_type = TANH;
+        out_n.m_spike_threshold = 1.5;
+        net.AddNeuron(in_n);
+        net.AddNeuron(out_n);
+        Connection conn;
+        conn.m_source_neuron_idx = 0;
+        conn.m_target_neuron_idx = 1;
+        conn.m_weight = -0.75;
+        conn.m_synaptic_delay = 0.004;
+        net.AddConnection(conn);
+        net.SetInputOutputDimentions(1, 1);
+        const std::string data = net.Serialize();
+        const NeuralNetwork loaded = NeuralNetwork::Deserialize(data);
+        CHECK(loaded.NumInputs() == 1 && loaded.NumOutputs() == 1);
+        CHECK(loaded.m_neurons.size() == 2 && loaded.m_connections.size() == 1);
+        CHECK(Near(loaded.m_connections[0].m_weight, -0.75));
+        CHECK(Near(loaded.m_connections[0].m_synaptic_delay, 0.004));
+        CHECK(Near(loaded.m_neurons[1].m_spike_threshold, 1.5));
+        CHECK(loaded.m_neurons[1].m_activation_function_type == TANH);
     }
 
     if (g_failures != 0) {

@@ -9,12 +9,12 @@ NEAT.cpp is a portable C++17 library for neuroevolution — training neural netw
 ## Features
 
 * **Evolution modes:** canonical NEAT (generational `Epoch()`), steady-state rtNEAT (`Tick()`), phased/simplifying search + delta coding, novelty search with behavior archive. (Note: `DetectCompetetiveCoevolutionStagnation`/`KillWorst*` parameters exist in `Parameters` but are never read by the evolution loop, so they currently have no effect.)
-* **Genome types:** `PERCEPTRON` and `LAYERED` seeds, FS-NEAT (feature-selective, starts sparsely connected per `FS_NEAT_links`), recurrent links + leaky-integrator neurons, HyperNEAT/CPPN via `Substrate` (custom connectivity, weight-only query). ES-HyperNEAT code is present but disabled (`#if 0`) and experimental.
-* **Variation:** add-neuron / add-link / remove-link / remove-simple-neuron mutations, weight perturb/replace, per-neuron activation-type/A/B/time-constant/bias mutation, multipoint/average crossover, inter-species crossover, elitism (champ copy; `EliteFraction` knob itself is currently hardcoded to 1 in `Species::Reproduce`), clone/archive control, custom topology constraints.
-* **Neurons:** 14 activation functions (signed/unsigned sigmoid, tanh, tanh-cubic, signed/unsigned step, signed/unsigned Gauss, abs, signed/unsigned sine, linear, ReLU, softplus); multiple `Activate*()` paths including fast and leaky.
-* **Speciation & selection:** tunable compatibility coefficients (disjoint/excess/weight/activation/time-constant/bias/function/traits), dynamic threshold, young-boost/old-penalty, tournament / roulette-wheel / truncation on the top `SurvivalRate` fraction. (Note: the `SelectionMode` enum lists rank/Boltzmann/stochastic modes, but the reproducer only implements the three above.)
+* **Genome types:** `PERCEPTRON` and `LAYERED` seeds, FS-NEAT (feature-selective, starts sparsely connected per `FS_NEAT_links`), recurrent links + leaky-integrator neurons, HyperNEAT/CPPN via `Substrate` (custom connectivity, weight-only query), ES-HyperNEAT (quadtree/octree subdivision with variance/band/LEO pruning).
+* **Variation:** add-neuron / add-link (cycle-guarded, uniform over admissible pairs) / remove-link / remove-simple-neuron mutations, weight perturb/replace with uniform/Gaussian/Cauchy/polynomial distributions, per-neuron activation-type/A/B/time-constant/bias/spiking-parameter mutation, multipoint/average/single-point/blend/SBX crossover, inter-species crossover, `EliteFraction` elitism, clone/archive control, custom topology constraints (`Parameters::SetCustomConstraintsFunction`), adaptive multi-operator mutation budgets.
+* **Neurons:** 18 activation functions (signed/unsigned sigmoid, tanh, tanh-cubic, signed/unsigned step, signed/unsigned Gauss, abs, signed/unsigned sine, linear, ReLU, softplus, LIF / adaptive-LIF / Izhikevich spiking, McCulloch-Pitts); multiple `Activate*()` paths including fast and leaky, plus event-driven `StepSpiking`/`SimulateSpiking` with current/binary/Poisson inputs and spike/rate/filtered/membrane outputs, per-connection STDP, and e-prop online learning (`EPropLearner`).
+* **Speciation & selection:** tunable compatibility coefficients (disjoint/excess/weight/activation/time-constant/bias/function/spiking-link/spiking-neuron/traits), dynamic threshold (legacy step or proportional control), young-boost/old-penalty, parent selection (`LEGACY_SELECTION` preserving truncation/roulette/tournament switches, plus `TRUNCATION`, `ROULETTE`, `RANK_LINEAR`, `RANK_EXP`, `TOURNAMENT`, `STOCHASTIC`, `BOLTZMANN`), offspring allocation (`LARGEST_REMAINDER`/`STOCHASTIC_REMAINDER` with `MinSpeciesSize`/`SpeciesElitism` floors), and population-wide fitness scaling (`SHIFTED`/`LINEAR_RANK`/`SIGMA`/`BOLTZMANN`).
 * **Traits:** evolvable per-neuron/link/genome traits (`int`/`float`/`str`/`intset`/`floatset`) with dependency gating and speciation weighting.
-* **Persistence:** save/load for `Genome`, `Population`, `Parameters`, `NeuralNetwork`.
+* **Persistence:** save/load for `Genome`, `Population`, `Parameters`, `NeuralNetwork`, plus versioned string `Serialize`/`Deserialize` checkpoints (genome format 4, species format 2, population format 2) with `Validate()` diagnostics on every level.
 
 ## Requirements
 
@@ -55,6 +55,7 @@ This is a fork of <https://github.com/peter-ch/MultiNEAT>.
 
 The primary divergence from the upstream is that the library is now `std`-only pure C++17; with Python bindings and the Boost dependency removed.
 Furthermore, traits now use `std::variant`, RNG uses `std::mt19937`, and cycle detection uses Kahn's algorithm.
+The MultiNEAT v2 feature set has been backported (see `PLAN.md`): spiking neuron models with STDP and e-prop learning, ES-HyperNEAT, the full selection/crossover/mutation/scaling/representative/allocation/threshold control surface, and versioned serialization — with v2 defaults adopted, so evolution trajectories differ from the v1 baseline by design.
 
 ### Performance
 

@@ -4,6 +4,7 @@
 // CTest-Timeout: 120
 #include <iostream>
 #include <stdexcept>
+#include <string>
 
 #include "Genome.h"
 #include "Parameters.h"
@@ -194,6 +195,92 @@ int TestSpecies(int argc, char *argv[]) {
         s.m_GensNoImprovement = p.SpeciesMaxStagnation + 1;
         s.AdjustFitness(p);
         CHECK(s.m_Individuals[1].GetAdjFitness() < 1e-6);
+    }
+
+    // Explicit parent-selection modes all return evaluated members.
+    {
+        const SelectionMode modes[] = {TRUNCATION, ROULETTE, RANK_LINEAR, RANK_EXP, TOURNAMENT, STOCHASTIC, BOLTZMANN};
+        for (SelectionMode mode : modes) {
+            Parameters p = DefaultParams();
+            p.ParentSelectionMode = mode;
+            p.TruncationSelection = false;
+            RNG rng;
+            rng.Seed(100 + static_cast<int>(mode));
+            Genome g1 = MakeScoredSeed(1, 1.0);
+            Genome g2 = MakeScoredSeed(2, 9.0);
+            Genome g3 = MakeScoredSeed(3, 5.0);
+            Genome g4 = MakeScoredSeed(4, 0.5);
+            Species s(g1, p, 1);
+            s.AddIndividual(g2);
+            s.AddIndividual(g3);
+            s.AddIndividual(g4);
+            s.SortIndividuals();
+            s.AdjustFitness(p);
+            Genome &picked = s.GetIndividual(p, rng);
+            CHECK(picked.IsEvaluated());
+            int id = picked.GetID();
+            CHECK(id >= 1 && id <= 4);
+        }
+    }
+
+    // Truncation restricts the parent pool to the survival fraction.
+    {
+        Parameters p = DefaultParams();
+        p.ParentSelectionMode = TRUNCATION;
+        p.SurvivalRate = 0.34;  // 1 of 3 survives truncation
+        RNG rng;
+        rng.Seed(7);
+        Genome g1 = MakeScoredSeed(1, 1.0);
+        Genome g2 = MakeScoredSeed(2, 9.0);
+        Genome g3 = MakeScoredSeed(3, 5.0);
+        Species s(g1, p, 1);
+        s.AddIndividual(g2);
+        s.AddIndividual(g3);
+        s.SortIndividuals();
+        s.AdjustFitness(p);
+        for (int i = 0; i < 10; ++i) {
+            CHECK(s.GetIndividual(p, rng).GetID() == 2);  // only the leader survives
+        }
+    }
+
+    // StagnationDelta gates the no-improvement reset and best-genome tracking.
+    {
+        Parameters p = DefaultParams();
+        p.StagnationDelta = 1.0;
+        Genome seed = MakeSeed();  // unevaluated: best starts at lowest()
+        Species s(seed, p, 1);
+        Genome g1 = MakeScoredSeed(1, 5.0);
+        s.AddIndividual(g1);
+        s.m_GensNoImprovement = 10;
+        s.AdjustFitness(p);  // fitness 5.0 > lowest(): best updates
+        CHECK(s.m_GensNoImprovement == 0);
+        CHECK(s.m_BestGenome.GetID() == 1);
+        s.m_GensNoImprovement = 10;
+        Genome slightly_better = MakeScoredSeed(2, 5.5);  // +0.5 < delta
+        s.AddIndividual(slightly_better);
+        s.AdjustFitness(p);
+        CHECK(s.m_GensNoImprovement == 10);              // counter not reset
+        CHECK(s.m_BestGenome.GetID() == 2);              // best still tracks the max
+        Genome clearly_better = MakeScoredSeed(3, 7.0);  // +2.0 >= delta
+        s.AddIndividual(clearly_better);
+        s.AdjustFitness(p);
+        CHECK(s.m_GensNoImprovement == 0);
+        CHECK(s.m_BestGenome.GetID() == 3);
+    }
+
+    // Serialize/Deserialize round-trips members and state.
+    {
+        Parameters p = DefaultParams();
+        Genome g1 = MakeScoredSeed(1, 2.0);
+        Genome g2 = MakeScoredSeed(2, 4.0);
+        Species s(g1, p, 3);
+        s.AddIndividual(g2);
+        s.AdjustFitness(p);
+        const std::string data = s.Serialize();
+        const Species r = Species::Deserialize(data);
+        CHECK(r.ID() == 3);
+        CHECK(r.NumIndividuals() == 2);
+        CHECK(r.m_Individuals[0].IsIdenticalTo(s.m_Individuals[0]));
     }
 
     if (g_failures != 0) {

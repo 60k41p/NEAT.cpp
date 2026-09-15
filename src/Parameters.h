@@ -32,7 +32,11 @@
 
 #pragma once
 
+#include <cstdio>
+#include <fstream>
+#include <functional>
 #include <map>
+#include <string>
 // #include "Genes.h"
 #include "Traits.h"
 // #include "Species.h"
@@ -41,6 +45,34 @@ namespace NEAT {
 
     // forward
     class Genome;
+
+    // Parent-selection algorithms. LEGACY_SELECTION preserves the historical
+    // TruncationSelection/RouletteWheelSelection/TournamentSelection switches.
+    // The remaining values make the previously advertised selection modes
+    // explicit and mutually exclusive.
+    enum SelectionMode { LEGACY_SELECTION = -1, TRUNCATION = 0, ROULETTE, RANK_LINEAR, RANK_EXP, TOURNAMENT, STOCHASTIC, BOLTZMANN };
+
+    // Link-gene recombination used for matching innovations. The historical
+    // Genome::Mate boolean maps to MULTIPOINT or AVERAGE.
+    enum CrossoverMode { MULTIPOINT = 0, AVERAGE, SINGLE_POINT, BLEND, SIMULATED_BINARY };
+
+    // Distribution used when perturbing (rather than replacing) link weights.
+    enum WeightMutationMode { UNIFORM_MUTATION = 0, GAUSSIAN_MUTATION, CAUCHY_MUTATION, POLYNOMIAL_MUTATION };
+
+    // Strategy used to carry a species representative into the next generation.
+    // FIRST_REPRESENTATIVE preserves the historical sorted leader behavior.
+    enum SpeciesRepresentativeMode { FIRST_REPRESENTATIVE = 0, RANDOM_REPRESENTATIVE, BEST_REPRESENTATIVE, MEDOID_REPRESENTATIVE };
+
+    // Strategy used to turn fractional species quotas into integer offspring.
+    enum OffspringAllocationMode { LARGEST_REMAINDER = 0, STOCHASTIC_REMAINDER };
+
+    // Dynamic compatibility-threshold controller.
+    enum CompatibilityThresholdMode { LEGACY_COMPATIBILITY_THRESHOLD = 0, PROPORTIONAL_COMPATIBILITY_THRESHOLD };
+
+    // Transformation applied to raw objective values before age adjustment and
+    // explicit fitness sharing. SHIFTED_FITNESS_SCALING preserves the historical
+    // behavior while computing it in an overflow-safe normalized domain.
+    enum FitnessScalingMode { SHIFTED_FITNESS_SCALING = 0, LINEAR_RANK_FITNESS_SCALING, SIGMA_FITNESS_SCALING, BOLTZMANN_FITNESS_SCALING };
 
     //////////////////////////////////////////////
     // The NEAT Parameters class
@@ -144,6 +176,9 @@ namespace NEAT {
         // the gene of the fitter parent will be prefered, instead of choosing one at random
         double PreferFitterParentRate;
 
+        // Performing truncation selection or not? (goes first)
+        bool TruncationSelection;
+
         // Performing roulette wheel selection or not?
         bool RouletteWheelSelection;
 
@@ -153,8 +188,12 @@ namespace NEAT {
         // For tournament selection
         unsigned int TournamentSize;
 
-        // Fraction of individuals to be copied unchanged
-        double EliteFraction;
+        // Fraction of individuals to be copied unchanged. Elitism is retained as
+        // a source-compatible spelling used by older MultiNEAT clients.
+        union {
+            double EliteFraction;
+            double Elitism;
+        };
 
         ///////////////////////////////////
         // Phased Search parameters   //
@@ -319,6 +358,10 @@ namespace NEAT {
         double ActivationFunction_Linear_Prob;
         double ActivationFunction_Relu_Prob;
         double ActivationFunction_Softplus_Prob;
+        double ActivationFunction_SpikingLIF_Prob;
+        double ActivationFunction_SpikingAdaptiveLIF_Prob;
+        double ActivationFunction_SpikingIzhikevich_Prob;
+        double ActivationFunction_McCullochPitts_Prob;
 
         // Probability for a baby's neuron time constant values to be mutated
         double MutateNeuronTimeConstantsProb;
@@ -333,6 +376,71 @@ namespace NEAT {
         // Bias range
         double MinNeuronBias;
         double MaxNeuronBias;
+
+        /////////////////////////////////////
+        // Spiking-neural-network parameters
+        /////////////////////////////////////
+
+        // Probabilities that the corresponding built-in parameter mutation is
+        // selected during reproduction. Zero preserves historical evolution.
+        double MutateNeuronSpikingParametersProb;
+        double MutateLinkSpikingParametersProb;
+
+        // Per-field mutation rate and the maximum fraction of a field's allowed
+        // range used by one perturbation.
+        double SpikingParameterMutationRate;
+        double SpikingParameterMutationPower;
+
+        // The canonical model gives any active inhibitory afferent an absolute
+        // veto. These probabilities make that rule heritable while allowing
+        // weighted-threshold variants when desired.
+        double InitialMCPInhibitoryVetoProb;
+        double MutateMCPInhibitoryVetoProb;
+
+        // Evolvable LIF and adaptive-LIF ranges.
+        double MinSpikingTimeConstant;
+        double MaxSpikingTimeConstant;
+        double MinSpikeThreshold;
+        double MaxSpikeThreshold;
+        double MinResetPotential;
+        double MaxResetPotential;
+        double MinRestingPotential;
+        double MaxRestingPotential;
+        double MinRefractoryPeriod;
+        double MaxRefractoryPeriod;
+        double MinMembraneResistance;
+        double MaxMembraneResistance;
+        double MinAdaptationTimeConstant;
+        double MaxAdaptationTimeConstant;
+        double MinAdaptationIncrement;
+        double MaxAdaptationIncrement;
+        double MinSpikeRateTimeConstant;
+        double MaxSpikeRateTimeConstant;
+
+        // Evolvable Izhikevich a/b/c/d ranges.
+        double MinIzhikevichA;
+        double MaxIzhikevichA;
+        double MinIzhikevichThreshold;
+        double MaxIzhikevichThreshold;
+        double MinIzhikevichB;
+        double MaxIzhikevichB;
+        double MinIzhikevichC;
+        double MaxIzhikevichC;
+        double MinIzhikevichD;
+        double MaxIzhikevichD;
+
+        // Evolvable current-based exponential synapse and STDP ranges.
+        double MinSynapticDelay;
+        double MaxSynapticDelay;
+        double MinSynapticTimeConstant;
+        double MaxSynapticTimeConstant;
+        double InitialSTDPEnabledProb;
+        double MinSTDPPlus;
+        double MaxSTDPPlus;
+        double MinSTDPMinus;
+        double MaxSTDPMinus;
+        double MinSTDPTau;
+        double MaxSTDPTau;
 
         /////////////////////////////////////
         // Speciation parameters
@@ -361,6 +469,11 @@ namespace NEAT {
 
         // Activation function type difference importance
         double ActivationFunctionDiffCoeff;
+
+        // Distance contributed by matching spiking neuron and synapse
+        // parameters. Defaults are zero for compatibility.
+        double SpikingNeuronDiffCoeff;
+        double SpikingLinkDiffCoeff;
 
         // Compatibility treshold
         double CompatTreshold;
@@ -413,15 +526,17 @@ namespace NEAT {
         // The Bias value for the CPPN queries.
         double CPPN_Bias;
 
-        // Quadtree Dimensions
+        // Quadtree / octree dimensions
         // The range of the tree. Typically set to 2,
         double Width;
         double Height;
+        double Depth;
 
-        // The (x, y) coordinates of the tree
+        // The (x, y, z) coordinates of the tree
         double Qtree_X;
 
         double Qtree_Y;
+        double Qtree_Z;
 
         // Use Link Expression output
         bool Leo;
@@ -444,6 +559,88 @@ namespace NEAT {
         double MutateGenomeTraitsProb;
 
         /////////////////////////////////////
+        // Advanced algorithm controls
+        /////////////////////////////////////
+
+        // LEGACY_SELECTION keeps all historical selection switches functional.
+        SelectionMode ParentSelectionMode;
+
+        // Baker linear-ranking pressure in [1, 2]. A value of 1 is uniform and
+        // 2 gives the strongest valid linear ranking pressure.
+        double RankSelectionPressure;
+
+        // Positive exponential decay applied to normalized rank.
+        double RankSelectionExponent;
+
+        // Positive softmax temperature for Boltzmann selection.
+        double BoltzmannTemperature;
+
+        // Additional crossover probabilities. MultipointCrossoverRate remains
+        // unchanged; any probability left over selects average crossover.
+        double SinglePointCrossoverRate;
+        double BlendCrossoverRate;
+        double SimulatedBinaryCrossoverRate;
+
+        // BLX-alpha expansion and SBX distribution index.
+        double CrossoverBlendAlpha;
+        double CrossoverSBXEta;
+
+        // The default UNIFORM_MUTATION exactly preserves historical mutation.
+        WeightMutationMode WeightMutationDistribution;
+
+        // Gaussian standard-deviation multiplier, Cauchy scale multiplier, and
+        // bounded polynomial-mutation distribution index.
+        double WeightMutationSigma;
+        double WeightMutationCauchyScale;
+        double WeightMutationPolynomialEta;
+
+        // Species representatives can remain leader-based for exact historical
+        // behavior, be sampled, or use a compatibility-distance medoid. A zero
+        // candidate limit makes MEDOID_REPRESENTATIVE examine every individual.
+        SpeciesRepresentativeMode SpeciesRepresentativeSelection;
+        unsigned int RepresentativeSelectionCandidates;
+
+        // Exact offspring allocation controls. MinSpeciesSize protects niches
+        // that receive a non-zero quota; SpeciesElitism also guarantees a quota
+        // to the best N species. Defaults preserve historical apportionment.
+        OffspringAllocationMode OffspringAllocation;
+        unsigned int MinSpeciesSize;
+        unsigned int SpeciesElitism;
+
+        // Multiplier applied to a stagnant non-champion species. This replaces
+        // the previously hard-coded value while keeping that value as default.
+        double StagnationPenalty;
+
+        // Proportional control is smoother than the historical one-step
+        // threshold update. TargetSpecies == 0 uses the midpoint of the existing
+        // MinSpecies/MaxSpecies interval.
+        CompatibilityThresholdMode CompatibilityThresholdControl;
+        unsigned int TargetSpecies;
+        double CompatibilityThresholdGain;
+        double MaxCompatTreshold;
+
+        // Optional strict evaluation guards. They are disabled by default so
+        // established workflows that rely on Epoch() marking genomes evaluated
+        // continue to work.
+        bool RequireEvaluatedGenomes;
+        bool RejectNonFiniteFitness;
+
+        // Expected number of mutation operators applied to a mutated offspring.
+        // Stagnation adaptation multiplies this budget after the configured
+        // generation and is disabled when AdaptiveMutationRate is zero.
+        double MutationOperatorsPerOffspring;
+        unsigned int AdaptiveMutationStart;
+        double AdaptiveMutationRate;
+        double AdaptiveMutationMaxFactor;
+
+        // Population-wide objective transforms used for offspring allocation.
+        // These are independent from the within-species parent selector.
+        FitnessScalingMode FitnessScaling;
+        double FitnessRankPressure;
+        double FitnessSigmaScale;
+        double FitnessBoltzmannTemperature;
+
+        /////////////////////////////////////
         // Constructors
         /////////////////////////////////////
 
@@ -456,8 +653,8 @@ namespace NEAT {
 
         // Load the parameters from a file returns 0 on success
         int Load(const char *filename);
-        // Load the parameters from an already opened file for reading
-        int Load(std::ifstream &a_DataFile);
+        // Load the parameters from an already opened stream for reading
+        int Load(std::istream &a_DataFile);
 
         void Save(const char *filename);
         // Saves the parameters to an already opened file for writing
@@ -465,6 +662,33 @@ namespace NEAT {
 
         // resets the parameters to built-in defaults
         void Reset();
+
+        // Opt-in preset for evolving mixed spiking topologies. Existing users
+        // retain rate-network defaults until this is called or fields are set
+        // explicitly.
+        void ConfigureSpiking(bool enable_stdp = false);
+
+        // Opt-in preset for pure McCulloch-Pitts evolution. Neuron thresholds,
+        // refractory periods, axonal delays, and the inhibitory-veto rule remain
+        // evolvable through the normal spiking mutation operators.
+        void ConfigureMcCullochPitts(bool inhibitory_veto = true, bool enable_stdp = false);
+
+        // Complete, round-trippable persistence. Function callbacks are omitted.
+        std::string Serialize() const;
+        static Parameters Deserialize(const std::string &data);
+
+        // Checks ranges and cross-field invariants without changing values.
+        bool Validate(std::string *error = nullptr) const;
+
+        // The legacy function-pointer field cannot represent capturing
+        // callables. These helpers preserve it for existing C++ users while
+        // allowing each Parameters instance to own an independent callable.
+        void SetCustomConstraintsFunction(std::function<bool(Genome &)> callback);
+        std::function<bool(Genome &)> GetCustomConstraintsFunction() const;
+        bool FailsCustomConstraints(Genome &genome) const;
+
+       private:
+        std::function<bool(Genome &)> m_CustomConstraintsFunction;
     };
 
 }  // namespace NEAT

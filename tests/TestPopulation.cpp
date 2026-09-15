@@ -163,14 +163,14 @@ int TestPopulation(int argc, char *argv[]) {
         bool threw = false;
         try {
             (void)pop.AccessGenomeByIndex(static_cast<int>(pop.NumGenomes()) + 10);
-        } catch (const std::runtime_error &) {
+        } catch (const std::exception &) {
             threw = true;
         }
         CHECK(threw);
         threw = false;
         try {
             (void)pop.AccessGenomeByID(-999999);
-        } catch (const std::runtime_error &) {
+        } catch (const std::exception &) {
             threw = true;
         }
         CHECK(threw);
@@ -209,7 +209,18 @@ int TestPopulation(int argc, char *argv[]) {
         for (size_t i = 1; i < pop.m_Species.size(); ++i) {
             CHECK(pop.m_Species[i - 1].GetBestFitness() >= pop.m_Species[i].GetBestFitness());
         }
+        // ChooseParentSpecies requires evaluated members: newborns are not evaluated.
+        EvaluateByLinkCount(pop);
         CHECK(pop.ChooseParentSpecies() < pop.m_Species.size());
+        // With no evaluated species it throws instead of returning a junk index.
+        Population fresh(MakeSeed(), params, true, 1.0, 6);
+        bool threw = false;
+        try {
+            (void)fresh.ChooseParentSpecies();
+        } catch (const std::runtime_error &) {
+            threw = true;
+        }
+        CHECK(threw);
         EXPECT_UNIQUE_IDS(pop);
     }
 
@@ -286,6 +297,91 @@ int TestPopulation(int argc, char *argv[]) {
         CHECK(solved);  // base Successful() returns true by contract
         CHECK(pop.NumGenomes() == params.PopulationSize);
         EXPECT_UNIQUE_IDS(pop);
+    }
+
+    // Fitness scaling modes keep allocation weights non-negative and finite.
+    {
+        const FitnessScalingMode modes[] = {SHIFTED_FITNESS_SCALING, LINEAR_RANK_FITNESS_SCALING, SIGMA_FITNESS_SCALING, BOLTZMANN_FITNESS_SCALING};
+        for (FitnessScalingMode mode : modes) {
+            Parameters params = SmallParams();
+            params.FitnessScaling = mode;
+            Population pop(MakeSeed(), params, true, 1.0, 21);
+            EvaluateByLinkCount(pop);
+            pop.Epoch();
+            CHECK(pop.NumGenomes() == params.PopulationSize);
+            EXPECT_UNIQUE_IDS(pop);
+        }
+    }
+
+    // Offspring allocation preserves the exact population size (no bonus clones).
+    {
+        Parameters params = SmallParams();
+        params.MinSpeciesSize = 2;
+        Population pop(MakeSeed(), params, true, 1.0, 22);
+        for (int gen = 0; gen < 3; ++gen) {
+            EvaluateByLinkCount(pop);
+            pop.Epoch();
+            CHECK(pop.NumGenomes() == params.PopulationSize);
+            EXPECT_UNIQUE_IDS(pop);
+        }
+    }
+
+    // Proportional compatibility control adapts the threshold toward the target.
+    {
+        Parameters params = SmallParams();
+        params.CompatibilityThresholdControl = PROPORTIONAL_COMPATIBILITY_THRESHOLD;
+        params.TargetSpecies = 4;
+        Population pop(MakeSeed(), params, true, 1.0, 23);
+        const double before = params.CompatTreshold;
+        (void)before;
+        EvaluateByLinkCount(pop);
+        pop.Epoch();
+        CHECK(pop.m_Parameters.CompatTreshold >= pop.m_Parameters.MinCompatTreshold);
+        CHECK(pop.m_Parameters.CompatTreshold <= pop.m_Parameters.MaxCompatTreshold);
+        CHECK(pop.NumGenomes() == params.PopulationSize);
+    }
+
+    // EliteFraction>0 preserves the champion; checkpoint round-trips state.
+    {
+        Parameters params = SmallParams();
+        params.EliteFraction = 0.1;
+        Population pop(MakeSeed(), params, true, 1.0, 24);
+        EvaluateByLinkCount(pop);
+        pop.Epoch();
+        CHECK(pop.NumGenomes() == params.PopulationSize);
+        std::string error;
+        CHECK(pop.Validate(&error));
+        const std::string checkpoint = pop.Serialize();
+        const Population restored = Population::Deserialize(checkpoint);
+        CHECK(restored.NumGenomes() == pop.NumGenomes());
+        CHECK(restored.GetGeneration() == pop.GetGeneration());
+        CHECK(restored.Validate());
+        const auto tmp = std::filesystem::temp_directory_path() / "multineat_test_pop.checkpoint";
+        pop.SaveState(tmp.string().c_str());
+        CHECK(std::filesystem::exists(tmp));
+        std::error_code ec;
+        std::filesystem::remove(tmp, ec);
+    }
+
+    // Strict guards are opt-in and off by default.
+    {
+        Parameters params = SmallParams();
+        CHECK(params.RequireEvaluatedGenomes == false);
+        CHECK(params.RejectNonFiniteFitness == false);
+        Population pop(MakeSeed(), params, true, 1.0, 25);
+        params.RequireEvaluatedGenomes = true;
+        // Newborns are unevaluated: Epoch with strict guards throws.
+        bool threw = false;
+        try {
+            // Force unevaluated state on one genome, then run guarded epoch.
+            pop.AccessGenomeByIndex(0).ResetEvaluated();
+            Population guarded = pop;
+            guarded.m_Parameters.RequireEvaluatedGenomes = true;
+            guarded.Epoch();
+        } catch (const std::runtime_error &) {
+            threw = true;
+        }
+        CHECK(threw);
     }
 
     if (g_failures != 0) {

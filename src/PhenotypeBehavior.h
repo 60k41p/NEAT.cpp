@@ -50,13 +50,14 @@ namespace NEAT {
         std::vector<std::vector<double> > m_Data;
 
         // This method acquires behavior data based on the genome given May return true if a successful behavior was encountered during evaluation
-        virtual bool Acquire(Genome *a_Genome) {
+        // (parameter unnamed: the base implementation ignores it, silencing unused-parameter warnings)
+        virtual bool Acquire(Genome *) {
             // ASSERT(false);
             return false;
         }
 
         // Overload this method to calcluate distance between behaviors
-        virtual double Distance_To(PhenotypeBehavior *a_Other) {
+        virtual double Distance_To(PhenotypeBehavior *) {
             // ASSERT(false);
             return 0;
         }
