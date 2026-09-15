@@ -2,11 +2,13 @@
 #include <cmath>
 #include <iostream>
 #include <map>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 
 #include "Genes.h"
 #include "Random.h"
+#include "Serialization.h"
 #include "Traits.h"
 
 namespace {
@@ -152,6 +154,20 @@ int TestTraitsGenes(int argc, char *argv[]) {
         CHECK(v == 4 || v == 6 || v == 8);
     }
     {
+        // Keys missing on one side are skipped (no map insertion / no throw).
+        RNG rng;
+        rng.Seed(5);
+        Gene a, b;
+        Trait ta, tb;
+        ta.value = 4;
+        tb.value = 8;
+        a.m_Traits["k"] = ta;
+        b.m_Traits["other"] = tb;
+        a.MateTraits(b.m_Traits, rng);
+        CHECK(a.m_Traits.count("other") == 0);
+        CHECK(std::get<int>(a.m_Traits["k"].value) == 4);
+    }
+    {
         RNG rng;
         rng.Seed(5);
         Gene a, b;
@@ -223,6 +239,20 @@ int TestTraitsGenes(int argc, char *argv[]) {
         const auto dist2 = a.GetTraitDistances(b.m_Traits);
         CHECK(dist2.count("v") == 1 && Near(dist2.at("v"), 8.0));
     }
+    {
+        // Asymmetric maps: missing keys are skipped, and const genes work.
+        Gene a, b;
+        Trait t1, t2;
+        t1.value = 3;
+        t2.value = 10;
+        a.m_Traits["i"] = t1;
+        b.m_Traits["i"] = t2;
+        b.m_Traits["ghost"] = t2;
+        const Gene &ca = a;
+        const auto dist = ca.GetTraitDistances(b.m_Traits);
+        CHECK(dist.count("i") == 1 && Near(dist.at("i"), 7.0));
+        CHECK(dist.count("ghost") == 0);
+    }
 
     // --- MutateTraits stays in range ------------------------------------------
     {
@@ -239,6 +269,68 @@ int TestTraitsGenes(int argc, char *argv[]) {
         }
     }
 
+    // --- Trait validation rejects bad schemas -----------------------------------
+    {
+        RNG rng;
+        rng.Seed(4);
+        Gene g;
+        // Unknown type throws instead of silently creating an empty trait.
+        std::map<std::string, TraitParameters> bad;
+        TraitParameters p;
+        p.type = "bogus";
+        bad["x"] = p;
+        bool threw = false;
+        try {
+            g.InitTraits(bad, rng);
+        } catch (const std::invalid_argument &) {
+            threw = true;
+        }
+        CHECK(threw);
+        // min > max throws.
+        std::map<std::string, TraitParameters> inverted;
+        inverted["speed"] = MakeIntTrait(10, 0);
+        threw = false;
+        try {
+            g.InitTraits(inverted, rng);
+        } catch (const std::invalid_argument &) {
+            threw = true;
+        }
+        CHECK(threw);
+    }
+
+    // --- Serialization round-trips traits and schemas ---------------------------
+    // (mirrors Genome's usage: marker token consumed first, then the reader
+    // takes the count and entries).
+    {
+        std::map<std::string, TraitParameters> schemas;
+        schemas["speed"] = MakeIntTrait(0, 10);
+        schemas["rate"] = MakeFloatTrait(-1.0, 1.0);
+        std::ostringstream schema_out;
+        NEAT::Serialization::WriteTraitParameters(schema_out, "Schemas", schemas);
+        std::istringstream schema_in(schema_out.str());
+        std::string schema_marker;
+        schema_in >> schema_marker;
+        CHECK(schema_marker == "Schemas");
+        const auto read_back = NEAT::Serialization::ReadTraitParameters(schema_in);
+        CHECK(read_back.size() == 2);
+        CHECK(read_back.at("speed").type == "int");
+        CHECK(read_back.at("rate").type == "float");
+
+        Gene g;
+        RNG rng;
+        rng.Seed(4);
+        g.InitTraits(schemas, rng);
+        std::ostringstream trait_out;
+        NEAT::Serialization::WriteTraits(trait_out, "Traits", g.m_Traits);
+        std::istringstream trait_in(trait_out.str());
+        std::string trait_marker;
+        trait_in >> trait_marker;
+        CHECK(trait_marker == "Traits");
+        const auto traits_back = NEAT::Serialization::ReadTraits(trait_in);
+        CHECK(traits_back.size() == g.m_Traits.size());
+        CHECK(traits_back.at("speed") == g.m_Traits.at("speed"));
+    }
+
     // --- LinkGene / NeuronGene basics ------------------------------------------
     {
         LinkGene l(1, 2, 7, 0.5, false);
@@ -248,18 +340,56 @@ int TestTraitsGenes(int argc, char *argv[]) {
         CHECK(Near(l.GetWeight(), 0.5));
         CHECK(!l.IsRecurrent());
         CHECK(!l.IsLoopedRecurrent());
+        // Spiking defaults are sane and inert for rate networks.
+        CHECK(!l.m_STDPEnabled);
+        CHECK(Near(l.m_SynapticDelay, 0.0));
         LinkGene loop(4, 4, 8, 1.0, true);
         CHECK(loop.IsLoopedRecurrent());
-        CHECK((LinkGene(1, 2, 7, 0.0) == LinkGene(9, 9, 7, 5.0)));
+        // operator== compares the full field set (v2 semantics): identical
+        // genes compare equal, genes differing in endpoints/weight do not,
+        // while ordering (<) still uses the innovation ID.
+        CHECK((LinkGene(1, 2, 7, 0.5) == LinkGene(1, 2, 7, 0.5)));
+        CHECK(!((LinkGene(1, 2, 7, 0.0) == LinkGene(9, 9, 7, 5.0))));
+        CHECK((LinkGene(1, 2, 7, 0.0) < LinkGene(1, 2, 8, 0.0)));
 
         NeuronGene n(HIDDEN, 42, 0.5);
         n.Init(1.0, 0.0, 1.0, 0.1, TANH);
         CHECK(n.ID() == 42);
         CHECK(n.Type() == HIDDEN);
         CHECK(n.m_ActFunction == TANH);
-        // operator== compares ID and Type.
-        CHECK((NeuronGene(HIDDEN, 42, 0.0) == NeuronGene(HIDDEN, 42, 1.0)));
+        // operator== compares the full field set (v2 semantics).
+        CHECK((NeuronGene(HIDDEN, 42, 0.5) == NeuronGene(HIDDEN, 42, 0.5)));
+        CHECK(!((NeuronGene(HIDDEN, 42, 0.0) == NeuronGene(HIDDEN, 42, 1.0))));
         CHECK(!((NeuronGene(HIDDEN, 42, 0.0) == NeuronGene(OUTPUT, 42, 0.0))));
+        // Spiking defaults + default construction is zero-initialized.
+        NeuronGene d;
+        CHECK(d.m_ID == 0 && d.m_Type == NONE);
+        CHECK(Near(d.m_SpikeThreshold, 1.0));
+        CHECK(Near(d.m_IzhikevichC, -65.0));
+        CHECK(d.m_MCPInhibitoryVeto);
+        CHECK(IsSpikingActivation(SPIKING_LIF));
+        CHECK(IsSpikingActivation(MCCULLOCH_PITTS));
+        CHECK(!IsSpikingActivation(TANH));
+    }
+
+    // --- MutateTraits terminates on degenerate schemas -------------------------
+    {
+        RNG rng;
+        rng.Seed(3);
+        // Singleton set: nothing to change to, must return quickly, not hang.
+        std::map<std::string, TraitParameters> tp;
+        TraitParameters p;
+        p.type = "str";
+        p.m_MutationProb = 1.0;
+        StringTraitParameters sdet;
+        sdet.set = {"only"};
+        sdet.probs = {1.0};
+        p.m_Details = sdet;
+        tp["s"] = p;
+        Gene g;
+        g.InitTraits(tp, rng);
+        (void)g.MutateTraits(tp, rng);
+        CHECK(std::get<std::string>(g.m_Traits["s"].value) == "only");
     }
 
     if (g_failures != 0) {

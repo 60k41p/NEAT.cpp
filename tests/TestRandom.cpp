@@ -1,6 +1,8 @@
 // Tests for NEAT::RNG (src/Random.h/.cpp). mt19937 is deterministic per the
 // C++ standard, so same seed => same sequence on all platforms.
 #include <iostream>
+#include <stdexcept>
+#include <string>
 #include <vector>
 
 #include "Random.h"
@@ -106,6 +108,83 @@ int TestRandom(int argc, char *argv[]) {
         RNG rng;
         rng.TimeSeed();
         (void)rng.RandFloat();
+    }
+
+    // RandInt validates its range; Roulette validates its input.
+    {
+        RNG rng;
+        rng.Seed(5);
+        bool threw = false;
+        try {
+            (void)rng.RandInt(9, 3);
+        } catch (const std::invalid_argument &) {
+            threw = true;
+        }
+        CHECK(threw);
+        threw = false;
+        try {
+            std::vector<double> empty;
+            (void)rng.Roulette(empty);
+        } catch (const std::invalid_argument &) {
+            threw = true;
+        }
+        CHECK(threw);
+        threw = false;
+        try {
+            std::vector<double> negative{0.5, -0.1};
+            (void)rng.Roulette(negative);
+        } catch (const std::invalid_argument &) {
+            threw = true;
+        }
+        CHECK(threw);
+        // All-zero weights fall back to a uniform valid index.
+        std::vector<double> zeros{0.0, 0.0, 0.0};
+        for (int i = 0; i < 16; ++i) {
+            const int idx = rng.Roulette(zeros);
+            CHECK(idx >= 0 && idx < 3);
+        }
+    }
+
+    // RandNormal / RandCauchy validation and determinism.
+    {
+        RNG a, b;
+        a.Seed(77);
+        b.Seed(77);
+        CHECK(a.RandNormal(0.0, 1.0) == b.RandNormal(0.0, 1.0));
+        CHECK(a.RandCauchy(0.0, 1.0) == b.RandCauchy(0.0, 1.0));
+        bool threw = false;
+        try {
+            (void)a.RandNormal(0.0, 0.0);
+        } catch (const std::invalid_argument &) {
+            threw = true;
+        }
+        CHECK(threw);
+        threw = false;
+        try {
+            (void)a.RandCauchy(0.0, -1.0);
+        } catch (const std::invalid_argument &) {
+            threw = true;
+        }
+        CHECK(threw);
+    }
+
+    // Serialize / Deserialize round-trips the engine state.
+    {
+        RNG a, b;
+        a.Seed(2026);
+        (void)a.RandFloat();
+        const std::string state = a.Serialize();
+        b.Deserialize(state);
+        for (int i = 0; i < 8; ++i) {
+            CHECK(a.RandFloat() == b.RandFloat());
+        }
+        bool threw = false;
+        try {
+            b.Deserialize("not-a-valid-state!!!");
+        } catch (const std::invalid_argument &) {
+            threw = true;
+        }
+        CHECK(threw);
     }
 
     if (g_failures != 0) {

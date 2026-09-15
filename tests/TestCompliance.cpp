@@ -49,12 +49,20 @@ int TestCompliance(int argc, char *argv[]) {
         CHECK(ProbOk(p.MultipointCrossoverRate));
         CHECK(ProbOk(p.SurvivalRate));
         CHECK(p.PopulationSize > 0);
-        // MinCompatTreshold defaults to 0.0 ( CompatTreshold is clamped up to
-        // it in Population), so only non-negativity is required here.
+        // CompatTreshold is clamped into [MinCompatTreshold, MaxCompatTreshold].
         CHECK(p.CompatTreshold > 0.0 && p.MinCompatTreshold >= 0.0);
+        CHECK(p.MaxCompatTreshold >= p.MinCompatTreshold);
         CHECK(p.MinNeuronBias <= p.MaxNeuronBias);
         CHECK(p.MinWeight <= p.MaxWeight);
         CHECK(p.TournamentSize > 0);
+        // Reset() defaults validate cleanly.
+        std::string validation_error;
+        CHECK(p.Validate(&validation_error));
+        CHECK(validation_error.empty());
+        // New algorithm controls stay in their documented domains.
+        CHECK(p.RankSelectionPressure >= 1.0 && p.RankSelectionPressure <= 2.0);
+        CHECK(p.MutationOperatorsPerOffspring >= 1.0);
+        CHECK(p.SinglePointCrossoverRate + p.BlendCrossoverRate + p.SimulatedBinaryCrossoverRate + p.MultipointCrossoverRate <= 1.0 + 1e-12);
     }
 
     // Saved Parameters files always carry the framing markers.
@@ -118,6 +126,21 @@ int TestCompliance(int argc, char *argv[]) {
         Genome g(p, init);
         CHECK(!g.FailsConstraints(p));
         CHECK(g.NumLinks() > 0);
+        CHECK(g.Validate());
+    }
+
+    // String serialization carries version markers and round-trips.
+    {
+        Parameters p;
+        p.Reset();
+        GenomeInitStruct init;
+        init.NumInputs = 2;
+        init.NumOutputs = 1;
+        Genome g(p, init);
+        const std::string data = g.Serialize();
+        CHECK(data.find("GenomeFormat 4") != std::string::npos);
+        CHECK(data.find("GenomeState") != std::string::npos);
+        CHECK(Genome::Deserialize(data).IsIdenticalTo(g));
     }
 
     if (g_failures != 0) {

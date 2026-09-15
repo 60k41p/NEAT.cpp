@@ -33,7 +33,11 @@
 #pragma once
 
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <fstream>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "Genes.h"
@@ -122,6 +126,16 @@ namespace NEAT {
         int m_NextNeuronID;
         int m_NextInnovationNum;
 
+        // Endpoint index for O(1) lookups, rebuilt lazily. Separate tables
+        // per type preserve first-match (CheckInnovation) vs last-match
+        // (CheckLastInnovation) semantics. Mutable so const queries stay const.
+        // Because m_Innovations is public, the index self-heals: any external
+        // edit that changes the size or reallocates triggers a rebuild.
+        mutable std::unordered_map<std::uint64_t, std::vector<int>> m_LinkInnovationIndex;
+        mutable std::unordered_map<std::uint64_t, std::vector<int>> m_NeuronInnovationIndex;
+        mutable std::size_t m_IndexedInnovationCount = 0;
+        mutable const Innovation *m_IndexedInnovationData = nullptr;
+
        public:
         ////////////////////////////
         // Constructors
@@ -176,10 +190,29 @@ namespace NEAT {
         // Clears all innovations in the database
         void Flush();
 
-        Innovation GetInnovationByIdx(int idx) const { return m_Innovations[idx]; };
+        Innovation GetInnovationByIdx(int idx) const { return m_Innovations.at(idx); };
+
+        // Rebuilds the endpoint index after external edits to m_Innovations.
+        void RebuildIndex() const;
+
+        // Checks structural invariants (positive counters/IDs, innovation
+        // ordering). Returns false with a message instead of throwing.
+        bool ValidateInnovationState(std::string *error = nullptr) const;
+
+        // Complete string persistence for checkpoints.
+        std::string Serialize() const;
+        static InnovationDatabase Deserialize(const std::string &data);
 
         // Saves the database to an already opened file
         void Save(FILE *a_file);
+
+       private:
+        // Endpoint key packing (from, to) into a single integer.
+        static std::uint64_t EndpointKey(int a_in, int a_out);
+        // Indexes a single entry (used incrementally on add).
+        void AppendToIndex(std::size_t a_index) const;
+        // Rebuilds the index if the innovation list changed underneath it.
+        void EnsureIndex() const;
     };
 
 }  // namespace NEAT

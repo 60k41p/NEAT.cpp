@@ -70,10 +70,13 @@ int TestSubstrate(int argc, char *argv[]) {
         CHECK(s.GetMinCPPNInputs() == 0 * 2 + 1 + 1);
     }
 
-    // Custom connectivity set/clear round-trip.
+    // Custom connectivity set/clear round-trip (neurons must be set first).
     {
         Substrate s;
         CHECK(s.m_custom_connectivity.empty());
+        s.m_input_coords = {{0.0, 0.0}, {1.0, 0.0}};
+        s.m_hidden_coords = {{0.5, 0.5}};
+        s.m_output_coords = {{0.5, 1.0}};
         std::vector<std::vector<int>> conns{
             {static_cast<int>(INPUT), 0, static_cast<int>(OUTPUT), 0},
             {static_cast<int>(INPUT), 1, static_cast<int>(HIDDEN), 0},
@@ -84,6 +87,30 @@ int TestSubstrate(int argc, char *argv[]) {
         CHECK(s.m_custom_connectivity[0][2] == static_cast<int>(OUTPUT));
         CHECK(s.m_custom_connectivity[1][3] == 0);
         s.ClearCustomConnectivity();
+        CHECK(s.m_custom_connectivity.empty());
+    }
+
+    // Malformed custom connectivity is rejected.
+    {
+        Substrate s;
+        s.m_input_coords = {{0.0}};
+        s.m_output_coords = {{1.0}};
+        bool threw = false;
+        try {
+            std::vector<std::vector<int>> bad{{static_cast<int>(INPUT), 0, static_cast<int>(OUTPUT)}};
+            s.SetCustomConnectivity(bad);
+        } catch (const std::invalid_argument &) {
+            threw = true;
+        }
+        CHECK(threw);
+        threw = false;
+        try {
+            std::vector<std::vector<int>> bad{{static_cast<int>(INPUT), 7, static_cast<int>(OUTPUT), 0}};
+            s.SetCustomConnectivity(bad);
+        } catch (const std::invalid_argument &) {
+            threw = true;
+        }
+        CHECK(threw);
         CHECK(s.m_custom_connectivity.empty());
     }
 

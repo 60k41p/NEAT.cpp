@@ -35,6 +35,40 @@ Run-to-run spread observed on this machine: <10% on all benchmarks except Popula
 - Text serialization (`Genome save+load`, ~3.9 ms/op) uses `ostringstream` + `%3.8f`-style formatting per field.
 - `BuildPhenotype` large (~163 us) rebuilds all neurons/connections from scratch per call even when topology is unchanged (weight-only updates could be incremental — API change, defer).
 
+## MultiNEAT v2 port (2026-09-16, `feat/mn2-port`)
+
+Release config (`build/bench`), same machine. Workloads are seed-identical to
+prior runs, but generation dynamics changed (v2 defaults + operators), so the
+large-genome fixtures differ slightly in size from earlier tables.
+
+| Benchmark                    | ops   | ns/op       | vs uplift-2   | notes |
+| ---------------------------- | ----- | ----------- | ------------- | ----- |
+| BuildPhenotype small         | 200k  | 1,021       | +69%          | spiking field copies + dangling-endpoint throw |
+| BuildPhenotype large         | 2k    | 40,694      | +124%         | same; fixture also differs |
+| Activate large net           | 20k   | 14,341      | +238%         | topology validation + `IsSpiking` + dispatched activation per call |
+| CompatibilityDistance        | 20k   | 86,543      | +706%         | sort-safety check + spiking diffs; fixture differs |
+| Copy+mutate genome           | 50k   | 1,207,137   | **+1486%**    | see note below |
+| Epoch pop100                 | 100   | 1,433,705   | +67%          | quotas, transforms, sorting, exact-size accounting |
+| XOR solve seed1              | 1     | 83.5 ms     | faster; gen 21 (was 31) | dynamics shifted, still solves |
+| Genome save+load             | 100   | 15,960,547  | +307%         | +`NeuronSpiking`/`LinkSpiking` lines per gene |
+| Population save+load         | 20    | 55,441,539  | +336%         | same reason |
+
+### Copy+mutate note (deliberate trade-off)
+
+`Mutate_AddLink` now guarantees the new forward link can never close a
+directed cycle (DFS/bitset reachability guard) and samples uniformly over all
+admissible pairs. Cost per call on a dense ~200-neuron/~1k-link genome:
+
+- bounded random tries (`LinkTries`, fast path, wins when free pairs are common),
+- exhaustive bitset-DP + reservoir-sampling fallback (no candidate storage/sort)
+  only when sampling fails.
+
+The 50k-op stress test hammers the dense worst case back-to-back (fallback on
+most calls); real evolution calls `AddLink` on small genomes where the fast
+path decides in microseconds — `Epoch pop100` (+67%) is the representative
+metric. A segfault found by this benchmark (stale merge iterator in
+`CompatibilityDistance`) was fixed and is covered by ASan in CI configs.
+
 ## Change log
 
 | Date | Commit | Change | Deltas |

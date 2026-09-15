@@ -98,7 +98,8 @@
 // ASSERT gets optimised out completely
 #define ASSERT(expr)
 
-// verify has expression evaluated, but no further action taken
-#define VERIFY(expr)  // if( expr ) {}
+// VERIFY always evaluates its expression (even in release) so that callers
+// never silently lose side effects; failures are reported only in DEBUG builds.
+#define VERIFY(expr) ((void)(expr))
 
 #endif

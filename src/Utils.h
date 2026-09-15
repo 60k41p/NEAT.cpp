@@ -35,6 +35,7 @@
 #include <math.h>
 #include <stdlib.h>
 
+#include <algorithm>
 #include <iostream>
 #include <limits>
 #include <sstream>
@@ -47,16 +48,14 @@
 using namespace std;
 
 inline void GetMaxMin(const vector<double> &a_Vals, double &a_Min, double &a_Max) {
-    // lowest() (most negative), not min() (smallest positive) — otherwise an
-    // all-negative input vector yields a bogus max equal to ~2.2e-308.
-    a_Max = std::numeric_limits<double>::lowest();
-    a_Min = std::numeric_limits<double>::max();
-    for (vector<double>::const_iterator t_It = a_Vals.begin(); t_It != a_Vals.end(); ++t_It) {
-        const double t_CurrentVal = (*t_It);
-        if (t_CurrentVal > a_Max) a_Max = t_CurrentVal;
-
-        if (t_CurrentVal < a_Min) a_Min = t_CurrentVal;
+    if (a_Vals.empty()) {
+        a_Min = 0;
+        a_Max = 0;
+        return;
     }
+    auto result = std::minmax_element(a_Vals.begin(), a_Vals.end());
+    a_Min = *result.first;
+    a_Max = *result.second;
 }
 
 // converts an integer to a string
@@ -126,19 +125,8 @@ inline void Clamp(int &a_Arg, const int a_Min, const int a_Max) {
     }
 }
 
-// rounds a double up or down depending on its value
-inline int Rounded(const double a_Val) {
-    const int t_Integral = static_cast<int>(a_Val);
-    const double t_Mantissa = a_Val - t_Integral;
-
-    if (t_Mantissa < 0.5) {
-        return t_Integral;
-    }
-
-    else {
-        return t_Integral + 1;
-    }
-}
+// rounds a double to the nearest integer (lround: halves away from zero, correct for negatives)
+inline int Rounded(const double a_Val) { return static_cast<int>(std::lround(a_Val)); }
 
 // rounds a double up or down depending on whether its mantissa is higher or lower than offset
 inline int RoundUnderOffset(const double a_Val, const double a_Offset) {
@@ -146,11 +134,7 @@ inline int RoundUnderOffset(const double a_Val, const double a_Offset) {
     const int t_Integral = static_cast<int>(a_Val);
     const double t_Mantissa = a_Val - t_Integral;
 
-    if (t_Mantissa < a_Offset) {
-        return t_Integral;
-    } else {
-        return t_Integral + 1;
-    }
+    return (t_Mantissa < a_Offset) ? t_Integral : t_Integral + 1;
 }
 
 // Scales the value "a", that is in range [a_min .. a_max] into its relative value in the range [tr_min .. tr_max] Example: A=2, in the range [0 .. 4] .. we
@@ -160,6 +144,14 @@ inline void Scale(double &a, const double a_min, const double a_max, const doubl
     //        ASSERT(a_min <= a_max);
     //        ASSERT(a_tr_min <= a_tr_max);
 
+    if (a_tr_min == a_tr_max) {
+        a = a_tr_min;
+        return;
+    }
+    if (fabs(a_max - a_min) < std::numeric_limits<double>::epsilon()) {
+        a = (a_tr_min + a_tr_max) / 2.0;
+        return;
+    }
     const double t_a_r = a_max - a_min;
     const double t_r = a_tr_max - a_tr_min;
     const double rel_a = (a - a_min) / t_a_r;
@@ -173,16 +165,22 @@ inline void Scale(float &a, const double a_min, const double a_max, const double
     //        ASSERT(a_min <= a_max);
     //        ASSERT(a_tr_min <= a_tr_max);
 
+    if (a_tr_min == a_tr_max) {
+        a = static_cast<float>(a_tr_min);
+        return;
+    }
+    if (fabs(a_max - a_min) < std::numeric_limits<double>::epsilon()) {
+        a = static_cast<float>((a_tr_min + a_tr_max) / 2.0);
+        return;
+    }
     const double t_a_r = a_max - a_min;
     const double t_r = a_tr_max - a_tr_min;
     const double rel_a = (a - a_min) / t_a_r;
-    a = a_tr_min + t_r * rel_a;
+    a = static_cast<float>(a_tr_min + t_r * rel_a);
 }
 
-inline double Abs(double x) {
-    if (x < 0) {
-        return -x;
-    } else {
-        return x;
-    }
-}
+inline double Abs(double x) { return (x < 0) ? -x : x; }
+
+// Scales every entry of the vector from its current [min .. max] range into [a_tr_min .. a_tr_max].
+// Defined in Utils.cpp.
+void Scale(vector<double> &a_Values, const double a_tr_min, const double a_tr_max);
