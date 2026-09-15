@@ -390,7 +390,7 @@ namespace NEAT {
                                 std::vector<double> probs;
                                 double allp = 0;
                                 for (int i = 0; i < pop.species_.size(); i++) {
-                                    if ((pop.species_[i].id_ == id_)) {
+                                    if (pop.species_[i].id_ == id_) {
                                         probs.push_back(0.0);
                                     } else {
                                         probs.push_back(pop.species_[i].averageFitness_);

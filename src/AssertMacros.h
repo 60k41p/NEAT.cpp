@@ -27,7 +27,7 @@
  *              always build the Debug (or dbgassert) config after touching library code to exercise them.
  *
  * References: Google C++ Style Guide, "CHECK macros" discussion (diagnostics over bare assert);
- *             intra-repo users: every src/*.cpp hot path (mutation, speciation, activation).
+ *             intra-repo users: every .cpp file under src/ on the hot path (mutation, speciation, activation).
  */
 
 #pragma once

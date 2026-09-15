@@ -53,8 +53,9 @@ Add NEAT.cpp as a CMake subdirectory and link against `NEAT.cpp` (static) or `NE
 
 This is a fork of <https://github.com/peter-ch/MultiNEAT>.
 
-The primary divergence from the upstream is that the library is now `std`-only pure C++17; with Python bindings and the Boost dependency removed.
-Furthermore, traits now use `std::variant`, RNG uses `std::mt19937`, and cycle detection uses Kahn's algorithm.
+* The library is now `std`-only pure C++17; with Python bindings and the Boost dependency removed
+* Traits now use `std::variant`, RNG uses `std::mt19937`, and cycle detection uses Kahn's algorithm.
+* Robust unit testing and benchmark harnesses were added, and many performance optimisations were applied.
 
 ### Performance
 
