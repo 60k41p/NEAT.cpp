@@ -1,6 +1,8 @@
 // Compliance tests: project-wide invariants that are not tied to one class.
 // (Mastering CMake: "tests do not necessarily have to involve running some
 // part of the software" — these check saved-file contracts and Reset sanity.)
+//
+// CTest-Labels: Compliance;Fast
 #include <cmath>
 #include <filesystem>
 #include <fstream>

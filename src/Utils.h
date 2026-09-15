@@ -1,34 +1,36 @@
-#ifndef _UTILS_H
-#define _UTILS_H
+/*
+ * NEAT.cpp: Portable, Zero-dependency C++17 NeuroEvolution Library
+ *
+ * Copyright (C) 2012 Peter Chervenski
+ * Modifications Copyright (C) 2026 Gökalp Özcan
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * This file has been modified from its original version by Gökalp Özcan in 2026.
+ *
+ * Contact info:
+ * Peter Chervenski <spookey@abv.bg>
+ * Shane Ryan <shane.mcdonald.ryan@gmail.com>
+ * Gökalp Özcan <gokalp@mail.com>
+ */
 
-///////////////////////////////////////////////////////////////////////////////////////////
-//    MultiNEAT - Python/C++ NeuroEvolution of Augmenting Topologies Library
-//
-//    Copyright (C) 2012 Peter Chervenski
-//
-//    This program is free software: you can redistribute it and/or modify
-//    it under the terms of the GNU Lesser General Public License as published by
-//    the Free Software Foundation, either version 3 of the License, or
-//    (at your option) any later version.
-//
-//    This program is distributed in the hope that it will be useful,
-//    but WITHOUT ANY WARRANTY; without even the implied warranty of
-//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//    GNU General Public License for more details.
-//
-//    You should have received a copy of the GNU Lesser General Public License
-//    along with this program.  If not, see < http://www.gnu.org/licenses/ >.
-//
-//    Contact info:
-//
-//    Peter Chervenski < spookey@abv.bg >
-//    Shane Ryan < shane.mcdonald.ryan@gmail.com >
-///////////////////////////////////////////////////////////////////////////////////////////
+/*
+ * File:        Utils.h
+ * Description: some handy little functions
+ */
 
-///////////////////////////////////////////////////////////////////////////////
-// File:        Utils.h
-// Description: some handy little functions
-///////////////////////////////////////////////////////////////////////////////
+#pragma once
 
 #include <math.h>
 #include <stdlib.h>
@@ -45,7 +47,9 @@
 using namespace std;
 
 inline void GetMaxMin(const vector<double> &a_Vals, double &a_Min, double &a_Max) {
-    a_Max = std::numeric_limits<double>::min();
+    // lowest() (most negative), not min() (smallest positive) — otherwise an
+    // all-negative input vector yields a bogus max equal to ~2.2e-308.
+    a_Max = std::numeric_limits<double>::lowest();
     a_Min = std::numeric_limits<double>::max();
     for (vector<double>::const_iterator t_It = a_Vals.begin(); t_It != a_Vals.end(); ++t_It) {
         const double t_CurrentVal = (*t_It);
@@ -182,5 +186,3 @@ inline double Abs(double x) {
         return x;
     }
 }
-
-#endif

@@ -37,6 +37,16 @@ int TestUtils(int argc, char *argv[]) {
         CHECK(Near(mx, 7.25));
     }
 
+    // Regression: all-negative input must yield the most-negative value as max,
+    // not the smallest positive double (numeric_limits::min() seeding bug).
+    {
+        std::vector<double> v{-5.0, -3.0, -9.0, -0.25};
+        double mn = 0.0, mx = 0.0;
+        GetMaxMin(v, mn, mx);
+        CHECK(Near(mn, -9.0));
+        CHECK(Near(mx, -0.25));
+    }
+
     // itos / ftos round-trip basics
     {
         CHECK(itos(0) == std::string("0"));

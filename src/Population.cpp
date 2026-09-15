@@ -1,31 +1,34 @@
-///////////////////////////////////////////////////////////////////////////////////////////
-//    MultiNEAT - Python/C++ NeuroEvolution of Augmenting Topologies Library
-//
-//    Copyright (C) 2012 Peter Chervenski
-//
-//    This program is free software: you can redistribute it and/or modify
-//    it under the terms of the GNU Lesser General Public License as published by
-//    the Free Software Foundation, either version 3 of the License, or
-//    (at your option) any later version.
-//
-//    This program is distributed in the hope that it will be useful,
-//    but WITHOUT ANY WARRANTY; without even the implied warranty of
-//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//    GNU General Public License for more details.
-//
-//    You should have received a copy of the GNU Lesser General Public License
-//    along with this program.  If not, see < http://www.gnu.org/licenses/ >.
-//
-//    Contact info:
-//
-//    Peter Chervenski < spookey@abv.bg >
-//    Shane Ryan < shane.mcdonald.ryan@gmail.com >
-///////////////////////////////////////////////////////////////////////////////////////////
+/*
+ * NEAT.cpp: Portable, Zero-dependency C++17 NeuroEvolution Library
+ *
+ * Copyright (C) 2012 Peter Chervenski
+ * Modifications Copyright (C) 2026 Gökalp Özcan
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * This file has been modified from its original version by Gökalp Özcan in 2026.
+ *
+ * Contact info:
+ * Peter Chervenski <spookey@abv.bg>
+ * Shane Ryan <shane.mcdonald.ryan@gmail.com>
+ * Gökalp Özcan <gokalp@mail.com>
+ */
 
-///////////////////////////////////////////////////////////////////////////////
-// File:        Population.cpp
-// Description: Implementation of the Population class.
-///////////////////////////////////////////////////////////////////////////////
+/*
+ * File:        Population.cpp
+ * Description: Implementation of the Population class.
+ */
 
 #include "Population.h"
 
@@ -577,6 +580,26 @@ namespace NEAT {
         unsigned int t_total_genomes = 0;
         for (unsigned int i = 0; i < m_Species.size(); i++) t_total_genomes += static_cast<unsigned int>(m_Species[i].m_Individuals.size());
 
+        // Rounding of the per-species offspring quotas can also overshoot the
+        // population size (not just undershoot). Trim the surplus newborns —
+        // the freshly created babies at the end of the last species — so the
+        // population-size invariant (SameGenomeIDCheck, AccessGenomeByIndex,
+        // CountOffspring) always holds.
+        while (t_total_genomes > m_Parameters.PopulationSize) {
+            int last = static_cast<int>(m_Species.size()) - 1;
+            while (last >= 0 && m_Species[last].m_Individuals.empty()) {
+                last--;
+            }
+            if (last < 0) {
+                break;  // cannot happen (total > 0), but never spin
+            }
+            m_Species[last].RemoveIndividual(static_cast<unsigned int>(m_Species[last].m_Individuals.size() - 1));
+            if (m_Species[last].m_Individuals.empty()) {
+                m_Species.erase(m_Species.begin() + last);
+            }
+            t_total_genomes--;
+        }
+
         if (t_total_genomes < m_Parameters.PopulationSize) {
             int t_nts = m_Parameters.PopulationSize - t_total_genomes;
 
@@ -602,7 +625,11 @@ namespace NEAT {
 
     Genome g_dummy;  // empty genome
     Genome &Population::AccessGenomeByIndex(int const a_idx) {
-        ASSERT(a_idx < m_Genomes.size());
+        // The genomes live in the species; m_Genomes is only the initial seed list
+        // and goes stale after the first Epoch, so bounds-check against the
+        // actual number of individuals.
+        ASSERT(a_idx >= 0);
+        ASSERT(a_idx < static_cast<int>(NumGenomes()));
         int t_counter = 0;
 
         for (unsigned int i = 0; i < m_Species.size(); i++) {
@@ -762,7 +789,7 @@ namespace NEAT {
             IncrementNextSpeciesID();
         } else {
             // try to find a compatible species
-            Genome &t_to_compare = t_cur_species->GetRepresentative();  // was GetRepresentative()
+            Genome t_to_compare = t_cur_species->GetRepresentative();
 
             t_found = false;
             while ((t_cur_species != m_Species.end()) && (!t_found)) {

@@ -125,6 +125,27 @@ int TestInnovation(int argc, char *argv[]) {
         std::filesystem::remove(tmp, ec);
     }
 
+    // Regression: garbage (no InnovationDatabaseStart marker) must throw
+    // instead of spinning on EOF forever.
+    {
+        const auto tmp = std::filesystem::temp_directory_path() / "neatcpp_test_garbage_innov.db";
+        {
+            std::ofstream out(tmp);
+            out << "no markers here\n";
+        }
+        InnovationDatabase db;
+        std::ifstream in(tmp.string());
+        bool threw = false;
+        try {
+            db.Init(in);
+        } catch (...) {
+            threw = true;
+        }
+        CHECK(threw);
+        std::error_code ec;
+        std::filesystem::remove(tmp, ec);
+    }
+
     if (g_failures != 0) {
         std::cerr << "Test failed: TestInnovation with " << g_failures << " failure(s)\n";
         return 1;

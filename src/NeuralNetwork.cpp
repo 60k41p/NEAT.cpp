@@ -1,31 +1,34 @@
-///////////////////////////////////////////////////////////////////////////////////////////
-//    MultiNEAT - Python/C++ NeuroEvolution of Augmenting Topologies Library
-//
-//    Copyright (C) 2012 Peter Chervenski
-//
-//    This program is free software: you can redistribute it and/or modify
-//    it under the terms of the GNU Lesser General Public License as published by
-//    the Free Software Foundation, either version 3 of the License, or
-//    (at your option) any later version.
-//
-//    This program is distributed in the hope that it will be useful,
-//    but WITHOUT ANY WARRANTY; without even the implied warranty of
-//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//    GNU General Public License for more details.
-//
-//    You should have received a copy of the GNU Lesser General Public License
-//    along with this program.  If not, see < http://www.gnu.org/licenses/ >.
-//
-//    Contact info:
-//
-//    Peter Chervenski < spookey@abv.bg >
-//    Shane Ryan < shane.mcdonald.ryan@gmail.com >
-///////////////////////////////////////////////////////////////////////////////////////////
+/*
+ * NEAT.cpp: Portable, Zero-dependency C++17 NeuroEvolution Library
+ *
+ * Copyright (C) 2012 Peter Chervenski
+ * Modifications Copyright (C) 2026 Gökalp Özcan
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * This file has been modified from its original version by Gökalp Özcan in 2026.
+ *
+ * Contact info:
+ * Peter Chervenski <spookey@abv.bg>
+ * Shane Ryan <shane.mcdonald.ryan@gmail.com>
+ * Gökalp Özcan <gokalp@mail.com>
+ */
 
-///////////////////////////////////////////////////////////////////////////////
-// File:        Phenotype.cpp
-// Description: Implementation of the phenotype activation functions.
-///////////////////////////////////////////////////////////////////////////////
+/*
+ * File:        NeuralNetwork.cpp
+ * Description: Implementation of the phenotype activation functions.
+ */
 
 #include "NeuralNetwork.h"
 
@@ -114,13 +117,13 @@ namespace NEAT {
             // build an XOR network
 
             // The input neurons are 3 // indexes 0 1 2
-            Neuron t_i1, t_i2, t_i3;
+            Neuron t_i1{}, t_i2{}, t_i3{};
 
             // The output neuron       // index 3
-            Neuron t_o1;
+            Neuron t_o1{};
 
             // The hidden neuron       // index 4
-            Neuron t_h1;
+            Neuron t_h1{};
 
             m_neurons.emplace_back(t_i1);
             m_neurons.emplace_back(t_i2);
@@ -129,7 +132,7 @@ namespace NEAT {
             m_neurons.emplace_back(t_h1);
 
             // The connections
-            Connection t_c;
+            Connection t_c{};
 
             t_c.m_source_neuron_idx = 0;
             t_c.m_target_neuron_idx = 3;

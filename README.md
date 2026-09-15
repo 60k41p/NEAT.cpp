@@ -1,8 +1,8 @@
-[![CI](https://github.com/60k41p/MultiNEAT/actions/workflows/ci.yml/badge.svg)](https://github.com/60k41p/MultiNEAT/actions/workflows/ci.yml)
+[![CI](https://github.com/60k41p/NEAT.cpp/actions/workflows/ci.yml/badge.svg)](https://github.com/60k41p/NEAT.cpp/actions/workflows/ci.yml)
 
-# MultiNEAT
+# NEAT.cpp
 
-MultiNEAT is a portable C++17 library for neuroevolution — training neural networks with a genetic algorithm. It is based on NEAT, which evolves both topology and weights through complexification from minimal genomes, historical markings for crossover alignment, and speciation with fitness sharing.
+NEAT.cpp is a portable C++17 library for neuroevolution — training neural networks with a genetic algorithm. It is based on NEAT, which evolves both topology and weights through complexification from minimal genomes, historical markings for crossover alignment, and speciation with fitness sharing.
 
 * Kenneth O. Stanley and Risto Miikkulainen, "Evolving Neural Networks through Augmenting Topologies," *Evolutionary Computation* 10(2), 2002. PDF: <https://nn.cs.utexas.edu/downloads/papers/stanley.ec02.pdf>
 
@@ -23,22 +23,24 @@ MultiNEAT is a portable C++17 library for neuroevolution — training neural net
 
 ## Building
 
+All build trees live under a single git-ignored `build/` directory, one subdirectory per configuration:
+
 ```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build
+cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release
+cmake --build build/release
 ```
 
-This produces both a static library (`libMultiNEAT.a`) and a shared library (`libMultiNEAT.dylib`/`.so`/`.dll`), and installs them together with the headers:
+This produces both a static library (`libNEAT.a`) and a shared library (`libNEAT.dylib`/`.so`/`.dll`), and installs them together with the headers:
 
 ```bash
-cmake --install build
+cmake --install build/release
 ```
 
 When building and linking manually, compile with `-std=c++17`.
 
 ### Usage
 
-Add MultiNEAT as a CMake subdirectory and link against `MultiNEAT` (static) or `MultiNEAT_shared` (shared), then include the library headers:
+Add NEAT.cpp as a CMake subdirectory and link against `NEAT.cpp` (static) or `NEAT.cpp_shared` (shared), then include the library headers:
 
 ```cpp
 #include "Genome.h"
@@ -54,6 +56,8 @@ This is a fork of <https://github.com/peter-ch/MultiNEAT>.
 The primary divergence from the upstream is that the library is now `std`-only pure C++17; with Python bindings and the Boost dependency removed.
 Furthermore, traits now use `std::variant`, RNG uses `std::mt19937`, and cycle detection uses Kahn's algorithm.
 
+### Performance
+
 The conversion was benchmarked via an A/B harness against the [upstream](https://github.com/peter-ch/MultiNEAT/commit/7e3d9e326aa4d7c314fe263df18518c8e0e5aaac). Indicative 5-run medians on macOS/AppleClang — real workloads on par or faster; only the artificial pure-draw RNG microbenchmark regressed due to the libc++ `std::mt19937` cost:
 
 | Benchmark | Boost | Std-only |
@@ -62,3 +66,5 @@ The conversion was benchmarked via an A/B harness against the [upstream](https:/
 | Cycle detection | 43 ms | 20 ms |
 | End-to-end evolution | 9 ms | 8 ms |
 | RNG throughput (pure draws) | 348 ms | 957 ms |
+
+Hot genome paths were reworked algorithmically rather than tuned: repeated linear scans for neuron-id lookups are replaced by a one-time id→index table, and loop detection became a single topological sweep. On a ~1k-link genome phenotype construction is about 9x faster and pairwise compatibility distance about 4.5x faster, loop detection is now linear in the graph instead of quadratic, and small-genome builds improved by roughly a sixth. All of it is behaviour-preserving — seeded runs replay identical trajectories and solve reference tasks at the same generations, so saved genomes and running experiments are unaffected. The harness and reproducible numbers live in [benchmarks/RESULTS.md](benchmarks/RESULTS.md).

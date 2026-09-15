@@ -1,4 +1,4 @@
-# MultiNEAT code style: Google C++ style with repo-specific adjustments.
+# NEAT.cpp code style: Google C++ style with repo-specific adjustments.
 # See https://google.github.io/styleguide/cppguide.html
 # BasedOnStyle carries K&R attached braces, namespace closing comments, etc.
 # Settings marked "Deviates from Google" are deliberate repo choices.

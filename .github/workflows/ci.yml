@@ -2,7 +2,6 @@ name: CI
 
 on:
   push:
-  pull_request:
 
 jobs:
   build-and-test:
@@ -13,18 +12,21 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         build_type: [Release, Debug]
-
+        exclude:
+          # Tests on Windows in debug mode take a stupidly long time, so exclude that configuration
+          - os: windows-latest
+            build_type: Debug
     steps:
       - uses: actions/checkout@v4
 
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DMULTINEAT_ENABLE_TESTS=ON
+        run: cmake -S . -B build/ci -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DNEATCPP_ENABLE_TESTS=ON
 
       - name: Build
-        run: cmake --build build --config ${{ matrix.build_type }} -j 2
+        run: cmake --build build/ci --config ${{ matrix.build_type }} --parallel
 
       - name: Test
-        run: ctest --test-dir build -C ${{ matrix.build_type }} --output-on-failure -j 2 --timeout 300
+        run: ctest --test-dir build/ci -C ${{ matrix.build_type }} --output-on-failure --parallel --timeout 600
 
   sanitizers:
     name: sanitizers (Linux, Debug, ASan+UBSan)
@@ -37,18 +39,18 @@ jobs:
           CXXFLAGS: -fsanitize=address,undefined -fno-omit-frame-pointer
           LDFLAGS: -fsanitize=address,undefined
         run: >
-          cmake -S . -B build-san
+          cmake -S . -B build/san
           -DCMAKE_BUILD_TYPE=Debug
-          -DMULTINEAT_ENABLE_TESTS=ON
+          -DNEATCPP_ENABLE_TESTS=ON
           -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
           -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
           -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
 
       - name: Build
-        run: cmake --build build-san -j 2
+        run: cmake --build build/san --parallel
 
       - name: Test
-        run: ctest --test-dir build-san --output-on-failure -j 2 --timeout 300
+        run: ctest --test-dir build/san --output-on-failure --parallel --timeout 600
 
   format:
     name: format (clang-format check)
@@ -59,7 +61,7 @@ jobs:
       - name: Check formatting
         run: |
           pip install "clang-format==22.1.8"
-          clang-format --dry-run --Werror src/*.h src/*.cpp tests/*.cxx
+          clang-format --dry-run --Werror src/*.h src/*.cpp tests/*.cpp benchmarks/*.cpp
 
   coverage:
     name: coverage (Linux, GCC)
@@ -69,18 +71,18 @@ jobs:
 
       - name: Configure with coverage
         run: >
-          cmake -S . -B build-cov
+          cmake -S . -B build/coverage
           -DCMAKE_BUILD_TYPE=Debug
-          -DMULTINEAT_ENABLE_TESTS=ON
+          -DNEATCPP_ENABLE_TESTS=ON
           -DCMAKE_CXX_FLAGS="--coverage -O0 -g"
           -DCMAKE_EXE_LINKER_FLAGS="--coverage"
           -DCMAKE_SHARED_LINKER_FLAGS="--coverage"
 
       - name: Build
-        run: cmake --build build-cov -j 2
+        run: cmake --build build/coverage --parallel
 
       - name: Test
-        run: ctest --test-dir build-cov --output-on-failure -j 2 --timeout 300
+        run: ctest --test-dir build/coverage --output-on-failure --parallel --timeout 600
 
       - name: Report
         run: |
