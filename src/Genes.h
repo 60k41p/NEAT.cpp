@@ -47,6 +47,7 @@
 #include "Parameters.h"
 #include "Random.h"
 #include "Traits.h"
+#include "Types.h"
 #include "Utils.h"
 
 namespace NEAT {
@@ -98,11 +99,11 @@ namespace NEAT {
        private:
         // Draws an index into a discrete trait set honoring the configured selection probabilities.
         // Throws std::runtime_error when the set is empty.
-        static int pickSetIndex(const std::vector<double> &probs, size_t setSize, const char *kind, RNG &rng) {
+        static int pickSetIndex(const std::vector<Real> &probs, size_t setSize, const char *kind, RNG &rng) {
             if (setSize == 0) {
                 throw std::runtime_error(std::string("Empty set of ") + kind + " traits");
             }
-            std::vector<double> adjustedProbs = probs;
+            std::vector<Real> adjustedProbs = probs;
             adjustedProbs.resize(setSize);
             return rng.roulette(adjustedProbs);
         }
@@ -120,7 +121,7 @@ namespace NEAT {
                 }
                 if (it->second.type == "float") {
                     FloatTraitParameters itp = std::get<FloatTraitParameters>(it->second.details_);
-                    double x = rng.randFloat();
+                    Real x = rng.randFloat();
                     scale(x, 0, 1, itp.min, itp.max);
                     t = x;
                 }
@@ -172,10 +173,10 @@ namespace NEAT {
                             traits_[it->first].value = (m1 + m2) / 2;
                         }
 
-                        if (std::holds_alternative<double>(mine)) {
-                            double m1 = std::get<double>(mine);
-                            double m2 = std::get<double>(yours);
-                            traits_[it->first].value = (m1 + m2) / 2.0;
+                        if (std::holds_alternative<Real>(mine)) {
+                            Real m1 = std::get<Real>(mine);
+                            Real m2 = std::get<Real>(yours);
+                            traits_[it->first].value = (m1 + m2) / 2;
                         }
 
                         if (std::holds_alternative<std::string>(mine)) {
@@ -252,8 +253,8 @@ namespace NEAT {
                             // determine type of mutation - modify or replace, according to parameters
                             if (rng.randFloat() < itp.mutReplaceProb) {
                                 // replace
-                                double val = std::get<double>(traits_[it->first].value);
-                                double cur = val;
+                                Real val = std::get<Real>(traits_[it->first].value);
+                                Real cur = val;
                                 while (cur == val) {
                                     val = rng.randFloat();
                                     scale(val, 0.0, 1.0, itp.min, itp.max);
@@ -262,8 +263,8 @@ namespace NEAT {
                                 didMutate = true;
                             } else {
                                 // modify
-                                double val = std::get<double>(traits_[it->first].value);
-                                double cur = val;
+                                Real val = std::get<Real>(traits_[it->first].value);
+                                Real cur = val;
                                 while (cur == val) {
                                     val += rng.randFloatSigned() * itp.mutPower;
                                     clamp(val, itp.min, itp.max);
@@ -314,8 +315,8 @@ namespace NEAT {
         }
         // Per-trait absolute distances to another gene's traits (0/1 for strings, magnitude for the rest),
         // gated the same way as mutation. Throws std::runtime_error when variant types mismatch.
-        std::map<std::string, double> getTraitDistances(const std::map<std::string, Trait> &other) {
-            std::map<std::string, double> dist;
+        std::map<std::string, Real> getTraitDistances(const std::map<std::string, Trait> &other) {
+            std::map<std::string, Real> dist;
             for (std::map<std::string, Trait>::const_iterator it = other.begin(); it != other.end(); it++) {
                 TraitType mine = traits_[it->first].value;
                 TraitType yours = it->second.value;
@@ -348,9 +349,9 @@ namespace NEAT {
                         // distance between ints - calculate directly
                         dist[it->first] = std::abs(std::get<int>(mine) - std::get<int>(yours));
                     }
-                    if (std::holds_alternative<double>(mine)) {
+                    if (std::holds_alternative<Real>(mine)) {
                         // distance between floats - calculate directly
-                        dist[it->first] = std::abs(std::get<double>(mine) - std::get<double>(yours));
+                        dist[it->first] = std::abs(std::get<Real>(mine) - std::get<Real>(yours));
                     }
                     if (std::holds_alternative<std::string>(mine)) {
                         // distance between strings - matching is 0, non-matching is 1
@@ -392,15 +393,15 @@ namespace NEAT {
         int innovationID_;
 
         // The weight of the connection (mutated during evolution).
-        double weight_;
+        Real weight_;
 
         // Whether the link is recurrent (target is at an equal or earlier depth).
         bool isRecurrent_;
 
        public:
-        double getWeight() const { return weight_; }
+        Real getWeight() const { return weight_; }
 
-        void setWeight(const double weight) { weight_ = weight; }
+        void setWeight(const Real weight) { weight_ = weight; }
 
         ////////////////
         // Constructors
@@ -413,7 +414,7 @@ namespace NEAT {
             isRecurrent_ = false;
         }
 
-        LinkGene(int inID, int outID, int innovID, double wgt, bool recurrent = false) {
+        LinkGene(int inID, int outID, int innovID, Real wgt, bool recurrent = false) {
             fromNeuronID_ = inID;
             toNeuronID_ = outID;
             innovationID_ = innovID;
@@ -481,7 +482,7 @@ namespace NEAT {
         // Display coordinates, safe to access directly.
         int x, y;
         // Depth of the neuron within the network (0 = input side).
-        double splitY_;
+        Real splitY_;
 
         /////////////////////////////////////////////////////////
         // Any additional properties of the neuron
@@ -506,13 +507,13 @@ namespace NEAT {
         // Sine    : using A    (frequency, phase)
         // Square  : using A, B (high phase lenght, low phase length)
         // Linear  : using B    (shift)
-        double a_, b_;
+        Real a_, b_;
 
         // Time constant value used when the neuron is activating in leaky integrator mode
-        double timeConstant_;
+        Real timeConstant_;
 
         // Bias value used when the neuron is activating in leaky integrator mode
-        double bias_;
+        Real bias_;
 
         // The type of activation function the neuron has
         ActivationFunction actFunction_;
@@ -538,7 +539,7 @@ namespace NEAT {
                 ;
         }
 
-        NeuronGene(NeuronType type, int id, double splity) {
+        NeuronGene(NeuronType type, int id, Real splity) {
             id_ = id;
             type_ = type;
             splitY_ = splity;
@@ -586,10 +587,10 @@ namespace NEAT {
 
         NeuronType type() const { return type_; }
 
-        double splitY() const { return splitY_; }
+        Real splitY() const { return splitY_; }
 
         // Initializing
-        void init(double a, double b, double timeConstant, double bias, ActivationFunction actFunc) {
+        void init(Real a, Real b, Real timeConstant, Real bias, ActivationFunction actFunc) {
             a_ = a;
             b_ = b;
             timeConstant_ = timeConstant;

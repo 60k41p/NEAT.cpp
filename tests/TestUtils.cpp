@@ -8,6 +8,8 @@
 
 #include "Utils.h"
 
+using NEAT::Real;
+
 namespace {
 
     int g_failures = 0;
@@ -20,7 +22,7 @@ namespace {
         }                                                                                   \
     } while (0)
 
-    bool near(double a, double b, double eps = 1e-9) { return std::fabs(a - b) <= eps; }
+    bool near(Real a, Real b, Real eps = 1e-9) { return std::fabs(a - b) <= eps; }
 
 }  // namespace
 
@@ -31,18 +33,18 @@ int TestUtils(int argc, char *argv[]) {
 
     // GetMaxMin
     {
-        std::vector<double> v{3.0, -1.5, 7.25, 0.0};
-        double mn = 0.0, mx = 0.0;
+        std::vector<Real> v{3.0, -1.5, 7.25, 0.0};
+        Real mn = 0.0, mx = 0.0;
         getMaxMin(v, mn, mx);
         CHECK(near(mn, -1.5));
         CHECK(near(mx, 7.25));
     }
 
     // Regression: all-negative input must yield the most-negative value as max,
-    // not the smallest positive double (numeric_limits::min() seeding bug).
+    // not the smallest positive Real (numeric_limits::min() seeding bug).
     {
-        std::vector<double> v{-5.0, -3.0, -9.0, -0.25};
-        double mn = 0.0, mx = 0.0;
+        std::vector<Real> v{-5.0, -3.0, -9.0, -0.25};
+        Real mn = 0.0, mx = 0.0;
         getMaxMin(v, mn, mx);
         CHECK(near(mn, -9.0));
         CHECK(near(mx, -0.25));
@@ -54,13 +56,13 @@ int TestUtils(int argc, char *argv[]) {
         CHECK(intToString(-42) == std::string("-42"));
         CHECK(intToString(12345) == std::string("12345"));
         // ftos must at least parse back to the same value
-        const double x = 3.25;
-        CHECK(near(std::stod(floatToString(x)), x, 1e-9));
+        const Real x = 3.25;
+        CHECK(near(std::stof(floatToString(x)), x, 1e-6));
     }
 
-    // Clamp double / float / int
+    // Clamp Real / float / int
     {
-        double d = -5.0;
+        Real d = -5.0;
         clamp(d, -1.0, 1.0);
         CHECK(near(d, -1.0));
         d = 5.0;
@@ -98,9 +100,9 @@ int TestUtils(int argc, char *argv[]) {
         CHECK(roundUnderOffset(1.2, 0.1) == 2);
     }
 
-    // Scale double / float: [0..4] -> [-12..12], 2 maps to 0
+    // Scale Real / float: [0..4] -> [-12..12], 2 maps to 0
     {
-        double a = 2.0;
+        Real a = 2.0;
         scale(a, 0.0, 4.0, -12.0, 12.0);
         CHECK(near(a, 0.0));
         a = 0.0;
@@ -118,7 +120,7 @@ int TestUtils(int argc, char *argv[]) {
     // Scale with a degenerate source range must not throw; result is
     // inf/nan by construction (division by zero). Just document it.
     {
-        double a = 1.0;
+        Real a = 1.0;
         scale(a, 1.0, 1.0, 0.0, 1.0);
         CHECK(std::isinf(a) || std::isnan(a));
     }

@@ -42,6 +42,8 @@
 #include <variant>
 #include <vector>
 
+#include "Types.h"
+
 namespace NEAT {
     // A single selectable integer of a discrete trait set (e.g. a "loid" selector). Compared by value.
     class IntSetElement {
@@ -65,7 +67,7 @@ namespace NEAT {
     class FloatSetElement {
        public:
         // The selected float.
-        double value;
+        Real value;
 
         // Comparison operator (compares by value).
         bool operator==(const FloatSetElement &rhs) const { return rhs.value == value; }
@@ -80,8 +82,8 @@ namespace NEAT {
         }
     };
 
-    // The runtime value of any trait: plain int/double/string or one discrete-set element.
-    using TraitType = std::variant<int, double, std::string, IntSetElement, FloatSetElement>;
+    // The runtime value of any trait: plain int/Real/string or one discrete-set element.
+    using TraitType = std::variant<int, Real, std::string, IntSetElement, FloatSetElement>;
 
     // Mutation parameters for an integer trait: uniform init/mutation inside [min .. max].
     class IntTraitParameters {
@@ -91,7 +93,7 @@ namespace NEAT {
         // Maximum perturbation up/down applied by a "modify" (non-replace) mutation.
         int mutPower;
         // Probability that a mutation replaces the value instead of perturbing it.
-        double mutReplaceProb;
+        Real mutReplaceProb;
 
         // Builds a zeroed parameter set.
         IntTraitParameters() {
@@ -117,11 +119,11 @@ namespace NEAT {
     class FloatTraitParameters {
        public:
         // Inclusive value range.
-        double min, max;
+        Real min, max;
         // Maximum perturbation up/down applied by a "modify" (non-replace) mutation.
-        double mutPower;
+        Real mutPower;
         // Probability that a mutation replaces the value instead of perturbing it.
-        double mutReplaceProb;
+        Real mutReplaceProb;
 
         // Builds a zeroed parameter set.
         FloatTraitParameters() {
@@ -149,7 +151,7 @@ namespace NEAT {
         // The admissible strings.
         std::vector<std::string> set;
         // Per-entry selection probabilities (resized to the set; see Gene::pickSetIndex in src/Genes.h).
-        std::vector<double> probs;
+        std::vector<Real> probs;
         // Assignment operator.
         StringTraitParameters &operator=(const StringTraitParameters &g) {
             if (this != &g) {
@@ -166,7 +168,7 @@ namespace NEAT {
         // The admissible integers.
         std::vector<IntSetElement> set;
         // Per-entry selection probabilities (resized to the set; see Gene::pickSetIndex in src/Genes.h).
-        std::vector<double> probs;
+        std::vector<Real> probs;
 
         // Assignment operator.
         IntSetTraitParameters &operator=(const IntSetTraitParameters &g) {
@@ -184,7 +186,7 @@ namespace NEAT {
         // The admissible floats.
         std::vector<FloatSetElement> set;
         // Per-entry selection probabilities (resized to the set; see Gene::pickSetIndex in src/Genes.h).
-        std::vector<double> probs;
+        std::vector<Real> probs;
 
         // Assignment operator.
         FloatSetTraitParameters &operator=(const FloatSetTraitParameters &g) {
@@ -203,9 +205,9 @@ namespace NEAT {
     class TraitParameters {
        public:
         // Weight of this trait's distance in the genome compatibility calculation.
-        double importanceCoeff_;
+        Real importanceCoeff_;
         // Per-reproduction probability that this trait is mutated.
-        double mutationProb_;
+        Real mutationProb_;
 
         // Type tag: "int", "float", "str", "intset" or "floatset" (legacy files may say "string"/"pyobject"; only the five above are honored).
         std::string type;

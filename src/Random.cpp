@@ -65,23 +65,23 @@ namespace NEAT {
     }
 
     // Returns a random number from a uniform distribution in the range of [0 .. 1]
-    double RNG::randFloat() {
-        std::uniform_real_distribution<double> dist(0.0, 1.0);
+    Real RNG::randFloat() {
+        std::uniform_real_distribution<Real> dist(0.0, 1.0);
         return dist(gen_);
     }
 
     // Returns a random number from a uniform distribution in the range of [-1 .. 1]
-    double RNG::randFloatSigned() { return (randFloat() - randFloat()); }
+    Real RNG::randFloatSigned() { return (randFloat() - randFloat()); }
 
     // Returns a random number from a gaussian (normal) distribution in the range of [-1 .. 1]
-    double RNG::randGaussSigned() {
-        std::normal_distribution<double> dist;
-        double pick = dist(gen_);
+    Real RNG::randGaussSigned() {
+        std::normal_distribution<Real> dist;
+        Real pick = dist(gen_);
         clamp(pick, -1, 1);
         return pick;
     }
 
-    int RNG::roulette(const std::vector<double> &probs) {
+    int RNG::roulette(const std::vector<Real> &probs) {
         std::discrete_distribution<int> dDist(probs.begin(), probs.end());
         return dDist(gen_);
     }

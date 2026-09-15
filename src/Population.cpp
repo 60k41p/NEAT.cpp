@@ -49,7 +49,7 @@
 namespace NEAT {
 
     // The constructor
-    Population::Population(const Genome &seed, const Parameters &parameters, bool randomizeWeights, double randomizationRange, int rngSeed) {
+    Population::Population(const Genome &seed, const Parameters &parameters, bool randomizeWeights, Real randomizationRange, int rngSeed) {
         rng_.seed(rngSeed);
         bestFitnessEver_ = 0.0;
         parameters_ = parameters;
@@ -285,8 +285,8 @@ namespace NEAT {
         ASSERT(genomes_.size() > 0);
         ASSERT(genomes_.size() == parameters_.populationSize);
 
-        double totalAdjustedFitness = 0.0;
-        double averageAdjustedFitness = 0.0;
+        Real totalAdjustedFitness = 0.0;
+        Real averageAdjustedFitness = 0.0;
         Genome t;
 
         // get the total adjusted fitness for all individuals
@@ -301,7 +301,7 @@ namespace NEAT {
         // must be above 0
         ASSERT(totalAdjustedFitness > 0.0);
 
-        averageAdjustedFitness = totalAdjustedFitness / static_cast<double>(parameters_.populationSize);
+        averageAdjustedFitness = totalAdjustedFitness / static_cast<Real>(parameters_.populationSize);
         if (averageAdjustedFitness == 0.0) {
             averageAdjustedFitness = 1.0;
         }
@@ -421,10 +421,10 @@ namespace NEAT {
                 // Make sure all are evaluated as we don't run in realtime
                 species_[i].individuals_[j].setEvaluated();
 
-                const double fitness = species_[i].individuals_[j].getFitness();
+                const Real fitness = species_[i].individuals_[j].getFitness();
                 if (bestFitnessEver_ < fitness) {
                     // Reset the stagnation counter only if the fitness jump is greater or equal to the delta.
-                    if (fabs(fitness - bestFitnessEver_) >= parameters_.stagnationDelta) {
+                    if (std::fabs(fitness - bestFitnessEver_) >= parameters_.stagnationDelta) {
                         gensSinceBestFitnessLastChanged_ = 0;
                     }
 
@@ -435,7 +435,7 @@ namespace NEAT {
         }
 
         // Find and save the current best genome
-        double bestf = std::numeric_limits<double>::min();
+        Real bestf = std::numeric_limits<Real>::min();
         for (unsigned int i = 0; i < species_.size(); i++) {
             for (unsigned int j = 0; j < species_[i].individuals_.size(); j++) {
                 if (species_[i].individuals_[j].getFitness() > bestf) {
@@ -513,7 +513,7 @@ namespace NEAT {
 
                         // Reset variables for simplifying mode
                         gensSinceMPCLastChanged_ = 0;
-                        oldMPC_ = std::numeric_limits<double>::max();  // Really big one
+                        oldMPC_ = std::numeric_limits<Real>::max();  // Really big one
 
                         // reset the age of species
                         for (unsigned int i = 0; i < species_.size(); i++) {
@@ -618,7 +618,7 @@ namespace NEAT {
     }
 
     Genome Population::getBestGenome() const {
-        double best = std::numeric_limits<double>::min();
+        Real best = std::numeric_limits<Real>::min();
         unsigned int indexSpecies = 0;
         unsigned int indexGenome = 0;
         for (unsigned int i = 0; i < species_.size(); i++) {
@@ -704,7 +704,7 @@ namespace NEAT {
 
         unsigned int curspecies = 0;
         // do
-        std::vector<double> probs;
+        std::vector<Real> probs;
         for (int i = 0; i < species_.size(); i++) {
             if ((species_[i].numEvaluated() == 0) || (species_[i].numIndividuals() == 0)) {
                 probs.push_back(0.0);
@@ -819,14 +819,14 @@ namespace NEAT {
                 //     m_Species[i].m_Individuals[j].SetFitness(0.00001);
                 // }
 
-                double fitness = species_[i].individuals_[j].getFitness();
+                Real fitness = species_[i].individuals_[j].getFitness();
                 if (std::isnan(fitness) || std::isinf(fitness)) {
                     fitness = 0;
                 }
 
                 if (fitness > bestFitnessEver_) {
                     // Reset the stagnation counter only if the fitness jump is greater or equal to the delta.
-                    if (fabs(fitness - bestFitnessEver_) >= parameters_.stagnationDelta) {
+                    if (std::fabs(fitness - bestFitnessEver_) >= parameters_.stagnationDelta) {
                         evalsSinceBestFitnessLastChanged_ = 0;
                     }
 
@@ -836,7 +836,7 @@ namespace NEAT {
             }
         }
 
-        double f = std::numeric_limits<double>::min();
+        Real f = std::numeric_limits<Real>::min();
         for (int i = 0; i < species_.size(); i++) {
             for (int j = 0; j < species_[i].individuals_.size(); j++) {
                 if (species_[i].individuals_[j].getFitness() > f) {
@@ -854,7 +854,7 @@ namespace NEAT {
         // adjust the compatibility treshold
         bool changed = false;
         if (parameters_.dynamicCompatibility == true) {
-            double oldcompat = parameters_.compatTreshold;
+            Real oldcompat = parameters_.compatTreshold;
             if ((numEvaluations_ % parameters_.compatTreshChangeIntervalEvaluations) == 0) {
                 if (species_.size() > parameters_.maxSpecies) {
                     parameters_.compatTreshold += parameters_.compatTresholdModifier;
@@ -1006,7 +1006,7 @@ namespace NEAT {
     Genome Population::removeWorstIndividual() {
         unsigned int worstIndex = 0;         // within the species
         unsigned int worstSpeciesIndex = 0;  // within the population
-        double worstFitness = std::numeric_limits<double>::max();
+        Real worstFitness = std::numeric_limits<Real>::max();
         int numev = 0;
 
         Genome genome;
@@ -1016,12 +1016,12 @@ namespace NEAT {
         // Find and kill the individual with the worst *adjusted* fitness
         for (unsigned int i = 0; i < species_.size(); i++) {
             if (species_[i].individuals_.size() > 0) {
-                double adjinv = 1.0 / static_cast<double>(species_[i].individuals_.size());
+                Real adjinv = 1.0 / static_cast<Real>(species_[i].individuals_.size());
                 for (unsigned int j = 0; j < species_[i].individuals_.size(); j++) {
                     // only evaluated individuals can be removed
                     if (species_[i].individuals_[j].isEvaluated()) {
                         numev++;
-                        double adjustedFitness = species_[i].individuals_[j].getFitness() * adjinv;
+                        Real adjustedFitness = species_[i].individuals_[j].getFitness() * adjinv;
                         if (std::isnan(adjustedFitness) || std::isinf(adjustedFitness)) {
                             adjustedFitness = 0;
                         }
@@ -1086,15 +1086,15 @@ namespace NEAT {
         }
     }
 
-    double Population::computeSparseness(Genome &genome) {
+    Real Population::computeSparseness(Genome &genome) {
         // this will hold the distances from our new behavior
-        std::vector<double> distancesList;
+        std::vector<Real> distancesList;
         distancesList.clear();
 
         // first add all distances from the population
         for (unsigned int i = 0; i < species_.size(); i++) {
             for (unsigned int j = 0; j < species_[i].individuals_.size(); j++) {
-                double distance = genome.phenotypeBehavior_->distanceTo(species_[i].individuals_[j].phenotypeBehavior_);
+                Real distance = genome.phenotypeBehavior_->distanceTo(species_[i].individuals_[j].phenotypeBehavior_);
                 distancesList.emplace_back(distance);
             }
         }
@@ -1108,7 +1108,7 @@ namespace NEAT {
         std::sort(distancesList.begin(), distancesList.end());
 
         // now compute the sparseness
-        double sparseness = 0;
+        Real sparseness = 0;
         for (unsigned int i = 1; i < (parameters_.noveltySearchK + 1); i++) {
             sparseness += distancesList[i];
         }
@@ -1148,7 +1148,7 @@ namespace NEAT {
         }
 
         // We have the new behavior, now let's calculate the sparseness of the point in behavior space
-        double sparseness = computeSparseness(*newBaby);
+        Real sparseness = computeSparseness(*newBaby);
 
         // OK now we have the sparseness for this behavior if the sparseness is above Pmin, add this behavior to the archive
         gensSinceLastArchiving_++;

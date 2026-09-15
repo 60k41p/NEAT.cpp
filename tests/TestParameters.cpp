@@ -16,6 +16,8 @@
 
 #include "Parameters.h"
 
+using NEAT::Real;
+
 namespace {
 
     int g_failures = 0;
@@ -28,7 +30,7 @@ namespace {
         }                                                                                   \
     } while (0)
 
-    bool near(double a, double b, double eps = 1e-9) { return std::fabs(a - b) <= eps; }
+    bool near(Real a, Real b, Real eps = 1e-9) { return std::fabs(a - b) <= eps; }
 
     std::string readWholeFile(const std::filesystem::path &p) {
         std::ifstream in(p, std::ios::binary);

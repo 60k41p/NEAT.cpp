@@ -55,7 +55,7 @@ namespace NEAT {
 
     bool genomeGreater(Genome &ls, Genome &rs) { return (ls.getFitness() > rs.getFitness()); }
 
-    bool indexFitnessPairGreater(std::pair<int, double> &ls, std::pair<int, double> &rs) { return (ls.second > rs.second); }
+    bool indexFitnessPairGreater(std::pair<int, Real> &ls, std::pair<int, Real> &rs) { return (ls.second > rs.second); }
 
     // initializes a species with a representative genome and an ID number
     Species::Species(const Genome &genome, const Parameters &parameters, int id) {
@@ -124,7 +124,7 @@ namespace NEAT {
         }
 
         // Make a pool of only evaluated individuals!
-        std::vector<std::pair<int, double> > evaluated;
+        std::vector<std::pair<int, Real> > evaluated;
         for (unsigned int i = 0; i < individuals_.size(); i++) {
             if (individuals_[i].isEvaluated()) {
                 evaluated.emplace_back(i, individuals_[i].getFitness());
@@ -147,7 +147,7 @@ namespace NEAT {
         int chosenOne = 0;
 
         if (parameters.tournamentSelection) {
-            std::vector<std::pair<int, double> > picked;
+            std::vector<std::pair<int, Real> > picked;
             // choose N individuals at random
             for (int i = 0; i < parameters.tournamentSize; i++) {
                 int c = rng.randInt(0, evaluated.size() - 1);
@@ -155,7 +155,7 @@ namespace NEAT {
             }
 
             std::sort(picked.begin(), picked.end(), indexFitnessPairGreater);
-            std::vector<double> probs;
+            std::vector<Real> probs;
             for (int i = 0; i < picked.size(); i++) {
                 probs.push_back(picked.size() - i);  // t_picked[i].second);
             }
@@ -166,7 +166,7 @@ namespace NEAT {
 
             // Here might be introduced better selection scheme, but this works OK for now
             if (!parameters.rouletteWheelSelection) {
-                int numParents = static_cast<int>(parameters.survivalRate * static_cast<double>(individuals_.size()));
+                int numParents = static_cast<int>(parameters.survivalRate * static_cast<Real>(individuals_.size()));
 
                 if (numParents >= evaluated.size()) {
                     numParents = evaluated.size() - 1;
@@ -179,7 +179,7 @@ namespace NEAT {
             } else {
                 // roulette wheel selection
                 int numParents = evaluated.size();
-                std::vector<double> probs;
+                std::vector<Real> probs;
                 for (unsigned int i = 0; i < numParents; i++) {
                     probs.push_back(evaluated[i].second);
                 }
@@ -219,10 +219,10 @@ namespace NEAT {
             throw std::runtime_error(message.str());
         }
 
-        double maxFitness = std::numeric_limits<double>::min();
+        Real maxFitness = std::numeric_limits<Real>::min();
         int leaderIndex = 0;
         for (unsigned int i = 0; i < individuals_.size(); i++) {
-            double f = individuals_[i].getFitness();
+            Real f = individuals_[i].getFitness();
             if (maxFitness < f) {
                 maxFitness = f;
                 leaderIndex = i;
@@ -259,7 +259,7 @@ namespace NEAT {
 
         // iterate through the members
         for (unsigned int i = 0; i < individuals_.size(); i++) {
-            double fitness = individuals_[i].getFitness();
+            Real fitness = individuals_[i].getFitness();
 
             // the fitness must be positive
             ASSERT(fitness >= 0.0);
@@ -303,7 +303,7 @@ namespace NEAT {
             }
 
             // Compute the adjusted fitness for this member
-            individuals_[i].setAdjFitness(fitness / static_cast<double>(ms));
+            individuals_[i].setAdjFitness(fitness / static_cast<Real>(ms));
         }
     }
 
@@ -387,8 +387,8 @@ namespace NEAT {
                             // There is a probability that the father may come from another species
                             if ((rng.randFloat() < parameters.interspeciesCrossoverRate) && (pop.species_.size() > 1)) {
                                 /// Find different species via roulette over average fitness as probability
-                                std::vector<double> probs;
-                                double allp = 0;
+                                std::vector<Real> probs;
+                                Real allp = 0;
                                 for (int i = 0; i < pop.species_.size(); i++) {
                                     if (pop.species_[i].id_ == id_) {
                                         probs.push_back(0.0);
@@ -562,13 +562,13 @@ namespace NEAT {
     ////////////
     // Real-time code
     void Species::calculateAverageFitness() {
-        double totalFitness = 0;
+        Real totalFitness = 0;
         int numIndividuals = 0;
 
         // consider individuals that were evaluated only!
         for (unsigned int i = 0; i < individuals_.size(); i++) {
             if (individuals_[i].isEvaluated()) {
-                double tf = individuals_[i].getFitness();
+                Real tf = individuals_[i].getFitness();
                 if (std::isinf(tf) || std::isnan(tf))  // nan/inf guard
                 {
                     tf = 0.0;
@@ -579,7 +579,7 @@ namespace NEAT {
         }
 
         if (numIndividuals > 0) {
-            averageFitness_ = totalFitness / static_cast<double>(numIndividuals);
+            averageFitness_ = totalFitness / static_cast<Real>(numIndividuals);
         } else {
             averageFitness_ = 0;
         }
@@ -623,8 +623,8 @@ namespace NEAT {
                     // There is a probability that the father may come from another species
                     if ((rng.randFloat() < parameters.interspeciesCrossoverRate) && (pop.species_.size() > 1)) {
                         // Find different species via roulette over average fitness as probability
-                        std::vector<double> probs;
-                        double allp = 0;
+                        std::vector<Real> probs;
+                        Real allp = 0;
                         for (int i = 0; i < pop.species_.size(); i++) {
                             if ((pop.species_[i].id_ == id_) || (pop.species_[i].numEvaluated() == 0)) {
                                 probs.push_back(0.0);
@@ -873,7 +873,7 @@ namespace NEAT {
             MUTATE_GENOME_TRAITS
         };
         std::vector<int> muts;
-        std::vector<double> mutProbs;
+        std::vector<Real> mutProbs;
 
         // ADD_NODE;
         mutProbs.emplace_back(parameters.mutateAddNeuronProb);

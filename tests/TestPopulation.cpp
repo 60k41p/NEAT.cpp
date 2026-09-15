@@ -16,6 +16,8 @@
 #include "Population.h"
 #include "Random.h"
 
+using NEAT::Real;
+
 namespace {
 
     int g_failures = 0;
@@ -55,7 +57,7 @@ namespace {
     void evaluateByLinkCount(NEAT::Population &pop) {
         for (unsigned i = 0; i < pop.numGenomes(); ++i) {
             NEAT::Genome &g = pop.accessGenomeByIndex(static_cast<int>(i));
-            g.setFitness(1.0 + static_cast<double>(g.numLinks()));
+            g.setFitness(1.0 + static_cast<Real>(g.numLinks()));
             g.setEvaluated();
         }
     }
@@ -124,8 +126,8 @@ int TestPopulation(int argc, char *argv[]) {
             pop.sort();
             return pop.getBestGenome().getFitness();
         };
-        const double a = run();
-        const double b = run();
+        const Real a = run();
+        const Real b = run();
         CHECK(a == b);
     }
 
@@ -234,7 +236,7 @@ int TestPopulation(int argc, char *argv[]) {
         Parameters params = smallParams();
         Population pop(makeSeed(), params, true, 1.0, 9);
         evaluateByLinkCount(pop);
-        double minfit = std::numeric_limits<double>::max();
+        Real minfit = std::numeric_limits<Real>::max();
         for (unsigned i = 0; i < pop.numGenomes(); ++i) {
             minfit = std::min(minfit, pop.accessGenomeByIndex(static_cast<int>(i)).getFitness());
         }

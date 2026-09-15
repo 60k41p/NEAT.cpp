@@ -51,19 +51,19 @@ namespace NEAT {
     // The set of activation functions //
     /////////////////////////////////////
 
-    inline double activationSigmoidUnsigned(double x, double slope, double shift) { return 1.0 / (1.0 + exp(-slope * x - shift)); }
+    inline Real activationSigmoidUnsigned(Real x, Real slope, Real shift) { return 1.0 / (1.0 + std::exp(-slope * x - shift)); }
 
-    inline double activationSigmoidSigned(double x, double slope, double shift) {
-        double y = activationSigmoidUnsigned(x, slope, shift);
+    inline Real activationSigmoidSigned(Real x, Real slope, Real shift) {
+        Real y = activationSigmoidUnsigned(x, slope, shift);
         return (y - 0.5) * 2.0;
     }
 
-    inline double activationTanh(double x, double slope, double shift) { return tanh(x * slope); }
+    inline Real activationTanh(Real x, Real slope, Real shift) { return std::tanh(x * slope); }
 
-    inline double activationTanhCubic(double x, double slope, double shift) { return tanh(x * x * x * slope); }
+    inline Real activationTanhCubic(Real x, Real slope, Real shift) { return std::tanh(x * x * x * slope); }
 
-    inline double activationStepSigned(double x, double shift) {
-        double y;
+    inline Real activationStepSigned(Real x, Real shift) {
+        Real y;
         if (x > shift) {
             y = 1.0;
         } else {
@@ -73,7 +73,7 @@ namespace NEAT {
         return y;
     }
 
-    inline double activationStepUnsigned(double x, double shift) {
+    inline Real activationStepUnsigned(Real x, Real shift) {
         if (x > (0.5 + shift)) {
             return 1.0;
         } else {
@@ -81,31 +81,31 @@ namespace NEAT {
         }
     }
 
-    inline double activationGaussSigned(double x, double slope, double shift) {
-        double y = exp(-slope * x * x + shift);  // TODO: Need separate a, b per activation function
+    inline Real activationGaussSigned(Real x, Real slope, Real shift) {
+        Real y = std::exp(-slope * x * x + shift);  // TODO: Need separate a, b per activation function
         return (y - 0.5) * 2.0;
     }
 
-    inline double activationGaussUnsigned(double x, double slope, double shift) { return exp(-slope * x * x + shift); }
+    inline Real activationGaussUnsigned(Real x, Real slope, Real shift) { return std::exp(-slope * x * x + shift); }
 
-    inline double activationAbs(double x, double shift) { return ((x + shift) < 0.0) ? -(x + shift) : (x + shift); }
+    inline Real activationAbs(Real x, Real shift) { return ((x + shift) < 0.0) ? -(x + shift) : (x + shift); }
 
-    inline double activationSineSigned(double x, double freq, double shift) { return sin(x * freq + shift); }
+    inline Real activationSineSigned(Real x, Real freq, Real shift) { return std::sin(x * freq + shift); }
 
-    inline double activationSineUnsigned(double x, double freq, double shift) {
-        double y = sin((x * freq + shift));
+    inline Real activationSineUnsigned(Real x, Real freq, Real shift) {
+        Real y = std::sin((x * freq + shift));
         return (y + 1.0) / 2.0;
     }
 
-    inline double activationLinear(double x, double shift) { return (x + shift); }
+    inline Real activationLinear(Real x, Real shift) { return (x + shift); }
 
-    inline double activationRelu(double x) { return (x > 0) ? x : 0; }
+    inline Real activationRelu(Real x) { return (x > 0) ? x : 0; }
 
-    inline double activationSoftplus(double x) { return log(1 + exp(x)); }
+    inline Real activationSoftplus(Real x) { return std::log(1 + std::exp(x)); }
 
-    double unsignedSigmoidDerivative(double x) { return x * (1 - x); }
+    Real unsignedSigmoidDerivative(Real x) { return x * (1 - x); }
 
-    double tanhDerivative(double x) { return 1 - x * x; }
+    Real tanhDerivative(Real x) { return 1 - x * x; }
 
     ///////////////////////////////////////
     // Neural network class implementation
@@ -172,7 +172,7 @@ namespace NEAT {
 
             // Initialize the network's weights (make them random)
             std::mt19937 weightEngine(std::random_device{}());
-            std::uniform_real_distribution<double> weightDist(-0.5, 0.5);
+            std::uniform_real_distribution<Real> weightDist(-0.5, 0.5);
             for (unsigned int i = 0; i < connections_.size(); i++) {
                 connections_[i].weight_ = weightDist(weightEngine);
             }
@@ -244,10 +244,10 @@ namespace NEAT {
         // Now loop nodes_activesums, pass the signals through the activation function and store the result back to nodes_activations also skip inputs since
         // they do not get an activation
         for (unsigned int i = numInputs_; i < neurons_.size(); i++) {
-            double x = neurons_[i].activesum_;
+            Real x = neurons_[i].activesum_;
             neurons_[i].activesum_ = 0;
             // Apply the activation function
-            double y = 0.0;
+            Real y = 0.0;
             y = activationSigmoidUnsigned(x, neurons_[i].a_, neurons_[i].b_);
             neurons_[i].activation_ = y;
         }
@@ -266,10 +266,10 @@ namespace NEAT {
         // Now loop nodes_activesums, pass the signals through the activation function and store the result back to nodes_activations also skip inputs since
         // they do not get an activation
         for (unsigned int i = numInputs_; i < neurons_.size(); i++) {
-            double x = neurons_[i].activesum_;
+            Real x = neurons_[i].activesum_;
             neurons_[i].activesum_ = 0;
             // Apply the activation function
-            double y = 0.0;
+            Real y = 0.0;
             switch (neurons_[i].activationFunctionType_) {
                 case SIGNED_SIGMOID:
                     y = activationSigmoidSigned(x, neurons_[i].a_, neurons_[i].b_);
@@ -334,10 +334,10 @@ namespace NEAT {
         // Now loop nodes_activesums, pass the signals through the activation function and store the result back to nodes_activations also skip inputs since
         // they do not get an activation
         for (unsigned int i = numInputs_; i < neurons_.size(); i++) {
-            double x = neurons_[i].activesum_ + neurons_[i].bias_;
+            Real x = neurons_[i].activesum_ + neurons_[i].bias_;
             neurons_[i].activesum_ = 0;
             // Apply the activation function
-            double y = 0.0;
+            Real y = 0.0;
             switch (neurons_[i].activationFunctionType_) {
                 case SIGNED_SIGMOID:
                     y = activationSigmoidSigned(x, neurons_[i].a_, neurons_[i].b_);
@@ -389,7 +389,7 @@ namespace NEAT {
         }
     }
 
-    void NeuralNetwork::activateLeaky(double dtime) {
+    void NeuralNetwork::activateLeaky(Real dtime) {
         // Loop connections. Calculate each connection's output signal.
         for (unsigned int i = 0; i < connections_.size(); i++) {
             connections_[i].signal_ = neurons_[connections_[i].sourceNeuronIndex_].activation_ * connections_[i].weight_;
@@ -401,16 +401,16 @@ namespace NEAT {
         }
         // Now we have the leaky integrator step for the neurons
         for (unsigned int i = numInputs_; i < neurons_.size(); i++) {
-            double timeFactor = dtime / neurons_[i].timeconst_;
+            Real timeFactor = dtime / neurons_[i].timeconst_;
             neurons_[i].membranePotential_ = (1.0 - timeFactor) * neurons_[i].membranePotential_ + timeFactor * neurons_[i].activesum_;
         }
         // Now loop nodes_activesums, pass the signals through the activation function and store the result back to nodes_activations also skip inputs since
         // they do not get an activation
         for (unsigned int i = numInputs_; i < neurons_.size(); i++) {
-            double x = neurons_[i].membranePotential_ + neurons_[i].bias_;
+            Real x = neurons_[i].membranePotential_ + neurons_[i].bias_;
             neurons_[i].activesum_ = 0;
             // Apply the activation function
-            double y = 0.0;
+            Real y = 0.0;
             switch (neurons_[i].activationFunctionType_) {
                 case SIGNED_SIGMOID:
                     y = activationSigmoidSigned(x, neurons_[i].a_, neurons_[i].b_);
@@ -476,7 +476,7 @@ namespace NEAT {
             for (unsigned int j = 0; j < neurons_.size(); j++)
                 for (unsigned int k = 0; k < neurons_.size(); k++) neurons_[k].sensitivityMatrix_[i][j] = 0;
     }
-    void NeuralNetwork::input(std::vector<double> &inputs) {
+    void NeuralNetwork::input(std::vector<Real> &inputs) {
         unsigned mx = inputs.size();
         if (mx > numInputs_) {
             mx = numInputs_;
@@ -487,8 +487,8 @@ namespace NEAT {
         }
     }
 
-    std::vector<double> NeuralNetwork::output() {
-        std::vector<double> output;
+    std::vector<Real> NeuralNetwork::output() {
+        std::vector<Real> output;
         for (int i = 0; i < numOutputs_; i++) {
             output.emplace_back(neurons_[i + numInputs_].activation_);
         }
@@ -497,10 +497,10 @@ namespace NEAT {
 
     void NeuralNetwork::adapt(Parameters &parameters) {
         // find max absolute magnitude of the weight
-        double maxWeight = -999999999;
+        Real maxWeight = -999999999;
         for (unsigned int i = 0; i < connections_.size(); i++) {
-            if (fabs(connections_[i].weight_) > maxWeight) {
-                maxWeight = fabs(connections_[i].weight_);
+            if (std::fabs(connections_[i].weight_) > maxWeight) {
+                maxWeight = std::fabs(connections_[i].weight_);
             }
         }
 
@@ -508,17 +508,17 @@ namespace NEAT {
             /////////////////////////////////////
             // modify weight of that connection
             ////
-            double incomingNeuronActivation = neurons_[connections_[i].sourceNeuronIndex_].activation_;
-            double outgoingNeuronActivation = neurons_[connections_[i].targetNeuronIndex_].activation_;
+            Real incomingNeuronActivation = neurons_[connections_[i].sourceNeuronIndex_].activation_;
+            Real outgoingNeuronActivation = neurons_[connections_[i].targetNeuronIndex_].activation_;
             if (connections_[i].weight_ > 0)  // positive weight
             {
-                double delta = (connections_[i].hebbRate_ * (maxWeight - connections_[i].weight_) * incomingNeuronActivation * outgoingNeuronActivation) +
-                               connections_[i].hebbPreRate_ * maxWeight * incomingNeuronActivation * (outgoingNeuronActivation - 1.0);
+                Real delta = (connections_[i].hebbRate_ * (maxWeight - connections_[i].weight_) * incomingNeuronActivation * outgoingNeuronActivation) +
+                             connections_[i].hebbPreRate_ * maxWeight * incomingNeuronActivation * (outgoingNeuronActivation - 1.0);
                 connections_[i].weight_ = (connections_[i].weight_ + delta);
             } else if (connections_[i].weight_ < 0)  // negative weight
             {
                 // In the inhibatory case, we strengthen the synapse when output is low and input is high
-                double delta =
+                Real delta =
                     connections_[i].hebbPreRate_ * (maxWeight - connections_[i].weight_) * incomingNeuronActivation * (1.0 - outgoingNeuronActivation) -
                     connections_[i].hebbRate_ * maxWeight * incomingNeuronActivation * outgoingNeuronActivation;
                 connections_[i].weight_ = -(connections_[i].weight_ + delta);
@@ -548,15 +548,15 @@ namespace NEAT {
                 {
                     int index = connectionExists(i, j);
                     if (index != -1) {
-                        // double t_derivative = unsigned_sigmoid_derivative( m_neurons[k].m_activation );
-                        double derivative = 0;
+                        // Real t_derivative = unsigned_sigmoid_derivative( m_neurons[k].m_activation );
+                        Real derivative = 0;
                         if (neurons_[k].activationFunctionType_ == NEAT::UNSIGNED_SIGMOID) {
                             derivative = unsignedSigmoidDerivative(neurons_[k].activation_);
                         } else if (neurons_[k].activationFunctionType_ == NEAT::TANH) {
                             derivative = tanhDerivative(neurons_[k].activation_);
                         }
 
-                        double sum = 0;
+                        Real sum = 0;
                         // calculate the other sum
                         for (unsigned int l = 0; l < neurons_.size(); l++) {
                             int lIndex = connectionExists(k, l);
@@ -577,7 +577,7 @@ namespace NEAT {
     }
 
     // please pay attention. notice here only one output is assumed
-    void NeuralNetwork::rtrlUpdateError(double target) {
+    void NeuralNetwork::rtrlUpdateError(Real target) {
         // add to total error
         totalError_ = (target - output()[0]);
         // adjust each weight
@@ -588,7 +588,7 @@ namespace NEAT {
                 int index = connectionExists(i, j);
                 if (index != -1) {
                     // we know the first output's index is m_num_inputs
-                    double delta = totalError_ * neurons_[numInputs_].sensitivityMatrix_[i][j];
+                    Real delta = totalError_ * neurons_[numInputs_].sensitivityMatrix_[i][j];
                     totalWeightChange_[index] += delta * LEARNING_RATE;
                 }
             }

@@ -47,6 +47,7 @@
 #include <map>
 
 #include "Traits.h"
+#include "Types.h"
 
 namespace NEAT {
 
@@ -111,20 +112,20 @@ namespace NEAT {
 
         // Fitness boost multiplier for young species (1.0 means no boost)
         // Make sure it is >= 1.0 to avoid confusion
-        double youngAgeFitnessBoost;
+        Real youngAgeFitnessBoost;
 
         // Number of generations without improvement (stagnation) allowed for a species
         unsigned int speciesMaxStagnation;
 
         // Minimum jump in fitness necessary to be considered as improvement. Setting this value to 0.0 makes the system to behave like regular NEAT.
-        double stagnationDelta;
+        Real stagnationDelta;
 
         // AgeGens threshold, meaning if a species if above it, it is considered old
         unsigned int oldAgeTreshold;
 
         // Multiplier that penalizes old species.
         // Make sure it is < 1.0 to avoid confusion.
-        double oldAgePenalty;
+        Real oldAgePenalty;
 
         // Detect competetive coevolution stagnation
         // This kills the worst species of age >N (each X generations)
@@ -137,24 +138,24 @@ namespace NEAT {
         int killWorstAge;
 
         // Percent of best individuals that are allowed to reproduce. 1.0 = 100%
-        double survivalRate;
+        Real survivalRate;
 
         // Probability for a baby to result from sexual reproduction (crossover/mating). 1.0 = 100%
-        double crossoverRate;
+        Real crossoverRate;
 
         // If a baby results from sexual reproduction, this probability determines if mutation will be performed after crossover. 1.0 = 100% (always mutate
         // after crossover)
-        double overallMutationRate;
+        Real overallMutationRate;
 
         // Probability for a baby to result from inter-species mating.
-        double interspeciesCrossoverRate;
+        Real interspeciesCrossoverRate;
 
         // Probability for a baby gene to result from Multipoint Crossover when mating. 1.0 = 100% The default if the Average mating.
-        double multipointCrossoverRate;
+        Real multipointCrossoverRate;
 
         // Probability that when doing multipoint crossover,
         // the gene of the fitter parent will be prefered, instead of choosing one at random
-        double preferFitterParentRate;
+        Real preferFitterParentRate;
 
         // Performing roulette wheel selection or not?
         bool rouletteWheelSelection;
@@ -166,7 +167,7 @@ namespace NEAT {
         unsigned int tournamentSize;
 
         // Fraction of individuals to be copied unchanged
-        double eliteFraction;
+        Real eliteFraction;
 
         ///////////////////////////////////
         // Phased Search parameters   //
@@ -195,7 +196,7 @@ namespace NEAT {
         unsigned int noveltySearchK;
 
         // Sparseness treshold. Add to the archive if above
-        double noveltySearchPMin;
+        Real noveltySearchPMin;
 
         // Dynamic Pmin?
         bool noveltySearchDynamicPMin;
@@ -204,17 +205,17 @@ namespace NEAT {
         unsigned int noveltySearchNoArchivingStagnationThreshold;
 
         // How should it be multiplied (make it less than 1.0)
-        double noveltySearchPMinLoweringMultiplier;
+        Real noveltySearchPMinLoweringMultiplier;
 
         // Not lower than this value
-        double noveltySearchPMinMin;
+        Real noveltySearchPMinMin;
 
         // How many one-after-another additions to the archive should
         // pass in order to raise Pmin
         unsigned int noveltySearchQuickArchivingMinEvaluations;
 
         // How should it be multiplied (make it more than 1.0)
-        double noveltySearchPMinRaisingMultiplier;
+        Real noveltySearchPMinRaisingMultiplier;
 
         // Per how many evaluations to recompute the sparseness
         unsigned int noveltySearchRecomputeSparsenessEach;
@@ -224,7 +225,7 @@ namespace NEAT {
         ///////////////////////////////////
 
         // Probability for a baby to be mutated with the Add-Neuron mutation.
-        double mutateAddNeuronProb;
+        Real mutateAddNeuronProb;
 
         // Allow splitting of any recurrent links
         bool splitRecurrent;
@@ -236,16 +237,16 @@ namespace NEAT {
         int neuronTries;
 
         // Probability for a baby to be mutated with the Add-Link mutation
-        double mutateAddLinkProb;
+        Real mutateAddLinkProb;
 
         // Probability for a new incoming link to be from the bias neuron;
-        double mutateAddLinkFromBiasProb;
+        Real mutateAddLinkFromBiasProb;
 
         // Probability for a baby to be mutated with the Remove-Link mutation
-        double mutateRemLinkProb;
+        Real mutateRemLinkProb;
 
         // Probability for a baby that a simple neuron will be replaced with a link
-        double mutateRemSimpleNeuronProb;
+        Real mutateRemSimpleNeuronProb;
 
         // Maximum number of tries to find 2 neurons to add/remove a link
         unsigned int linkTries;
@@ -257,131 +258,131 @@ namespace NEAT {
         int maxNeurons;
 
         // Probability that a link mutation will be made recurrent
-        double recurrentProb;
+        Real recurrentProb;
 
         // Probability that a recurrent link mutation will be looped
-        double recurrentLoopProb;
+        Real recurrentLoopProb;
 
         // Probability for a baby's weights to be mutated
-        double mutateWeightsProb;
+        Real mutateWeightsProb;
 
         // Probability for a severe (shaking) weight mutation
-        double mutateWeightsSevereProb;
+        Real mutateWeightsSevereProb;
 
         // Probability for a particular gene to be mutated. 1.0 = 100%
-        double weightMutationRate;
+        Real weightMutationRate;
 
         // Probability for a particular gene to be mutated via replacement of the weight. 1.0 = 100%
-        double weightReplacementRate;
+        Real weightReplacementRate;
 
         // Maximum perturbation for a weight mutation
-        double weightMutationMaxPower;
+        Real weightMutationMaxPower;
 
         // Maximum magnitude of a replaced weight
-        double weightReplacementMaxPower;
+        Real weightReplacementMaxPower;
 
         // Maximum weight
-        double maxWeight;
+        Real maxWeight;
 
         // Minimum weight
-        double minWeight;
+        Real minWeight;
 
         // Probability for a baby's A activation function parameters to be perturbed
-        double mutateActivationAProb;
+        Real mutateActivationAProb;
 
         // Probability for a baby's B activation function parameters to be perturbed
-        double mutateActivationBProb;
+        Real mutateActivationBProb;
 
         // Maximum magnitude for the A parameter perturbation
-        double activationAMutationMaxPower;
+        Real activationAMutationMaxPower;
 
         // Maximum magnitude for the B parameter perturbation
-        double activationBMutationMaxPower;
+        Real activationBMutationMaxPower;
 
         // Maximum magnitude for time costants perturbation
-        double timeConstantMutationMaxPower;
+        Real timeConstantMutationMaxPower;
 
         // Maximum magnitude for biases perturbation
-        double biasMutationMaxPower;
+        Real biasMutationMaxPower;
 
         // Activation parameter A min/max
-        double minActivationA;
-        double maxActivationA;
+        Real minActivationA;
+        Real maxActivationA;
 
         // Activation parameter B min/max
-        double minActivationB;
-        double maxActivationB;
+        Real minActivationB;
+        Real maxActivationB;
 
         // Probability for a baby that an activation function type will be changed for a single neuron considered a structural mutation because of the large
         // impact on fitness
-        double mutateNeuronActivationTypeProb;
+        Real mutateNeuronActivationTypeProb;
 
         // Probabilities for a particular activation function appearance
-        double activationFunctionSignedSigmoidProb;
-        double activationFunctionUnsignedSigmoidProb;
-        double activationFunctionTanhProb;
-        double activationFunctionTanhCubicProb;
-        double activationFunctionSignedStepProb;
-        double activationFunctionUnsignedStepProb;
-        double activationFunctionSignedGaussProb;
-        double activationFunctionUnsignedGaussProb;
-        double activationFunctionAbsProb;
-        double activationFunctionSignedSineProb;
-        double activationFunctionUnsignedSineProb;
-        double activationFunctionLinearProb;
-        double activationFunctionReluProb;
-        double activationFunctionSoftplusProb;
+        Real activationFunctionSignedSigmoidProb;
+        Real activationFunctionUnsignedSigmoidProb;
+        Real activationFunctionTanhProb;
+        Real activationFunctionTanhCubicProb;
+        Real activationFunctionSignedStepProb;
+        Real activationFunctionUnsignedStepProb;
+        Real activationFunctionSignedGaussProb;
+        Real activationFunctionUnsignedGaussProb;
+        Real activationFunctionAbsProb;
+        Real activationFunctionSignedSineProb;
+        Real activationFunctionUnsignedSineProb;
+        Real activationFunctionLinearProb;
+        Real activationFunctionReluProb;
+        Real activationFunctionSoftplusProb;
 
         // Probability for a baby's neuron time constant values to be mutated
-        double mutateNeuronTimeConstantsProb;
+        Real mutateNeuronTimeConstantsProb;
 
         // Probability for a baby's neuron bias values to be mutated
-        double mutateNeuronBiasesProb;
+        Real mutateNeuronBiasesProb;
 
         // Time constant range
-        double minNeuronTimeConstant;
-        double maxNeuronTimeConstant;
+        Real minNeuronTimeConstant;
+        Real maxNeuronTimeConstant;
 
         // Bias range
-        double minNeuronBias;
-        double maxNeuronBias;
+        Real minNeuronBias;
+        Real maxNeuronBias;
 
         /////////////////////////////////////
         // Speciation parameters
         /////////////////////////////////////
 
         // Percent of disjoint genes importance
-        double disjointCoeff;
+        Real disjointCoeff;
 
         // Percent of excess genes importance
-        double excessCoeff;
+        Real excessCoeff;
 
         // Node-specific activation parameter A difference importance
-        double activationADiffCoeff;
+        Real activationADiffCoeff;
 
         // Node-specific activation parameter B difference importance
-        double activationBDiffCoeff;
+        Real activationBDiffCoeff;
 
         // Average weight difference importance
-        double weightDiffCoeff;
+        Real weightDiffCoeff;
 
         // Average time constant difference importance
-        double timeConstantDiffCoeff;
+        Real timeConstantDiffCoeff;
 
         // Average bias difference importance
-        double biasDiffCoeff;
+        Real biasDiffCoeff;
 
         // Activation function type difference importance
-        double activationFunctionDiffCoeff;
+        Real activationFunctionDiffCoeff;
 
         // Compatibility treshold
-        double compatTreshold;
+        Real compatTreshold;
 
         // Minumal value of the compatibility treshold
-        double minCompatTreshold;
+        Real minCompatTreshold;
 
         // Modifier per generation for keeping the species stable
-        double compatTresholdModifier;
+        Real compatTresholdModifier;
 
         // Per how many generations to change the treshold
         unsigned int compatTreshChangeIntervalGenerations;
@@ -390,7 +391,7 @@ namespace NEAT {
         unsigned int compatTreshChangeIntervalEvaluations;
 
         // What is the minimal difference needed for not to be a clone
-        double minDeltaCompatEqualGenomes;
+        Real minDeltaCompatEqualGenomes;
 
         // How many times to test a genome for constraint failure or being a clone (when AllowClones=False)
         int constraintTrials;
@@ -407,12 +408,12 @@ namespace NEAT {
         // ES HyperNEAT params
         /////////////////////////////
 
-        double divisionThreshold;
+        Real divisionThreshold;
 
-        double varianceThreshold;
+        Real varianceThreshold;
 
         // Used for Band prunning.
-        double bandThreshold;
+        Real bandThreshold;
 
         // Max and Min Depths of the quadtree
         unsigned int initialDepth;
@@ -423,23 +424,23 @@ namespace NEAT {
         unsigned int iterationLevel;
 
         // The Bias value for the CPPN queries.
-        double cppnBias;
+        Real cppnBias;
 
         // Quadtree Dimensions
         // The range of the tree. Typically set to 2,
-        double width;
-        double height;
+        Real width;
+        Real height;
 
         // The (x, y) coordinates of the tree
-        double qtreeX;
+        Real qtreeX;
 
-        double qtreeY;
+        Real qtreeY;
 
         // Use Link Expression output
         bool leo;
 
         // Threshold above which a connection is expressed
-        double leoThreshold;
+        Real leoThreshold;
 
         // Use geometric seeding. Currently only along the X axis. 1
         bool leoSeed;
@@ -451,9 +452,9 @@ namespace NEAT {
         std::map<std::string, TraitParameters> neuronTraits;
         std::map<std::string, TraitParameters> linkTraits;
         std::map<std::string, TraitParameters> genomeTraits;
-        double mutateNeuronTraitsProb;
-        double mutateLinkTraitsProb;
-        double mutateGenomeTraitsProb;
+        Real mutateNeuronTraitsProb;
+        Real mutateLinkTraitsProb;
+        Real mutateGenomeTraitsProb;
 
         /////////////////////////////////////
         // Constructors

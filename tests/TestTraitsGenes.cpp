@@ -9,6 +9,8 @@
 #include "Random.h"
 #include "Traits.h"
 
+using NEAT::Real;
+
 namespace {
 
     int g_failures = 0;
@@ -21,9 +23,9 @@ namespace {
         }                                                                                   \
     } while (0)
 
-    bool near(double a, double b, double eps = 1e-9) { return std::fabs(a - b) <= eps; }
+    bool near(Real a, Real b, Real eps = 1e-9) { return std::fabs(a - b) <= eps; }
 
-    NEAT::TraitParameters makeIntTrait(int mn, int mx, double mutProb = 1.0) {
+    NEAT::TraitParameters makeIntTrait(int mn, int mx, Real mutProb = 1.0) {
         NEAT::TraitParameters tp;
         tp.type = "int";
         tp.mutationProb_ = mutProb;
@@ -37,7 +39,7 @@ namespace {
         return tp;
     }
 
-    NEAT::TraitParameters makeFloatTrait(double mn, double mx, double mutProb = 1.0) {
+    NEAT::TraitParameters makeFloatTrait(Real mn, Real mx, Real mutProb = 1.0) {
         NEAT::TraitParameters tp;
         tp.type = "float";
         tp.mutationProb_ = mutProb;
@@ -103,7 +105,7 @@ int TestTraitsGenes(int argc, char *argv[]) {
 
         const int speed = std::get<int>(g.traits_["speed"].value);
         CHECK(speed >= 0 && speed <= 10);
-        const double rate = std::get<double>(g.traits_["rate"].value);
+        const Real rate = std::get<Real>(g.traits_["rate"].value);
         CHECK(rate >= -1.0 && rate <= 1.0);
         const std::string color = std::get<std::string>(g.traits_["color"].value);
         CHECK(color == "red" || color == "green" || color == "blue");
@@ -181,13 +183,13 @@ int TestTraitsGenes(int argc, char *argv[]) {
         b.traits_["i"] = t2;
         a.traits_["s"] = s1;
         b.traits_["s"] = s2;
-        const std::map<std::string, double> dist = a.getTraitDistances(b.traits_);
+        const std::map<std::string, Real> dist = a.getTraitDistances(b.traits_);
         CHECK(dist.count("i") == 1 && near(dist.at("i"), 7.0));
         CHECK(dist.count("s") == 1 && near(dist.at("s"), 1.0));
 
         // Identical strings => distance 0.
         b.traits_["s"] = s1;
-        const std::map<std::string, double> dist2 = a.getTraitDistances(b.traits_);
+        const std::map<std::string, Real> dist2 = a.getTraitDistances(b.traits_);
         CHECK(near(dist2.at("s"), 0.0));
 
         // Mismatched variant types throw.
@@ -216,11 +218,11 @@ int TestTraitsGenes(int argc, char *argv[]) {
         b.traits_["gate"] = gateB;
         a.traits_["v"] = vA;
         b.traits_["v"] = vB;
-        const std::map<std::string, double> dist = a.getTraitDistances(b.traits_);
+        const std::map<std::string, Real> dist = a.getTraitDistances(b.traits_);
         CHECK(dist.count("v") == 0);
 
         b.traits_["gate"] = gateA;  // both "on" now
-        const std::map<std::string, double> dist2 = a.getTraitDistances(b.traits_);
+        const std::map<std::string, Real> dist2 = a.getTraitDistances(b.traits_);
         CHECK(dist2.count("v") == 1 && near(dist2.at("v"), 8.0));
     }
 

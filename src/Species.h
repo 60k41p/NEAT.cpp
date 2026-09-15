@@ -45,6 +45,7 @@
 #include "Genes.h"
 #include "Genome.h"
 #include "Innovation.h"
+#include "Types.h"
 
 namespace NEAT {
 
@@ -80,11 +81,11 @@ namespace NEAT {
         unsigned int ageEvaluations_;
 
         // Offspring quota assigned by countOffspring() for the next generation.
-        double offspringRqd_;
+        Real offspringRqd_;
 
        public:
         // Best fitness observed in this species (updated on addIndividual()).
-        double bestFitness_;
+        Real bestFitness_;
 
         // Copy of the best genome seen (used by co-evolutionary setups).
         Genome bestGenome_;
@@ -98,7 +99,7 @@ namespace NEAT {
         int r_, g_, b_;
 
         // Mean fitness of the current members (see calculateAverageFitness()).
-        double averageFitness_;
+        Real averageFitness_;
 
         ////////////////////////////
         // Constructors
@@ -135,10 +136,10 @@ namespace NEAT {
         ////////////////////////////
 
         // Cached best fitness (may lag behind members; see getActualBestFitness() for a recompute).
-        double getBestFitness() const { return bestFitness_; }
+        Real getBestFitness() const { return bestFitness_; }
         // Recomputes the best fitness over evaluated members.
-        double getActualBestFitness() const {
-            double f = std::numeric_limits<double>::min();
+        Real getActualBestFitness() const {
+            Real f = std::numeric_limits<Real>::min();
             for (int i = 0; i < individuals_.size(); i++) {
                 if (individuals_[i].isEvaluated()) {
                     if (individuals_[i].getFitness() > f) {
@@ -166,8 +167,8 @@ namespace NEAT {
         }
         void increaseEvalsNoImprovement() { evalsNoImprovement_++; }
         // Offspring quota for the next generation (see countOffspring()).
-        void setOffspringRqd(double ofs) { offspringRqd_ = ofs; }
-        double getOffspringRqd() const { return offspringRqd_; }
+        void setOffspringRqd(Real ofs) { offspringRqd_ = ofs; }
+        Real getOffspringRqd() const { return offspringRqd_; }
         unsigned int numIndividuals() { return static_cast<unsigned int>(individuals_.size()); }
         void clearIndividuals() { individuals_.clear(); }
         int id() { return id_; }

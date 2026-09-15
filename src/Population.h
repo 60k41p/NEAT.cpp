@@ -42,6 +42,7 @@
 #include "PhenotypeBehavior.h"
 #include "Random.h"
 #include "Species.h"
+#include "Types.h"
 
 namespace NEAT {
 
@@ -78,13 +79,13 @@ namespace NEAT {
         SearchMode searchMode_;
 
         // Current mean population complexity (average genome size metric).
-        double currentMPC_;
+        Real currentMPC_;
 
         // Previous generation's MPC, for phase-change detection.
-        double oldMPC_;
+        Real oldMPC_;
 
         // MPC baseline that the simplifying phase returns toward.
-        double baseMPC_;
+        Real baseMPC_;
 
         // Groups all members into species by compatibility distance.
         void speciate();
@@ -105,7 +106,7 @@ namespace NEAT {
         void calculateMPC();
 
         // Best fitness ever observed in this run.
-        double bestFitnessEver_;
+        Real bestFitnessEver_;
 
         // Best genome of the current generation and of the whole run.
         Genome bestGenome_;
@@ -148,7 +149,7 @@ namespace NEAT {
 
         // Clones the seed genome into a full population; randomizes link weights into [-randomRange .. randomRange]
         // when randomizeWeights is set. The size comes from parameters.populationSize.
-        Population(const Genome &g, const Parameters &parameters, bool randomizeWeights, double randomRange, int rngSeed);
+        Population(const Genome &g, const Parameters &parameters, bool randomizeWeights, Real randomRange, int rngSeed);
 
         // Loads a population from a saved file (see save()).
         Population(const std::string fileName);
@@ -161,8 +162,8 @@ namespace NEAT {
 
         // Current phased-search state (see SearchMode).
         SearchMode getSearchMode() const { return searchMode_; }
-        double getCurrentMPC() const { return currentMPC_; }
-        double getBaseMPC() const { return baseMPC_; }
+        Real getCurrentMPC() const { return currentMPC_; }
+        Real getBaseMPC() const { return baseMPC_; }
 
         // Total member count across all species.
         unsigned int numGenomes() const {
@@ -174,7 +175,7 @@ namespace NEAT {
         }
 
         unsigned int getGeneration() const { return generation_; }
-        double getBestFitnessEver() const { return bestFitnessEver_; }
+        Real getBestFitnessEver() const { return bestFitnessEver_; }
         // Copies out the fittest genome across all species (defined in Population.cpp).
         Genome getBestGenome() const;
 
@@ -245,7 +246,7 @@ namespace NEAT {
         bool noveltySearchTick(Genome &successfulGenome);
 
         // Mean behavioral distance of the genome to its K nearest neighbors (population + archive).
-        double computeSparseness(Genome &genome);
+        Real computeSparseness(Genome &genome);
 
         // Generations since the last archive addition / consecutive quick additions (Pmin adaptation).
         unsigned int gensSinceLastArchiving_;

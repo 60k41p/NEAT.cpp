@@ -5,6 +5,8 @@
 
 #include "Random.h"
 
+using NEAT::Real;
+
 namespace {
 
     int g_failures = 0;
@@ -62,11 +64,11 @@ int TestRandom(int argc, char *argv[]) {
         RNG rng;
         rng.seed(7);
         for (int i = 0; i < 1000; ++i) {
-            const double u = rng.randFloat();
+            const Real u = rng.randFloat();
             CHECK(u >= 0.0 && u <= 1.0);
-            const double s = rng.randFloatSigned();
+            const Real s = rng.randFloatSigned();
             CHECK(s >= -1.0 && s <= 1.0);
-            const double g = rng.randGaussSigned();
+            const Real g = rng.randGaussSigned();
             CHECK(g >= -1.0 && g <= 1.0);
             const int pn = rng.randPosNeg();
             CHECK(pn == 1 || pn == -1);
@@ -84,7 +86,7 @@ int TestRandom(int argc, char *argv[]) {
         RNG a, b;
         a.seed(99);
         b.seed(99);
-        std::vector<double> probs{0.2, 0.5, 0.3};
+        std::vector<Real> probs{0.2, 0.5, 0.3};
         for (int i = 0; i < 32; ++i) {
             const int ia = a.roulette(probs);
             const int ib = b.roulette(probs);
@@ -95,7 +97,7 @@ int TestRandom(int argc, char *argv[]) {
     {
         RNG rng;
         rng.seed(11);
-        std::vector<double> forced{0.0, 0.0, 1.0};
+        std::vector<Real> forced{0.0, 0.0, 1.0};
         for (int i = 0; i < 20; ++i) {
             CHECK(rng.roulette(forced) == 2);
         }

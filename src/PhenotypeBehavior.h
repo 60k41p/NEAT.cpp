@@ -43,6 +43,7 @@
 #include <vector>
 
 #include "AssertMacros.h"
+#include "Types.h"
 
 namespace NEAT {
 
@@ -54,15 +55,15 @@ namespace NEAT {
        public:
         virtual ~PhenotypeBehavior() {};
 
-        // Behavior descriptor: a 2D matrix of doubles of arbitrary size. Sufficient for most domains
+        // Behavior descriptor: a 2D matrix of Reals of arbitrary size. Sufficient for most domains
         // (e.g. endpoint coordinates, trajectory samples).
-        std::vector<std::vector<double> > data_;
+        std::vector<std::vector<Real> > data_;
 
         // Evaluates the genome, fills data_ and returns true when a successful (goal) behavior was observed.
         virtual bool acquire(Genome *genome) { return false; }
 
         // Behavioral distance to another descriptor (drives the sparseness score).
-        virtual double distanceTo(PhenotypeBehavior *other) { return 0; }
+        virtual Real distanceTo(PhenotypeBehavior *other) { return 0; }
 
         // Whether this behavior counts as solving the task. Always true by default, so open-ended
         // runs need not override it.

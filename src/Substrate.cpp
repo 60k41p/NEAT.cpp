@@ -59,7 +59,7 @@ namespace NEAT {
         maxTimeConst_ = 1.0;
     };
 
-    Substrate::Substrate(std::vector<std::vector<double> > &inputs, std::vector<std::vector<double> > &hidden, std::vector<std::vector<double> > &outputs) {
+    Substrate::Substrate(std::vector<std::vector<Real> > &inputs, std::vector<std::vector<Real> > &hidden, std::vector<std::vector<Real> > &outputs) {
         leaky_ = false;
         withDistance_ = false;
         queryWeightsOnly_ = false;

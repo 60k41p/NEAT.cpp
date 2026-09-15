@@ -16,6 +16,8 @@
 #include "Parameters.h"
 #include "Random.h"
 
+using NEAT::Real;
+
 namespace {
 
     int g_failures = 0;
@@ -28,7 +30,7 @@ namespace {
         }                                                                                   \
     } while (0)
 
-    bool near(double a, double b, double eps = 1e-9) { return std::fabs(a - b) <= eps; }
+    bool near(Real a, Real b, Real eps = 1e-9) { return std::fabs(a - b) <= eps; }
 
     NEAT::Parameters defaultParams() {
         NEAT::Parameters p;
@@ -110,7 +112,7 @@ int TestGenome(int argc, char *argv[]) {
         CHECK(net.numInputs() == 3 && net.numOutputs() == 1);
         CHECK(net.neurons_.size() == g.numNeurons());
         CHECK(net.connections_.size() == g.numLinks());
-        std::vector<double> in{0.5, -0.5, 1.0};
+        std::vector<Real> in{0.5, -0.5, 1.0};
         net.flush();
         net.input(in);
         net.activate();
@@ -350,8 +352,8 @@ int TestGenome(int argc, char *argv[]) {
         Genome baby = mom.mate(dad, false, false, rng, p);
         CHECK(baby.numLinks() == mom.numLinks());
         for (unsigned i = 0; i < baby.numLinks(); ++i) {
-            const double wm = mom.getLinkByIndex(static_cast<int>(i)).getWeight();
-            const double wd = dad.getLinkByIndex(static_cast<int>(i)).getWeight();
+            const Real wm = mom.getLinkByIndex(static_cast<int>(i)).getWeight();
+            const Real wd = dad.getLinkByIndex(static_cast<int>(i)).getWeight();
             if (wm != wd) {
                 CHECK(near(baby.getLinkByIndex(static_cast<int>(i)).getWeight(), wm));
             }
@@ -372,12 +374,12 @@ int TestGenome(int argc, char *argv[]) {
 
         // Remove links from b only: each removal makes b missing a gene that a
         // has, i.e. adds disjoint genes to the pair, so the distance strictly grows.
-        double prev = 0.0;
+        Real prev = 0.0;
         int removed = 0;
         for (int i = 0; i < 3 && b.numLinks() > 0; ++i) {
             if (b.mutateRemoveLink(rng)) {
                 ++removed;
-                const double d = a.compatibilityDistance(b, p);
+                const Real d = a.compatibilityDistance(b, p);
                 CHECK(d > prev);
                 prev = d;
             }
@@ -394,7 +396,7 @@ int TestGenome(int argc, char *argv[]) {
         g.buildPhenotype(net);
         CHECK(net.connections_.size() == static_cast<size_t>(g.numLinks()));
         for (unsigned i = 0; i < net.connections_.size(); ++i) {
-            net.connections_[i].weight_ = 0.25 * static_cast<double>(i) - 1.0;
+            net.connections_[i].weight_ = 0.25 * static_cast<Real>(i) - 1.0;
         }
         g.derivePhenotypicChanges(net);
         for (unsigned i = 0; i < net.connections_.size(); ++i) {
@@ -409,7 +411,7 @@ int TestGenome(int argc, char *argv[]) {
         NeuralNetwork net1, net2;
         g.buildPhenotype(net1);
         g.buildPhenotype(net2);
-        std::vector<double> in{0.3, 0.6, 0.9};
+        std::vector<Real> in{0.3, 0.6, 0.9};
         net1.input(in);
         net1.activate();
         net2.input(in);

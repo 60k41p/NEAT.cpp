@@ -13,6 +13,8 @@
 #include "NeuralNetwork.h"
 #include "Parameters.h"
 
+using NEAT::Real;
+
 namespace {
 
     int g_failures = 0;
@@ -25,7 +27,7 @@ namespace {
         }                                                                                   \
     } while (0)
 
-    bool probOk(double v) { return v >= 0.0 && v <= 1.0; }
+    bool probOk(Real v) { return v >= 0.0 && v <= 1.0; }
 
 }  // namespace
 

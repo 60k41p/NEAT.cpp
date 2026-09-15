@@ -43,6 +43,7 @@
 #include <vector>
 
 #include "NeuralNetwork.h"
+#include "Types.h"
 
 namespace NEAT {
 
@@ -52,9 +53,9 @@ namespace NEAT {
     class Substrate {
        public:
         // Node coordinates per layer; each entry is one point in substrate space.
-        std::vector<std::vector<double> > inputCoords_;
-        std::vector<std::vector<double> > hiddenCoords_;
-        std::vector<std::vector<double> > outputCoords_;
+        std::vector<std::vector<Real> > inputCoords_;
+        std::vector<std::vector<Real> > hiddenCoords_;
+        std::vector<std::vector<Real> > outputCoords_;
 
         // Build substrate neurons as leaky integrators (uses minTimeConst_/maxTimeConst_ below).
         bool leaky_;
@@ -86,12 +87,12 @@ namespace NEAT {
         ActivationFunction outputNodesActivation_;
 
         // Weight/bias magnitude cap and leaky-integrator time-constant range for created neurons.
-        double maxWeightAndBias_;
-        double minTimeConst_;
-        double maxTimeConst_;
+        Real maxWeightAndBias_;
+        Real minTimeConst_;
+        Real maxTimeConst_;
 
         Substrate();
-        Substrate(std::vector<std::vector<double> > &inputs, std::vector<std::vector<double> > &hidden, std::vector<std::vector<double> > &outputs);
+        Substrate(std::vector<std::vector<Real> > &inputs, std::vector<std::vector<Real> > &hidden, std::vector<std::vector<Real> > &outputs);
 
         // Replaces the connectivity scheme; the coordinate lists must already be populated.
         void setCustomConnectivity(std::vector<std::vector<int> > &conns);

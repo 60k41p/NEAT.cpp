@@ -53,6 +53,7 @@
 #include "PhenotypeBehavior.h"
 #include "Random.h"
 #include "Substrate.h"
+#include "Types.h"
 
 namespace NEAT {
 
@@ -123,16 +124,16 @@ namespace NEAT {
         int numOutputs_;
 
         // Raw fitness assigned externally via setFitness().
-        double fitness_;
+        Real fitness_;
 
         // Fitness after species sharing (see Species::adjustFitness()).
-        double adjustedFitness_;
+        Real adjustedFitness_;
 
         // Longest input-to-output path (see calculateDepth()).
         int depth_;
 
         // Offspring quota for the next generation (see Population::countOffspring()).
-        double offspringAmount_;
+        Real offspringAmount_;
 
         ////////////////////
         // Structural queries (private helpers)
@@ -245,13 +246,13 @@ namespace NEAT {
         void setNeuronY(unsigned int index, int y);
 
         // Raw / shared fitness accessors (fitness is set externally after evaluation).
-        double getFitness() const;
+        Real getFitness() const;
 
-        double getAdjFitness() const;
+        Real getAdjFitness() const;
 
-        void setFitness(double f);
+        void setFitness(Real f);
 
-        void setAdjFitness(double af);
+        void setAdjFitness(Real af);
 
         int getID() const;
 
@@ -273,9 +274,9 @@ namespace NEAT {
         bool failsConstraints(const Parameters &parameters);
 
         // Offspring quota accessors (see Population::countOffspring()).
-        double getOffspringAmount() const;
+        Real getOffspringAmount() const;
 
-        void setOffspringAmount(double oa);
+        void setOffspringAmount(Real oa);
 
         // Decodes the genotype into a runnable phenotype (direct encoding).
         void buildPhenotype(NeuralNetwork &net);
@@ -312,7 +313,7 @@ namespace NEAT {
         bool isCompatibleWith(Genome &g, Parameters &parameters);
 
         // Weighted compatibility distance to g (disjoint/excess/weight/activation/trait terms).
-        double compatibilityDistance(Genome &g, Parameters &parameters);
+        Real compatibilityDistance(Genome &g, Parameters &parameters);
 
         // Recomputes depth_ as the longest input-to-output path.
         void calculateDepth();
@@ -399,9 +400,9 @@ namespace NEAT {
         // A connection between two points. Stores weight and the coordinates of the points
         struct TempConnection
         {
-            std::vector<double> source;
-            std::vector<double> target;
-            double weight;
+            std::vector<Real> source;
+            std::vector<Real> target;
+            Real weight;
 
             TempConnection()
             {
@@ -410,8 +411,8 @@ namespace NEAT {
                 weight = 0;
             }
 
-            TempConnection(std::vector<double> source, std::vector<double> target,
-                           double weight)
+            TempConnection(std::vector<Real> source, std::vector<Real> target,
+                           Real weight)
             {
                 source = source;
                 target = target;
@@ -420,7 +421,7 @@ namespace NEAT {
                 target.reserve(3);
             }
 
-            TempConnection(std::vector<double> source, std::vector<double> target, double weight, unsigned int coordSize)
+            TempConnection(std::vector<Real> source, std::vector<Real> target, Real weight, unsigned int coordSize)
             {
                 source = source;
                 target = target;
@@ -444,16 +445,16 @@ namespace NEAT {
         // A quadpoint in the HyperCube.
         struct QuadPoint
         {
-            double x;
-            double y;
-            double z;
-            double width;
-            double weight;
-            double height;
-            double variance;
+            Real x;
+            Real y;
+            Real z;
+            Real width;
+            Real weight;
+            Real height;
+            Real variance;
             int level;
             // Do I use this?
-            double leo;
+            Real leo;
 
 
             std::vector<boost::shared_ptr<QuadPoint> > children;
@@ -465,7 +466,7 @@ namespace NEAT {
                 children.reserve(4);
             }
 
-            QuadPoint(double x, double y, double width, double height, int level)
+            QuadPoint(Real x, Real y, Real width, Real height, int level)
             {
                 x = x;
                 y = y;
@@ -481,7 +482,7 @@ namespace NEAT {
             }
 
             // Mind the Z
-            QuadPoint(double x, double y, double z, double width, double height,
+            QuadPoint(Real x, Real y, Real z, Real width, Real height,
                       int level)
             {
                 x = x;
@@ -505,15 +506,15 @@ namespace NEAT {
 
         struct NTree
         {
-            std::vector<double> coord;
-            double weight;
-            double varience;
+            std::vector<Real> coord;
+            Real weight;
+            Real varience;
             int lvl;
-            double width;
-            double leo = 0.0;
+            Real width;
+            Real leo = 0.0;
             std::vector<boost::shared_ptr<NTree> > children;
 
-            NTree(std::vector<double> coordIn, double wdth, double level)
+            NTree(std::vector<Real> coordIn, Real wdth, Real level)
             {
                 width = wdth;
                 lvl = level;
@@ -526,7 +527,7 @@ namespace NEAT {
             {
                 for(unsigned int ix = 0; ix < 2**coord.size(); ix++){
                     std::string sumPermute = toBinary(ix, coord.size());
-                    std::vector<double> childCoords;
+                    std::vector<Real> childCoords;
                     int childParamLen = sumPermute.length();
                     childCoords.reserve(childParamLen);
                     for(unsigned int signIx = 0; signIx < childParamLen; signIx++)
@@ -566,29 +567,29 @@ namespace NEAT {
         void buildESHyperNEATPhenotypeND(NeuralNetwork &net, Substrate &subst, Parameters &params);
         void buildESHyperNEATPhenotype(NeuralNetwork &net, Substrate &subst, Parameters &params);
 
-        void divideInitialize(const std::vector<double> &node,
+        void divideInitialize(const std::vector<Real> &node,
                               boost::shared_ptr<QuadPoint> &root,
                               NeuralNetwork &cppn, Parameters &params,
-                              const bool &outgoing, const double &zCoord);
+                              const bool &outgoing, const Real &zCoord);
 
-        void pruneExpress(const std::vector<double> &node,
+        void pruneExpress(const std::vector<Real> &node,
                           boost::shared_ptr<QuadPoint> &root, NeuralNetwork &cppn,
                           Parameters &params, std::vector<Genome::TempConnection> &connections,
                           const bool &outgoing);
-        void divideInitializeND(const std::vector<double> &node,
+        void divideInitializeND(const std::vector<Real> &node,
                               boost::shared_ptr<NTree> &root,
                               NeuralNetwork &cppn, Parameters &params,
-                              const bool &outgoing, const double &zCoord);
+                              const bool &outgoing, const Real &zCoord);
 
-        void pruneExpressND(const std::vector<double> &node,
+        void pruneExpressND(const std::vector<Real> &node,
                           boost::shared_ptr<NTree> &root, NeuralNetwork &cppn,
                           Parameters &params, std::vector<Genome::TempConnection> &connections,
                           const bool &outgoing);
 
 
-        void collectValues(std::vector<double> &vals, boost::shared_ptr<QuadPoint> &point);
+        void collectValues(std::vector<Real> &vals, boost::shared_ptr<QuadPoint> &point);
 
-        double variance(boost::shared_ptr<QuadPoint> &point);
+        Real variance(boost::shared_ptr<QuadPoint> &point);
 
         void cleanNet(std::vector<Connection> &connections, unsigned int inputCount,
                        unsigned int outputCount, unsigned int hiddenCount);

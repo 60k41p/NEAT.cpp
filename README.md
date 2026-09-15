@@ -55,6 +55,7 @@ This is a fork of <https://github.com/peter-ch/MultiNEAT>.
 
 * The library is now `std`-only pure C++17; with Python bindings and the Boost dependency removed
 * Traits now use `std::variant`, RNG uses `std::mt19937`, and cycle detection uses Kahn's algorithm.
+* All numerics (weights, activations, fitness, parameters) are single-precision via the `NEAT::Real` alias in `src/Types.h` (flip it to `double` for an exact-precision A/B); seeded trajectories replay identically per seed.
 * Robust unit testing and benchmark harnesses were added, and many performance optimisations were applied.
 
 ### Performance

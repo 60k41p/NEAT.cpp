@@ -43,6 +43,7 @@
 #include <vector>
 
 #include "Genes.h"
+#include "Types.h"
 
 namespace NEAT {
 
@@ -54,16 +55,16 @@ namespace NEAT {
         // Index of the target neuron in NeuralNetwork::neurons_.
         int targetNeuronIndex_;
         // Connection weight (copied from the genome at build time).
-        double weight_;
+        Real weight_;
         // Cached weight * source activation, refreshed by activate*().
-        double signal_;
+        Real signal_;
 
         // Recurrence flag (display/diagnostics only; activation order does not depend on it).
         bool recurFlag_;
 
         // Hebbian lifetime-learning rates (see adapt()); ignored when the link traits are absent.
-        double hebbRate_;
-        double hebbPreRate_;
+        Real hebbRate_;
+        Real hebbPreRate_;
 
         // Compares by topology (source/target indexes) so tests can match structure ignoring weights.
         bool operator==(Connection const &other) const {
@@ -80,26 +81,26 @@ namespace NEAT {
     class Neuron {
        public:
         // Summed weighted input for the current step.
-        double activesum_;
+        Real activesum_;
         // activesum_ passed through the activation function.
-        double activation_;
+        Real activation_;
 
         // Activation-function parameters (slope/shift/time-constant/bias slots; meaning depends on activationFunctionType_).
-        double a_, b_, timeconst_, bias_;
+        Real a_, b_, timeconst_, bias_;
         // Leaky-integrator membrane potential (activateLeaky() only).
-        double membranePotential_;
+        Real membranePotential_;
         // Which activation function activate() applies to this neuron.
         ActivationFunction activationFunctionType_;
 
         // Display coordinates and substrate position (HyperNEAT queries); splitY_ is network depth.
-        double x_, y_, z_;
-        double sx_, sy_, sz_;
-        std::vector<double> substrateCoords_;
-        double splitY_;
+        Real x_, y_, z_;
+        Real sx_, sy_, sz_;
+        std::vector<Real> substrateCoords_;
+        Real splitY_;
         NeuronType type_;
 
         // Per-neuron sensitivity cube for RTRL learning (see initRTRLMatrix()).
-        std::vector<std::vector<double> > sensitivityMatrix_;
+        std::vector<std::vector<Real> > sensitivityMatrix_;
 
         // Compares by role/depth/activation type so tests can match structure ignoring live state.
         bool operator==(Neuron const &other) const {
@@ -115,10 +116,10 @@ namespace NEAT {
     class NeuralNetwork {
         /////////////////////
         // RTRL bookkeeping (see initRTRLMatrix(); empty unless RTRL learning runs)
-        double totalError_;
+        Real totalError_;
 
         // Accumulated per-connection weight change, always sized like connections_.
-        std::vector<double> totalWeightChange_;
+        std::vector<Real> totalWeightChange_;
         /////////////////////
 
         // Returns the connection index for the (to, from) pair, or -1 when absent.
@@ -144,11 +145,11 @@ namespace NEAT {
         // Like activate() but adds the neuron bias term during summation.
         void activateUseInternalBias();
         // Leaky-integrator step with the given time delta.
-        void activateLeaky(double step);
+        void activateLeaky(Real step);
 
         // RTRL gradient accumulation / error injection / weight update triplet.
         void rtrlUpdateGradients();
-        void rtrlUpdateError(double target);
+        void rtrlUpdateError(Real target);
         // Performs the backprop step.
         void rtrlUpdateWeights();
 
@@ -161,10 +162,10 @@ namespace NEAT {
         void flushCube();
 
         // Loads the input layer (size must equal numInputs()).
-        void input(std::vector<double> &inputs);
+        void input(std::vector<Real> &inputs);
 
         // Reads the output layer after activation.
-        std::vector<double> output();
+        std::vector<Real> output();
 
         // Appends one neuron/connection (no dedup; callers keep indexes consistent).
         void addNeuron(const Neuron &n) { neurons_.push_back(n); }
@@ -189,8 +190,8 @@ namespace NEAT {
         }
 
         // Squared Euclidean distance between two neurons' substrate coordinates (HyperNEAT diagnostics).
-        double getConnectionLength(const Neuron &source, const Neuron &target) {
-            double dist = 0.0;
+        Real getConnectionLength(const Neuron &source, const Neuron &target) {
+            Real dist = 0.0;
             for (unsigned int i = 0; i < source.substrateCoords_.size(); i++) {
                 dist += (target.substrateCoords_[i] - source.substrateCoords_[i]) * (target.substrateCoords_[i] - source.substrateCoords_[i]);
             }
@@ -198,7 +199,7 @@ namespace NEAT {
         }
 
         // Number of connections (legacy name spoke of length; it has always been a count).
-        double getConnectionCount() { return static_cast<double>(connections_.size()); }
+        Real getConnectionCount() { return static_cast<Real>(connections_.size()); }
 
         // one-shot save/load
         void save(const char *filename);

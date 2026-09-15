@@ -40,6 +40,8 @@
 #include <random>
 #include <vector>
 
+#include "Types.h"
+
 namespace NEAT {
 
     // Deterministic 32-bit Mersenne Twister engine. Copyable; copy the whole RNG to fork a stream.
@@ -61,16 +63,16 @@ namespace NEAT {
         int randInt(int x, int y);
 
         // Returns a random number from a uniform distribution in the range of [0 .. 1]
-        double randFloat();
+        Real randFloat();
 
         // Returns a random number from a uniform distribution in the range of [-1 .. 1]
-        double randFloatSigned();
+        Real randFloatSigned();
 
         // Returns a random number from a gaussian (normal) distribution in the range of [-1 .. 1]
-        double randGaussSigned();
+        Real randGaussSigned();
 
         // Returns an index sampled proportionally to the given weights (throws on empty input).
-        int roulette(const std::vector<double> &probs);
+        int roulette(const std::vector<Real> &probs);
     };
 
 }  // namespace NEAT

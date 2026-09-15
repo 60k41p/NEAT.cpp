@@ -42,6 +42,7 @@
 
 #include <cmath>
 #include <cstdlib>
+#include <iomanip>
 #include <iostream>
 #include <limits>
 #include <sstream>
@@ -50,17 +51,18 @@
 
 #include "AssertMacros.h"
 #include "Random.h"
+#include "Types.h"
 
 namespace NEAT {
 
     // Finds the minimum and maximum of a value list.
     // Uses lowest() (most negative) rather than min() (smallest positive) so an
     // all-negative input still yields a correct maximum.
-    inline void getMaxMin(const std::vector<double> &vals, double &min, double &max) {
-        max = std::numeric_limits<double>::lowest();
-        min = std::numeric_limits<double>::max();
-        for (std::vector<double>::const_iterator it = vals.begin(); it != vals.end(); ++it) {
-            const double currentVal = (*it);
+    inline void getMaxMin(const std::vector<Real> &vals, Real &min, Real &max) {
+        max = std::numeric_limits<Real>::lowest();
+        min = std::numeric_limits<Real>::max();
+        for (std::vector<Real>::const_iterator it = vals.begin(); it != vals.end(); ++it) {
+            const Real currentVal = (*it);
             if (currentVal > max) max = currentVal;
 
             if (currentVal < min) min = currentVal;
@@ -78,12 +80,12 @@ namespace NEAT {
         return buffer.str();
     }
 
-    // Converts a double to a string.
-    inline std::string floatToString(const double arg) {
+    // Converts a Real to a string with enough digits to parse back to the same value.
+    inline std::string floatToString(const Real arg) {
         std::ostringstream buffer;
 
-        // send the double to the ostringstream
-        buffer << arg;
+        // send the Real to the ostringstream
+        buffer << std::setprecision(std::numeric_limits<Real>::max_digits10) << arg;
 
         // capture the string
         return buffer.str();
@@ -105,10 +107,10 @@ namespace NEAT {
         }
     }
 
-    // Rounds a double to the nearest integer (halves round up).
-    inline int rounded(const double val) {
+    // Rounds a Real to the nearest integer (halves round up).
+    inline int rounded(const Real val) {
         const int integral = static_cast<int>(val);
-        const double mantissa = val - integral;
+        const Real mantissa = val - integral;
 
         if (mantissa < 0.5) {
             return integral;
@@ -119,10 +121,10 @@ namespace NEAT {
         }
     }
 
-    // Rounds a double up or down depending on whether its mantissa is below the offset.
-    inline int roundUnderOffset(const double val, const double offset) {
+    // Rounds a Real up or down depending on whether its mantissa is below the offset.
+    inline int roundUnderOffset(const Real val, const Real offset) {
         const int integral = static_cast<int>(val);
-        const double mantissa = val - integral;
+        const Real mantissa = val - integral;
 
         if (mantissa < offset) {
             return integral;
@@ -135,15 +137,15 @@ namespace NEAT {
     // value in the range [targetMin .. targetMax]. Example: value=2 in [0 .. 4]
     // scaled to [-12 .. 12] gives 0.
     template <typename ValueType>
-    inline void scale(ValueType &value, const double min, const double max, const double targetMin, const double targetMax) {
-        const double sourceRange = max - min;
-        const double targetRange = targetMax - targetMin;
-        const double relativePosition = (value - min) / sourceRange;
+    inline void scale(ValueType &value, const Real min, const Real max, const Real targetMin, const Real targetMax) {
+        const Real sourceRange = max - min;
+        const Real targetRange = targetMax - targetMin;
+        const Real relativePosition = (value - min) / sourceRange;
         value = static_cast<ValueType>(targetMin + targetRange * relativePosition);
     }
 
     // Scales every entry of the vector from its current [min .. max] range into [targetMin .. targetMax].
     // Defined in Utils.cpp.
-    void scale(std::vector<double> &values, const double targetMin, const double targetMax);
+    void scale(std::vector<Real> &values, const Real targetMin, const Real targetMax);
 
 }  // namespace NEAT

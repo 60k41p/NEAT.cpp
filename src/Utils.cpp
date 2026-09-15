@@ -35,13 +35,13 @@
 namespace NEAT {
 
     // Scales every entry of the vector from its current [min .. max] range into [targetMin .. targetMax].
-    void scale(std::vector<double> &values, const double targetMin, const double targetMax) {
-        double max = std::numeric_limits<double>::lowest();
-        double min = std::numeric_limits<double>::max();
+    void scale(std::vector<Real> &values, const Real targetMin, const Real targetMax) {
+        Real max = std::numeric_limits<Real>::lowest();
+        Real min = std::numeric_limits<Real>::max();
         getMaxMin(values, min, max);
-        std::vector<double> valuesScaled;
-        for (std::vector<double>::const_iterator it = values.begin(); it != values.end(); ++it) {
-            double valueToBeScaled = (*it);
+        std::vector<Real> valuesScaled;
+        for (std::vector<Real>::const_iterator it = values.begin(); it != values.end(); ++it) {
+            Real valueToBeScaled = (*it);
             scale(valueToBeScaled, min, max, targetMin, targetMax);
             valuesScaled.push_back(valueToBeScaled);
         }
