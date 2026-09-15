@@ -1,9 +1,31 @@
-//
-// Created by peter on 28.04.17.
-//
+/*
+ * NEAT.cpp: Portable, Zero-dependency C++17 NeuroEvolution Library
+ *
+ * Copyright (C) 2026 Gökalp Özcan
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * Contact info:
+ * Gökalp Özcan <gokalp@mail.com>
+ */
 
-#ifndef NEATCPP_TRAITS_H
-#define NEATCPP_TRAITS_H
+/*
+ * File:        Traits.h
+ * Description: Definitions for the trait parameter types (int, float, string and set variants) built on std::variant.
+ */
+
+#pragma once
 
 #include <cmath>
 #include <string>
@@ -196,4 +218,3 @@ namespace NEAT {
     };
 
 }  // namespace NEAT
-#endif  // NEATCPP_TRAITS_H

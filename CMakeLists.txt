@@ -10,33 +10,14 @@ option(NEATCPP_BUILD_STATIC "Build the static library" ON)
 option(NEATCPP_ENABLE_TESTS "Build the unit test harness" ON)
 option(NEATCPP_ENABLE_BENCHMARKS "Build the benchmark harness" OFF)
 
-set(NEATCPP_SOURCES
-    src/Genome.cpp
-    src/Innovation.cpp
-    src/NeuralNetwork.cpp
-    src/Parameters.cpp
-    src/PhenotypeBehavior.cpp
-    src/Population.cpp
-    src/Random.cpp
-    src/Species.cpp
-    src/Substrate.cpp
-    src/Traits.cpp
-    src/Utils.cpp)
-
-set(NEATCPP_HEADERS
-    src/AssertMacros.h
-    src/Genes.h
-    src/Genome.h
-    src/Innovation.h
-    src/NeuralNetwork.h
-    src/Parameters.h
-    src/PhenotypeBehavior.h
-    src/Population.h
-    src/Random.h
-    src/Species.h
-    src/Substrate.h
-    src/Traits.h
-    src/Utils.h)
+# Library sources and headers are auto-discovered. CONFIGURE_DEPENDS makes the
+# generator re-run the globs as part of the build, so adding or removing a file
+# needs no CMakeLists edit and no manual reconfigure.
+file(GLOB NEATCPP_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
+file(GLOB NEATCPP_HEADERS CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.h)
+# Glob order is unspecified; sort for reproducible build graphs.
+list(SORT NEATCPP_SOURCES)
+list(SORT NEATCPP_HEADERS)
 
 set(NEATCPP_TARGETS "")
 

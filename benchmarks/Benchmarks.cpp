@@ -1,11 +1,11 @@
 // Micro/macro benchmarks for NEAT.cpp. Standalone executable; prints one line
 // per benchmark: <name> <elapsed_ms> (<ops> ops, <ns_per_op> ns/op).
 //
-// Build:  cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DNEATCPP_ENABLE_BENCHMARKS=ON
-// Run:    ./build/benchmarks/NEATcppBench
+// Build:  cmake -S . -B build/bench -DCMAKE_BUILD_TYPE=Release -DNEATCPP_ENABLE_BENCHMARKS=ON
+// Run:    ./build/bench/benchmarks/NEATcppBench
 //
 // Seeded and fixed-iteration so runs are comparable across changes;
-// compare output against BENCHMARKS.md baselines.
+// compare output against RESULTS.md baselines.
 #include <chrono>
 #include <cmath>
 #include <cstdio>

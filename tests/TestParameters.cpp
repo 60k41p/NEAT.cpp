@@ -4,6 +4,9 @@
 // legacy file without NEAT_ParametersStart/End markers, and Parameters::Load
 // spins forever searching for the start marker on such files. The round-trip
 // below uses freshly Saved files plus tests/data/minimal.NEAT instead.
+//
+// CTest-Labels: Unit;IO;Fast
+// CTest-Timeout: 60
 #include <cmath>
 #include <cstdio>
 #include <filesystem>

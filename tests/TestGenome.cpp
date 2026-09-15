@@ -1,4 +1,7 @@
 // Tests for NEAT::Genome: structure, compatibility, phenotype, mutations.
+//
+// CTest-Labels: Evolution;Fast
+// CTest-Timeout: 120
 #include <algorithm>
 #include <cmath>
 #include <filesystem>

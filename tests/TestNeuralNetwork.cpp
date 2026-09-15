@@ -1,4 +1,7 @@
 // Golden tests for NEAT::NeuralNetwork activation + save/load.
+//
+// CTest-Labels: Unit;IO;Fast
+// CTest-Timeout: 60
 #include <cmath>
 #include <filesystem>
 #include <fstream>

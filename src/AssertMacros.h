@@ -1,29 +1,31 @@
-#ifndef NEATCPP_AssertMacros_h
-#define NEATCPP_AssertMacros_h
+/*
+ * NEAT.cpp: Portable, Zero-dependency C++17 NeuroEvolution Library
+ *
+ * Copyright (C) 2026 Gökalp Özcan
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * Contact info:
+ * Gökalp Özcan <gokalp@mail.com>
+ */
 
-///////////////////////////////////////////////////////////////////////////////////////////
-//    NEAT.cpp - C++ NeuroEvolution of Augmenting Topologies Library
-//
-//    Copyright (C) 2012 Peter Chervenski
-//
-//    This program is free software: you can redistribute it and/or modify
-//    it under the terms of the GNU Lesser General Public License as published by
-//    the Free Software Foundation, either version 3 of the License, or
-//    (at your option) any later version.
-//
-//    This program is distributed in the hope that it will be useful,
-//    but WITHOUT ANY WARRANTY; without even the implied warranty of
-//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//    GNU General Public License for more details.
-//
-//    You should have received a copy of the GNU Lesser General Public License
-//    along with this program.  If not, see < http://www.gnu.org/licenses/ >.
-//
-//    Contact info:
-//
-//    Peter Chervenski < spookey@abv.bg >
-//    Shane Ryan < shane.mcdonald.ryan@gmail.com >
-///////////////////////////////////////////////////////////////////////////////////////////
+/*
+ * File:        AssertMacros.h
+ * Description: ASSERT()/VERIFY() invariant macros, compiled in with DEBUG and optimised out otherwise.
+ */
+
+#pragma once
 
 #include <assert.h>
 
@@ -100,5 +102,3 @@
 #define VERIFY(expr)  // if( expr ) {}
 
 #endif
-
-#endif  // INCLUDE_GUARD_Assert_h

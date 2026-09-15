@@ -1,5 +1,8 @@
 // Seeded evolution smoke/regression tests for NEAT::Population.
 // Small populations + fixed RNG seeds keep these fast and deterministic.
+//
+// CTest-Labels: Evolution;Fast
+// CTest-Timeout: 120
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
@@ -63,7 +66,7 @@ namespace {
         try {
             pop.SameGenomeIDCheck();
         } catch (const std::exception &e) {
-            std::cerr << "FAILED TestPopulation.cxx:" << line << ": unique genome IDs (" << e.what() << ")\n";
+            std::cerr << "FAILED TestPopulation.cpp:" << line << ": unique genome IDs (" << e.what() << ")\n";
             ++g_failures;
         }
     }

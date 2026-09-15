@@ -6,6 +6,9 @@
 // fixed steep unsigned sigmoids, pure mutation (no crossover), rare neuron
 // addition, dynamic compatibility. All five seeds typically solve within ~50
 // generations; the budget below gives a large cross-platform margin.
+//
+// CTest-Labels: Evolution
+// CTest-Timeout: 600
 #include <algorithm>
 #include <cmath>
 #include <iostream>

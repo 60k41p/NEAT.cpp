@@ -1,4 +1,7 @@
 // Tests for NEAT::Species: selection, sorting, fitness sharing.
+//
+// CTest-Labels: Evolution;Fast
+// CTest-Timeout: 120
 #include <iostream>
 #include <stdexcept>
 
