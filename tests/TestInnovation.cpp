@@ -20,13 +20,13 @@ namespace {
         }                                                                                   \
     } while (0)
 
-    NEAT::Genome MakeSeedGenome() {
+    NEAT::Genome makeSeedGenome() {
         NEAT::Parameters params;
-        params.Reset();
+        params.reset();
         NEAT::GenomeInitStruct init;
-        init.NumInputs = 3;
-        init.NumOutputs = 1;
-        init.SeedType = NEAT::PERCEPTRON;
+        init.numInputs = 3;
+        init.numOutputs = 1;
+        init.seedType = NEAT::PERCEPTRON;
         return NEAT::Genome(params, init);
     }
 
@@ -40,86 +40,86 @@ int TestInnovation(int argc, char *argv[]) {
     // Empty database: lookups miss.
     {
         InnovationDatabase db;
-        CHECK(db.m_Innovations.empty());
-        CHECK(db.CheckInnovation(1, 2, NEW_LINK) == -1);
-        CHECK(db.CheckLastInnovation(1, 2, NEW_LINK) == -1);
-        CHECK(db.CheckAllInnovations(1, 2, NEW_LINK).empty());
-        CHECK(db.FindNeuronID(1, 2) == -1);
+        CHECK(db.innovations_.empty());
+        CHECK(db.checkInnovation(1, 2, NEW_LINK) == -1);
+        CHECK(db.checkLastInnovation(1, 2, NEW_LINK) == -1);
+        CHECK(db.checkAllInnovations(1, 2, NEW_LINK).empty());
+        CHECK(db.findNeuronID(1, 2) == -1);
     }
 
     // Link innovations: add/find, last-wins semantics.
     {
         InnovationDatabase db;
-        db.Init(1, 1);
-        const int id1 = db.AddLinkInnovation(1, 2);
+        db.init(1, 1);
+        const int id1 = db.addLinkInnovation(1, 2);
         CHECK(id1 == 1);
-        const int id2 = db.AddLinkInnovation(2, 3);
+        const int id2 = db.addLinkInnovation(2, 3);
         CHECK(id2 == 2);
-        CHECK(db.CheckInnovation(1, 2, NEW_LINK) == id1);
-        CHECK(db.CheckLastInnovation(1, 2, NEW_LINK) == id1);
-        CHECK(db.CheckInnovation(1, 2, NEW_NEURON) == -1);  // type matters
-        CHECK(db.GetInnovationByIdx(0).ID() == id1);
-        CHECK(db.GetInnovationByIdx(1).InnovType() == NEW_LINK);
+        CHECK(db.checkInnovation(1, 2, NEW_LINK) == id1);
+        CHECK(db.checkLastInnovation(1, 2, NEW_LINK) == id1);
+        CHECK(db.checkInnovation(1, 2, NEW_NEURON) == -1);  // type matters
+        CHECK(db.getInnovationByIndex(0).id() == id1);
+        CHECK(db.getInnovationByIndex(1).innovType() == NEW_LINK);
     }
 
     // Neuron innovations: IDs advance, Find* resolves the split link.
     {
         InnovationDatabase db;
-        db.Init(10, 20);
-        const int nid = db.AddNeuronInnovation(1, 2, HIDDEN);
+        db.init(10, 20);
+        const int nid = db.addNeuronInnovation(1, 2, HIDDEN);
         CHECK(nid == 20);
-        CHECK(db.FindNeuronID(1, 2) == nid);
-        CHECK(db.FindLastNeuronID(1, 2) == nid);
-        CHECK(db.CheckInnovation(1, 2, NEW_NEURON) == 10);
-        const int nid2 = db.AddNeuronInnovation(1, 2, HIDDEN);
+        CHECK(db.findNeuronID(1, 2) == nid);
+        CHECK(db.findLastNeuronID(1, 2) == nid);
+        CHECK(db.checkInnovation(1, 2, NEW_NEURON) == 10);
+        const int nid2 = db.addNeuronInnovation(1, 2, HIDDEN);
         CHECK(nid2 == 21);
         // First match vs last match differ once duplicated.
-        CHECK(db.CheckInnovation(1, 2, NEW_NEURON) == 10);
-        CHECK(db.CheckLastInnovation(1, 2, NEW_NEURON) == 11);
-        CHECK(db.FindLastNeuronID(1, 2) == nid2);
-        CHECK(db.CheckAllInnovations(1, 2, NEW_NEURON).size() == 2);
+        CHECK(db.checkInnovation(1, 2, NEW_NEURON) == 10);
+        CHECK(db.checkLastInnovation(1, 2, NEW_NEURON) == 11);
+        CHECK(db.findLastNeuronID(1, 2) == nid2);
+        CHECK(db.checkAllInnovations(1, 2, NEW_NEURON).size() == 2);
     }
 
     // Flush + Init(genome) rebuilds link entries from the seed genome.
     {
         InnovationDatabase db;
-        db.Init(1, 1);
-        db.AddLinkInnovation(1, 2);
-        CHECK(!db.m_Innovations.empty());
-        db.Flush();
-        CHECK(db.m_Innovations.empty());
+        db.init(1, 1);
+        db.addLinkInnovation(1, 2);
+        CHECK(!db.innovations_.empty());
+        db.flush();
+        CHECK(db.innovations_.empty());
 
-        const Genome seed = MakeSeedGenome();
-        db.Init(seed);
-        CHECK(db.m_Innovations.size() == seed.NumLinks());
-        for (const auto &innov : db.m_Innovations) {
-            CHECK(innov.InnovType() == NEW_LINK);
+        const Genome seed = makeSeedGenome();
+        db.init(seed);
+        CHECK(db.innovations_.size() == seed.numLinks());
+        for (const Innovation &innov : db.innovations_) {
+            CHECK(innov.innovType() == NEW_LINK);
         }
     }
 
     // Save/Init(ifstream) round-trip preserves entries and counters.
     {
-        const auto tmp = std::filesystem::temp_directory_path() / "multineat_test_innov.db";
+        const std::filesystem::path tmp = std::filesystem::temp_directory_path() / "multineat_test_innov.db";
         {
             InnovationDatabase db;
-            db.Init(100, 200);
-            db.AddLinkInnovation(1, 2);
-            db.AddNeuronInnovation(2, 3, HIDDEN);
+            db.init(100, 200);
+            db.addLinkInnovation(1, 2);
+            db.addNeuronInnovation(2, 3, HIDDEN);
             FILE *f = std::fopen(tmp.string().c_str(), "w");
             CHECK(f != nullptr);
-            db.Save(f);
+            db.save(f);
             std::fclose(f);
         }
         {
             InnovationDatabase db2;
             std::ifstream in(tmp.string());
             CHECK(in.is_open());
-            db2.Init(in);
-            CHECK(db2.m_Innovations.size() == 2);
-            CHECK(db2.CheckInnovation(1, 2, NEW_LINK) == 100);
-            CHECK(db2.FindNeuronID(2, 3) != -1);
+            db2.init(in);
+            CHECK(db2.innovations_.size() == 2);
+            CHECK(db2.checkInnovation(1, 2, NEW_LINK) == 100);
+            CHECK(db2.findNeuronID(2, 3) != -1);
             // Counters advanced past the added entries.
-            CHECK(db2.AddLinkInnovation(7, 8) == 102);
+            CHECK(db2.addLinkInnovation(7, 8) == 102);
         }
         std::error_code ec;
         std::filesystem::remove(tmp, ec);
@@ -128,7 +128,7 @@ int TestInnovation(int argc, char *argv[]) {
     // Regression: garbage (no InnovationDatabaseStart marker) must throw
     // instead of spinning on EOF forever.
     {
-        const auto tmp = std::filesystem::temp_directory_path() / "neatcpp_test_garbage_innov.db";
+        const std::filesystem::path tmp = std::filesystem::temp_directory_path() / "neatcpp_test_garbage_innov.db";
         {
             std::ofstream out(tmp);
             out << "no markers here\n";
@@ -137,7 +137,7 @@ int TestInnovation(int argc, char *argv[]) {
         std::ifstream in(tmp.string());
         bool threw = false;
         try {
-            db.Init(in);
+            db.init(in);
         } catch (...) {
             threw = true;
         }

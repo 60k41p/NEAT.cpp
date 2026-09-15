@@ -43,116 +43,114 @@ namespace NEAT {
 
     // Creates an empty database
     InnovationDatabase::InnovationDatabase() {
-        m_NextInnovationNum = 1;  // innovations start at 1
-        m_NextNeuronID = 1;       // neuron IDs start at 1
-        m_Innovations.clear();
+        nextInnovationNum_ = 1;  // innovations start at 1
+        nextNeuronID_ = 1;       // neuron IDs start at 1
+        innovations_.clear();
     }
 
     // Creates an empty database but this time sets the next innov number and neuron ID
-    InnovationDatabase::InnovationDatabase(int a_LastInnovationNum, int a_LastNeuronID) {
-        ASSERT((a_LastInnovationNum > 0) && (a_LastNeuronID > 0));
+    InnovationDatabase::InnovationDatabase(int lastInnovationNum, int lastNeuronID) {
+        ASSERT((lastInnovationNum > 0) && (lastNeuronID > 0));
 
-        m_NextInnovationNum = a_LastInnovationNum;
-        m_NextNeuronID = a_LastNeuronID;
-        m_Innovations.clear();
+        nextInnovationNum_ = lastInnovationNum;
+        nextNeuronID_ = lastNeuronID;
+        innovations_.clear();
     }
 
     // Initializes an empty database
-    void InnovationDatabase::Init(int a_LastInnovationNum, int a_LastNeuronID) {
-        Flush();
+    void InnovationDatabase::init(int lastInnovationNum, int lastNeuronID) {
+        flush();
 
-        m_NextNeuronID = a_LastNeuronID;
-        m_NextInnovationNum = a_LastInnovationNum;
+        nextNeuronID_ = lastNeuronID;
+        nextInnovationNum_ = lastInnovationNum;
     }
 
     // Initializes a database from a given genome
-    void InnovationDatabase::Init(const Genome &a_Genome) {
-        m_Innovations.clear();
-        for (unsigned int i = 0; i < a_Genome.NumLinks(); i++) {
-            Innovation t_innov(a_Genome.GetLinkByIndex(i).InnovationID(), NEW_LINK, a_Genome.GetLinkByIndex(i).FromNeuronID(),
-                               a_Genome.GetLinkByIndex(i).ToNeuronID(), NONE, -1);
-            m_Innovations.emplace_back(t_innov);
+    void InnovationDatabase::init(const Genome &genome) {
+        innovations_.clear();
+        for (unsigned int i = 0; i < genome.numLinks(); i++) {
+            Innovation innov(genome.getLinkByIndex(i).innovationID(), NEW_LINK, genome.getLinkByIndex(i).fromNeuronID(), genome.getLinkByIndex(i).toNeuronID(),
+                             NONE, -1);
+            innovations_.emplace_back(innov);
         }
 
-        m_NextNeuronID = a_Genome.GetLastNeuronID();
-        m_NextInnovationNum = a_Genome.GetLastInnovationID();
+        nextNeuronID_ = genome.getLastNeuronID();
+        nextInnovationNum_ = genome.getLastInnovationID();
     }
 
-    void InnovationDatabase::Init(std::ifstream &a_DataFile) {
-        m_Innovations.clear();
-        m_NextInnovationNum = 0;
-        m_NextNeuronID = 0;
+    void InnovationDatabase::init(std::ifstream &dataFile) {
+        innovations_.clear();
+        nextInnovationNum_ = 0;
+        nextNeuronID_ = 0;
 
-        std::string t_str;
+        std::string str;
 
         // search for InnovationDatabaseStart (with EOF guard: failed extraction
         // leaves t_str unchanged, so the loop would otherwise never terminate)
         do {
-            a_DataFile >> t_str;
-            if (a_DataFile.eof()) {
+            dataFile >> str;
+            if (dataFile.eof()) {
                 throw std::runtime_error("Innovation database file error: InnovationDatabaseStart not found!");
             }
-        } while (t_str != "InnovationDatabaseStart");
+        } while (str != "InnovationDatabaseStart");
 
         // Read the last innov numbers
-        a_DataFile >> t_str;
-        a_DataFile >> m_NextInnovationNum;
-        a_DataFile >> t_str;
-        a_DataFile >> m_NextNeuronID;
+        dataFile >> str;
+        dataFile >> nextInnovationNum_;
+        dataFile >> str;
+        dataFile >> nextNeuronID_;
 
         // Read the database until InnovationDatabaseEnd is encountered
         do {
-            a_DataFile >> t_str;
-            if (a_DataFile.eof()) {
+            dataFile >> str;
+            if (dataFile.eof()) {
                 throw std::runtime_error("Innovation database file error: InnovationDatabaseEnd not found!");
             }
 
-            if (t_str == "Innovation") {
+            if (str == "Innovation") {
                 // Read in the innovation
-                int t_id, t_from, t_to, t_innovtype, t_neurontype, t_nid;
+                int id, from, to, innovtype, neurontype, nid;
 
-                a_DataFile >> t_id;
-                a_DataFile >> t_innovtype;
-                a_DataFile >> t_from;
-                a_DataFile >> t_to;
-                a_DataFile >> t_neurontype;
-                a_DataFile >> t_nid;
+                dataFile >> id;
+                dataFile >> innovtype;
+                dataFile >> from;
+                dataFile >> to;
+                dataFile >> neurontype;
+                dataFile >> nid;
 
-                m_Innovations.emplace_back(
-                    Innovation(t_id, static_cast<InnovationType>(t_innovtype), t_from, t_to, static_cast<NeuronType>(t_neurontype), t_nid));
+                innovations_.emplace_back(Innovation(id, static_cast<InnovationType>(innovtype), from, to, static_cast<NeuronType>(neurontype), nid));
             }
 
-        } while (t_str != "InnovationDatabaseEnd");
+        } while (str != "InnovationDatabaseEnd");
     }
 
     // The file is assumed to be opened
-    void InnovationDatabase::Save(FILE *a_file) {
-        fprintf(a_file, "InnovationDatabaseStart\n");
-        fprintf(a_file, "NextInnovNum: %d\n", m_NextInnovationNum);
-        fprintf(a_file, "NextNeuronID: %d\n", m_NextNeuronID);
+    void InnovationDatabase::save(FILE *file) {
+        fprintf(file, "InnovationDatabaseStart\n");
+        fprintf(file, "NextInnovNum: %d\n", nextInnovationNum_);
+        fprintf(file, "NextNeuronID: %d\n", nextNeuronID_);
 
         // Now save all innovations
-        for (unsigned int i = 0; i < m_Innovations.size(); i++) {
-            fprintf(a_file, "Innovation %d %d %d %d %d %d\n", m_Innovations[i].ID(), static_cast<int>(m_Innovations[i].InnovType()),
-                    m_Innovations[i].FromNeuronID(), m_Innovations[i].ToNeuronID(), static_cast<int>(m_Innovations[i].GetNeuronType()),
-                    m_Innovations[i].NeuronID());
+        for (unsigned int i = 0; i < innovations_.size(); i++) {
+            fprintf(file, "Innovation %d %d %d %d %d %d\n", innovations_[i].id(), static_cast<int>(innovations_[i].innovType()), innovations_[i].fromNeuronID(),
+                    innovations_[i].toNeuronID(), static_cast<int>(innovations_[i].getNeuronType()), innovations_[i].neuronID());
         }
-        fprintf(a_file, "InnovationDatabaseEnd\n\n");
+        fprintf(file, "InnovationDatabaseEnd\n\n");
     }
 
     // Checks the database if the innovation has already occured
     // Returns the innovation id if true or -1 if false
     // If it is a NEW_LINK innovation, in & out specify the neuron IDs being connected
     // If it is a NEW_NEURON innovation, in & out specify the connection that was split
-    int InnovationDatabase::CheckInnovation(int a_In, int a_Out, InnovationType a_Type) const {
-        ASSERT((a_In > 0) && (a_Out > 0));
-        ASSERT((a_Type == NEW_NEURON) || (a_Type == NEW_LINK));
+    int InnovationDatabase::checkInnovation(int in, int out, InnovationType type) const {
+        ASSERT((in > 0) && (out > 0));
+        ASSERT((type == NEW_NEURON) || (type == NEW_LINK));
 
         // search the list for a match
-        for (unsigned int i = 0; i < m_Innovations.size(); i++) {
-            if ((m_Innovations[i].FromNeuronID() == a_In) && (m_Innovations[i].ToNeuronID() == a_Out) && (m_Innovations[i].InnovType() == a_Type)) {
+        for (unsigned int i = 0; i < innovations_.size(); i++) {
+            if ((innovations_[i].fromNeuronID() == in) && (innovations_[i].toNeuronID() == out) && (innovations_[i].innovType() == type)) {
                 // match found?
-                return m_Innovations[i].ID();
+                return innovations_[i].id();
             }
         }
 
@@ -160,51 +158,51 @@ namespace NEAT {
         return -1;
     }
 
-    int InnovationDatabase::CheckLastInnovation(int a_In, int a_Out, InnovationType a_Type) const {
-        ASSERT((a_In > 0) && (a_Out > 0));
-        ASSERT((a_Type == NEW_NEURON) || (a_Type == NEW_LINK));
-        int t_ID = -1;
+    int InnovationDatabase::checkLastInnovation(int in, int out, InnovationType type) const {
+        ASSERT((in > 0) && (out > 0));
+        ASSERT((type == NEW_NEURON) || (type == NEW_LINK));
+        int id = -1;
 
         // search the list for a match
-        for (unsigned int i = 0; i < m_Innovations.size(); i++) {
-            if ((m_Innovations[i].FromNeuronID() == a_In) && (m_Innovations[i].ToNeuronID() == a_Out) && (m_Innovations[i].InnovType() == a_Type)) {
+        for (unsigned int i = 0; i < innovations_.size(); i++) {
+            if ((innovations_[i].fromNeuronID() == in) && (innovations_[i].toNeuronID() == out) && (innovations_[i].innovType() == type)) {
                 // match found?
-                t_ID = m_Innovations[i].ID();
+                id = innovations_[i].id();
             }
         }
 
-        return t_ID;
+        return id;
     }
 
     // returns a list of indexes in the database of identical innovations
-    std::vector<int> InnovationDatabase::CheckAllInnovations(int a_In, int a_Out, InnovationType a_Type) const {
-        ASSERT((a_In > 0) && (a_Out > 0));
-        ASSERT((a_Type == NEW_NEURON) || (a_Type == NEW_LINK));
+    std::vector<int> InnovationDatabase::checkAllInnovations(int in, int out, InnovationType type) const {
+        ASSERT((in > 0) && (out > 0));
+        ASSERT((type == NEW_NEURON) || (type == NEW_LINK));
 
-        std::vector<int> t_idxs;
-        t_idxs.clear();
+        std::vector<int> indexs;
+        indexs.clear();
 
         // search the list for a match
-        for (unsigned int i = 0; i < m_Innovations.size(); i++) {
-            if ((m_Innovations[i].FromNeuronID() == a_In) && (m_Innovations[i].ToNeuronID() == a_Out) && (m_Innovations[i].InnovType() == a_Type)) {
+        for (unsigned int i = 0; i < innovations_.size(); i++) {
+            if ((innovations_[i].fromNeuronID() == in) && (innovations_[i].toNeuronID() == out) && (innovations_[i].innovType() == type)) {
                 // match found?
-                t_idxs.emplace_back(i);
+                indexs.emplace_back(i);
             }
         }
 
-        return t_idxs;
+        return indexs;
     }
 
     // Returns the neuron ID given the in and out neurons
     // If not found, returns -1
-    int InnovationDatabase::FindNeuronID(int a_In, int a_Out) const {
-        ASSERT((a_In > 0) && (a_Out > 0));
+    int InnovationDatabase::findNeuronID(int in, int out) const {
+        ASSERT((in > 0) && (out > 0));
 
         // search the list for a match
-        for (unsigned int i = 0; i < m_Innovations.size(); i++) {
-            if ((m_Innovations[i].FromNeuronID() == a_In) && (m_Innovations[i].ToNeuronID() == a_Out) && (m_Innovations[i].InnovType() == NEW_NEURON)) {
+        for (unsigned int i = 0; i < innovations_.size(); i++) {
+            if ((innovations_[i].fromNeuronID() == in) && (innovations_[i].toNeuronID() == out) && (innovations_[i].innovType() == NEW_NEURON)) {
                 // match found?
-                return m_Innovations[i].NeuronID();
+                return innovations_[i].neuronID();
             }
         }
 
@@ -212,45 +210,45 @@ namespace NEAT {
         return -1;
     }
 
-    int InnovationDatabase::FindLastNeuronID(int a_In, int a_Out) const {
-        ASSERT((a_In > 0) && (a_Out > 0));
-        int t_ID = -1;
+    int InnovationDatabase::findLastNeuronID(int in, int out) const {
+        ASSERT((in > 0) && (out > 0));
+        int id = -1;
 
         // search the list for a match
-        for (unsigned int i = 0; i < m_Innovations.size(); i++) {
-            if ((m_Innovations[i].FromNeuronID() == a_In) && (m_Innovations[i].ToNeuronID() == a_Out) && (m_Innovations[i].InnovType() == NEW_NEURON)) {
+        for (unsigned int i = 0; i < innovations_.size(); i++) {
+            if ((innovations_[i].fromNeuronID() == in) && (innovations_[i].toNeuronID() == out) && (innovations_[i].innovType() == NEW_NEURON)) {
                 // match found?
-                t_ID = m_Innovations[i].NeuronID();
+                id = innovations_[i].neuronID();
             }
         }
 
-        return t_ID;
+        return id;
     }
 
     // Adds a new link innovation and returns its ID Increments the m_NextInnovationNum internally
-    int InnovationDatabase::AddLinkInnovation(int a_In, int a_Out) {
-        ASSERT((a_In > 0) && (a_Out > 0));
+    int InnovationDatabase::addLinkInnovation(int in, int out) {
+        ASSERT((in > 0) && (out > 0));
 
-        m_Innovations.emplace_back(Innovation(m_NextInnovationNum, NEW_LINK, a_In, a_Out, NONE, -1));
-        m_NextInnovationNum++;
+        innovations_.emplace_back(Innovation(nextInnovationNum_, NEW_LINK, in, out, NONE, -1));
+        nextInnovationNum_++;
 
-        return (m_NextInnovationNum - 1);
+        return (nextInnovationNum_ - 1);
     }
 
     // Adds a new neuron innovation and returns the new neuron ID in and out specify the connection that was split type specifies the type of neuron Increments
     // the m_NextNeuronID and m_NextInnovationNum internally
-    int InnovationDatabase::AddNeuronInnovation(int a_In, int a_Out, NeuronType a_NType) {
-        ASSERT((a_In > 0) && (a_Out > 0));
-        ASSERT(!((a_NType == INPUT) || (a_NType == BIAS) || (a_NType == OUTPUT)));
+    int InnovationDatabase::addNeuronInnovation(int in, int out, NeuronType nType) {
+        ASSERT((in > 0) && (out > 0));
+        ASSERT(!((nType == INPUT) || (nType == BIAS) || (nType == OUTPUT)));
 
-        m_Innovations.emplace_back(Innovation(m_NextInnovationNum, NEW_NEURON, a_In, a_Out, a_NType, m_NextNeuronID));
-        m_NextInnovationNum++;
-        m_NextNeuronID++;
+        innovations_.emplace_back(Innovation(nextInnovationNum_, NEW_NEURON, in, out, nType, nextNeuronID_));
+        nextInnovationNum_++;
+        nextNeuronID_++;
 
-        return (m_NextNeuronID - 1);
+        return (nextNeuronID_ - 1);
     }
 
     // Clears all innovations in the database
-    void InnovationDatabase::Flush() { m_Innovations.clear(); }
+    void InnovationDatabase::flush() { innovations_.clear(); }
 
 }  // namespace NEAT

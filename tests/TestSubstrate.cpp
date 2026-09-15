@@ -27,18 +27,18 @@ int TestSubstrate(int argc, char *argv[]) {
     // Default construction: documented flag state.
     {
         Substrate s;
-        CHECK(!s.m_leaky);
-        CHECK(!s.m_with_distance);
-        CHECK(!s.m_query_weights_only);
-        CHECK(s.m_allow_input_hidden_links);
-        CHECK(s.m_allow_input_output_links);
-        CHECK(!s.m_allow_hidden_hidden_links);
-        CHECK(s.m_allow_hidden_output_links);
-        CHECK(s.GetMaxDims() == 0);
+        CHECK(!s.leaky_);
+        CHECK(!s.withDistance_);
+        CHECK(!s.queryWeightsOnly_);
+        CHECK(s.allowInputHiddenLinks_);
+        CHECK(s.allowInputOutputLinks_);
+        CHECK(!s.allowHiddenHiddenLinks_);
+        CHECK(s.allowHiddenOutputLinks_);
+        CHECK(s.getMaxDims() == 0);
         // 0 dims * 2 + bias.
-        CHECK(s.GetMinCPPNInputs() == 1);
+        CHECK(s.getMinCPPNInputs() == 1);
         // link on/off + weight.
-        CHECK(s.GetMinCPPNOutputs() == 2);
+        CHECK(s.getMinCPPNOutputs() == 2);
     }
 
     // Dimensionality math over mixed coordinate sizes.
@@ -47,50 +47,50 @@ int TestSubstrate(int argc, char *argv[]) {
         std::vector<std::vector<double>> hid{{0.0, 0.0}};
         std::vector<std::vector<double>> outs{{0.0, 0.0}};
         Substrate s(ins, hid, outs);
-        CHECK(s.GetMaxDims() == 2);
-        CHECK(s.GetMinCPPNInputs() == 2 * 2 + 1);
-        CHECK(s.GetMinCPPNOutputs() == 2);
+        CHECK(s.getMaxDims() == 2);
+        CHECK(s.getMinCPPNInputs() == 2 * 2 + 1);
+        CHECK(s.getMinCPPNOutputs() == 2);
 
         // 3-D inputs raise the max.
-        s.m_input_coords.push_back({0.0, 0.0, 0.0});
-        CHECK(s.GetMaxDims() == 3);
-        CHECK(s.GetMinCPPNInputs() == 3 * 2 + 1);
+        s.inputCoords_.push_back({0.0, 0.0, 0.0});
+        CHECK(s.getMaxDims() == 3);
+        CHECK(s.getMinCPPNInputs() == 3 * 2 + 1);
     }
 
     // Flag-driven CPPN output dimensionality.
     {
         Substrate s;
-        s.m_query_weights_only = true;
-        CHECK(s.GetMinCPPNOutputs() == 1);
-        s.m_leaky = true;
-        CHECK(s.GetMinCPPNOutputs() == 3);  // 1 + time_const + bias
-        s.m_query_weights_only = false;
-        CHECK(s.GetMinCPPNOutputs() == 4);  // 2 + time_const + bias
-        s.m_with_distance = true;
-        CHECK(s.GetMinCPPNInputs() == 0 * 2 + 1 + 1);
+        s.queryWeightsOnly_ = true;
+        CHECK(s.getMinCPPNOutputs() == 1);
+        s.leaky_ = true;
+        CHECK(s.getMinCPPNOutputs() == 3);  // 1 + time_const + bias
+        s.queryWeightsOnly_ = false;
+        CHECK(s.getMinCPPNOutputs() == 4);  // 2 + time_const + bias
+        s.withDistance_ = true;
+        CHECK(s.getMinCPPNInputs() == 0 * 2 + 1 + 1);
     }
 
     // Custom connectivity set/clear round-trip.
     {
         Substrate s;
-        CHECK(s.m_custom_connectivity.empty());
+        CHECK(s.customConnectivity_.empty());
         std::vector<std::vector<int>> conns{
             {static_cast<int>(INPUT), 0, static_cast<int>(OUTPUT), 0},
             {static_cast<int>(INPUT), 1, static_cast<int>(HIDDEN), 0},
         };
-        s.SetCustomConnectivity(conns);
-        CHECK(s.m_custom_connectivity.size() == 2);
-        CHECK(s.m_custom_connectivity[0][0] == static_cast<int>(INPUT));
-        CHECK(s.m_custom_connectivity[0][2] == static_cast<int>(OUTPUT));
-        CHECK(s.m_custom_connectivity[1][3] == 0);
-        s.ClearCustomConnectivity();
-        CHECK(s.m_custom_connectivity.empty());
+        s.setCustomConnectivity(conns);
+        CHECK(s.customConnectivity_.size() == 2);
+        CHECK(s.customConnectivity_[0][0] == static_cast<int>(INPUT));
+        CHECK(s.customConnectivity_[0][2] == static_cast<int>(OUTPUT));
+        CHECK(s.customConnectivity_[1][3] == 0);
+        s.clearCustomConnectivity();
+        CHECK(s.customConnectivity_.empty());
     }
 
     // PrintInfo must not crash (smoke).
     {
         Substrate s;
-        s.PrintInfo();
+        s.printInfo();
     }
 
     if (g_failures != 0) {

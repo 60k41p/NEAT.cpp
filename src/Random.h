@@ -27,7 +27,11 @@
 
 /*
  * File:        Random.h
- * Description: Declarations for a class dealing with random numbers.
+ * Description: Deterministic RNG wrapper (std::mt19937) used by every stochastic operator: initialization,
+ *              mutation, mating, roulette selection and trait draws. Seed it explicitly for reproducible runs.
+ *
+ * References: C++ <random> distributions (uniform_int/uniform_real/normal/discrete_distribution).
+ *             Intra-repo users: src/Genome.h, src/Population.h, src/Species.h, src/Genes.h.
  */
 
 #pragma once
@@ -38,33 +42,35 @@
 
 namespace NEAT {
 
+    // Deterministic 32-bit Mersenne Twister engine. Copyable; copy the whole RNG to fork a stream.
     class RNG {
-        std::mt19937 gen;
+        // Engine state (seeded via seed()/timeSeed()).
+        std::mt19937 gen_;
 
        public:
         // Seeds the random number generator with this value
-        void Seed(long seed);
+        void seed(long seed);
 
         // Seeds the random number generator with time
-        void TimeSeed();
+        void timeSeed();
 
         // Returns randomly either 1 or -1
-        int RandPosNeg();
+        int randPosNeg();
 
         // Returns a random integer between X and Y
-        int RandInt(int x, int y);
+        int randInt(int x, int y);
 
         // Returns a random number from a uniform distribution in the range of [0 .. 1]
-        double RandFloat();
+        double randFloat();
 
         // Returns a random number from a uniform distribution in the range of [-1 .. 1]
-        double RandFloatSigned();
+        double randFloatSigned();
 
         // Returns a random number from a gaussian (normal) distribution in the range of [-1 .. 1]
-        double RandGaussSigned();
+        double randGaussSigned();
 
-        // Returns an index given a vector of probabilities
-        int Roulette(std::vector<double> &a_probs);
+        // Returns an index sampled proportionally to the given weights (throws on empty input).
+        int roulette(const std::vector<double> &probs);
     };
 
 }  // namespace NEAT

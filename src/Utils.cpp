@@ -32,15 +32,21 @@
 
 #include "Utils.h"
 
-void Scale(vector<double> &a_Values, const double a_tr_min, const double a_tr_max) {
-    double t_max = std::numeric_limits<double>::lowest(), t_min = std::numeric_limits<double>::max();
-    GetMaxMin(a_Values, t_min, t_max);
-    vector<double> t_ValuesScaled;
-    for (vector<double>::const_iterator t_It = a_Values.begin(); t_It != a_Values.end(); ++t_It) {
-        double t_ValueToBeScaled = (*t_It);
-        Scale(t_ValueToBeScaled, t_min, t_max, 0, 1);  // !!!!!!!!!!!!!!!!??????????
-        t_ValuesScaled.push_back(t_ValueToBeScaled);
+namespace NEAT {
+
+    // Scales every entry of the vector from its current [min .. max] range into [targetMin .. targetMax].
+    void scale(std::vector<double> &values, const double targetMin, const double targetMax) {
+        double max = std::numeric_limits<double>::lowest();
+        double min = std::numeric_limits<double>::max();
+        getMaxMin(values, min, max);
+        std::vector<double> valuesScaled;
+        for (std::vector<double>::const_iterator it = values.begin(); it != values.end(); ++it) {
+            double valueToBeScaled = (*it);
+            scale(valueToBeScaled, min, max, targetMin, targetMax);
+            valuesScaled.push_back(valueToBeScaled);
+        }
+
+        values = valuesScaled;
     }
 
-    a_Values = t_ValuesScaled;
-}
+}  // namespace NEAT

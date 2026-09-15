@@ -32,19 +32,17 @@
 
 #include "NeuralNetwork.h"
 
-#include <float.h>
-#include <math.h>
-
+#include <cfloat>
+#include <cmath>
 #include <fstream>
 #include <iostream>
+#include <random>
 #include <sstream>
 #include <string>
 
 #include "AssertMacros.h"
 #include "Utils.h"
 
-// #define NULL 0
-#define sqr(x) ((x) * (x))
 #define LEARNING_RATE 0.0001
 
 namespace NEAT {
@@ -53,485 +51,486 @@ namespace NEAT {
     // The set of activation functions //
     /////////////////////////////////////
 
-    inline double af_sigmoid_unsigned(double aX, double aSlope, double aShift) { return 1.0 / (1.0 + exp(-aSlope * aX - aShift)); }
+    inline double activationSigmoidUnsigned(double x, double slope, double shift) { return 1.0 / (1.0 + exp(-slope * x - shift)); }
 
-    inline double af_sigmoid_signed(double aX, double aSlope, double aShift) {
-        double tY = af_sigmoid_unsigned(aX, aSlope, aShift);
-        return (tY - 0.5) * 2.0;
+    inline double activationSigmoidSigned(double x, double slope, double shift) {
+        double y = activationSigmoidUnsigned(x, slope, shift);
+        return (y - 0.5) * 2.0;
     }
 
-    inline double af_tanh(double aX, double aSlope, double aShift) { return tanh(aX * aSlope); }
+    inline double activationTanh(double x, double slope, double shift) { return tanh(x * slope); }
 
-    inline double af_tanh_cubic(double aX, double aSlope, double aShift) { return tanh(aX * aX * aX * aSlope); }
+    inline double activationTanhCubic(double x, double slope, double shift) { return tanh(x * x * x * slope); }
 
-    inline double af_step_signed(double aX, double aShift) {
-        double tY;
-        if (aX > aShift) {
-            tY = 1.0;
+    inline double activationStepSigned(double x, double shift) {
+        double y;
+        if (x > shift) {
+            y = 1.0;
         } else {
-            tY = -1.0;
+            y = -1.0;
         }
 
-        return tY;
+        return y;
     }
 
-    inline double af_step_unsigned(double aX, double aShift) {
-        if (aX > (0.5 + aShift)) {
+    inline double activationStepUnsigned(double x, double shift) {
+        if (x > (0.5 + shift)) {
             return 1.0;
         } else {
             return 0.0;
         }
     }
 
-    inline double af_gauss_signed(double aX, double aSlope, double aShift) {
-        double tY = exp(-aSlope * aX * aX + aShift);  // TODO: Need separate a, b per activation function
-        return (tY - 0.5) * 2.0;
+    inline double activationGaussSigned(double x, double slope, double shift) {
+        double y = exp(-slope * x * x + shift);  // TODO: Need separate a, b per activation function
+        return (y - 0.5) * 2.0;
     }
 
-    inline double af_gauss_unsigned(double aX, double aSlope, double aShift) { return exp(-aSlope * aX * aX + aShift); }
+    inline double activationGaussUnsigned(double x, double slope, double shift) { return exp(-slope * x * x + shift); }
 
-    inline double af_abs(double aX, double aShift) { return ((aX + aShift) < 0.0) ? -(aX + aShift) : (aX + aShift); }
+    inline double activationAbs(double x, double shift) { return ((x + shift) < 0.0) ? -(x + shift) : (x + shift); }
 
-    inline double af_sine_signed(double aX, double aFreq, double aShift) { return sin(aX * aFreq + aShift); }
+    inline double activationSineSigned(double x, double freq, double shift) { return sin(x * freq + shift); }
 
-    inline double af_sine_unsigned(double aX, double aFreq, double aShift) {
-        double tY = sin((aX * aFreq + aShift));
-        return (tY + 1.0) / 2.0;
+    inline double activationSineUnsigned(double x, double freq, double shift) {
+        double y = sin((x * freq + shift));
+        return (y + 1.0) / 2.0;
     }
 
-    inline double af_linear(double aX, double aShift) { return (aX + aShift); }
+    inline double activationLinear(double x, double shift) { return (x + shift); }
 
-    inline double af_relu(double aX) { return (aX > 0) ? aX : 0; }
+    inline double activationRelu(double x) { return (x > 0) ? x : 0; }
 
-    inline double af_softplus(double aX) { return log(1 + exp(aX)); }
+    inline double activationSoftplus(double x) { return log(1 + exp(x)); }
 
-    double unsigned_sigmoid_derivative(double x) { return x * (1 - x); }
+    double unsignedSigmoidDerivative(double x) { return x * (1 - x); }
 
-    double tanh_derivative(double x) { return 1 - x * x; }
+    double tanhDerivative(double x) { return 1 - x * x; }
 
     ///////////////////////////////////////
     // Neural network class implementation
     ///////////////////////////////////////
-    NeuralNetwork::NeuralNetwork(bool a_Minimal) {
-        if (!a_Minimal) {
+    NeuralNetwork::NeuralNetwork(bool minimal) {
+        if (!minimal) {
             // build an XOR network
 
             // The input neurons are 3 // indexes 0 1 2
-            Neuron t_i1{}, t_i2{}, t_i3{};
+            Neuron i1{}, i2{}, i3{};
 
             // The output neuron       // index 3
-            Neuron t_o1{};
+            Neuron o1{};
 
             // The hidden neuron       // index 4
-            Neuron t_h1{};
+            Neuron h1{};
 
-            m_neurons.emplace_back(t_i1);
-            m_neurons.emplace_back(t_i2);
-            m_neurons.emplace_back(t_i3);
-            m_neurons.emplace_back(t_o1);
-            m_neurons.emplace_back(t_h1);
+            neurons_.emplace_back(i1);
+            neurons_.emplace_back(i2);
+            neurons_.emplace_back(i3);
+            neurons_.emplace_back(o1);
+            neurons_.emplace_back(h1);
 
             // The connections
-            Connection t_c{};
+            Connection c{};
 
-            t_c.m_source_neuron_idx = 0;
-            t_c.m_target_neuron_idx = 3;
-            t_c.m_weight = 0;
-            m_connections.emplace_back(t_c);
+            c.sourceNeuronIndex_ = 0;
+            c.targetNeuronIndex_ = 3;
+            c.weight_ = 0;
+            connections_.emplace_back(c);
 
-            t_c.m_source_neuron_idx = 1;
-            t_c.m_target_neuron_idx = 3;
-            t_c.m_weight = 0;
-            m_connections.emplace_back(t_c);
+            c.sourceNeuronIndex_ = 1;
+            c.targetNeuronIndex_ = 3;
+            c.weight_ = 0;
+            connections_.emplace_back(c);
 
-            t_c.m_source_neuron_idx = 2;
-            t_c.m_target_neuron_idx = 3;
-            t_c.m_weight = 0;
-            m_connections.emplace_back(t_c);
+            c.sourceNeuronIndex_ = 2;
+            c.targetNeuronIndex_ = 3;
+            c.weight_ = 0;
+            connections_.emplace_back(c);
 
-            t_c.m_source_neuron_idx = 0;
-            t_c.m_target_neuron_idx = 4;
-            t_c.m_weight = 0;
-            m_connections.emplace_back(t_c);
+            c.sourceNeuronIndex_ = 0;
+            c.targetNeuronIndex_ = 4;
+            c.weight_ = 0;
+            connections_.emplace_back(c);
 
-            t_c.m_source_neuron_idx = 1;
-            t_c.m_target_neuron_idx = 4;
-            t_c.m_weight = 0;
-            m_connections.emplace_back(t_c);
+            c.sourceNeuronIndex_ = 1;
+            c.targetNeuronIndex_ = 4;
+            c.weight_ = 0;
+            connections_.emplace_back(c);
 
-            t_c.m_source_neuron_idx = 2;
-            t_c.m_target_neuron_idx = 4;
-            t_c.m_weight = 0;
-            m_connections.emplace_back(t_c);
+            c.sourceNeuronIndex_ = 2;
+            c.targetNeuronIndex_ = 4;
+            c.weight_ = 0;
+            connections_.emplace_back(c);
 
-            t_c.m_source_neuron_idx = 4;
-            t_c.m_target_neuron_idx = 3;
-            t_c.m_weight = 0;
-            m_connections.emplace_back(t_c);
+            c.sourceNeuronIndex_ = 4;
+            c.targetNeuronIndex_ = 3;
+            c.weight_ = 0;
+            connections_.emplace_back(c);
 
-            m_num_inputs = 3;
-            m_num_outputs = 1;
+            numInputs_ = 3;
+            numOutputs_ = 1;
 
             // Initialize the network's weights (make them random)
-            for (unsigned int i = 0; i < m_connections.size(); i++) {
-                m_connections[i].m_weight = ((double)rand() / (double)RAND_MAX) - 0.5;
+            std::mt19937 weightEngine(std::random_device{}());
+            std::uniform_real_distribution<double> weightDist(-0.5, 0.5);
+            for (unsigned int i = 0; i < connections_.size(); i++) {
+                connections_[i].weight_ = weightDist(weightEngine);
             }
 
             // clean up other neuron data as well
-            for (unsigned int i = 0; i < m_neurons.size(); i++) {
-                m_neurons[i].m_a = 1;
-                m_neurons[i].m_b = 0;
-                m_neurons[i].m_timeconst = m_neurons[i].m_bias = m_neurons[i].m_membrane_potential = 0;
+            for (unsigned int i = 0; i < neurons_.size(); i++) {
+                neurons_[i].a_ = 1;
+                neurons_[i].b_ = 0;
+                neurons_[i].timeconst_ = neurons_[i].bias_ = neurons_[i].membranePotential_ = 0;
             }
 
-            InitRTRLMatrix();
+            initRTRLMatrix();
         } else {
             // an empty network
-            m_num_inputs = m_num_outputs = 0;
-            m_total_error = 0;
+            numInputs_ = numOutputs_ = 0;
+            totalError_ = 0;
             // clean up other neuron data as well
-            for (unsigned int i = 0; i < m_neurons.size(); i++) {
-                m_neurons[i].m_a = 1;
-                m_neurons[i].m_b = 0;
-                m_neurons[i].m_timeconst = m_neurons[i].m_bias = m_neurons[i].m_membrane_potential = 0;
+            for (unsigned int i = 0; i < neurons_.size(); i++) {
+                neurons_[i].a_ = 1;
+                neurons_[i].b_ = 0;
+                neurons_[i].timeconst_ = neurons_[i].bias_ = neurons_[i].membranePotential_ = 0;
             }
-            Clear();
+            clear();
         }
     }
 
     NeuralNetwork::NeuralNetwork() {
         // an empty network
-        m_num_inputs = m_num_outputs = 0;
-        m_total_error = 0;
+        numInputs_ = numOutputs_ = 0;
+        totalError_ = 0;
         // clean up other neuron data as well
-        for (unsigned int i = 0; i < m_neurons.size(); i++) {
-            m_neurons[i].m_a = 1;
-            m_neurons[i].m_b = 0;
-            m_neurons[i].m_timeconst = m_neurons[i].m_bias = m_neurons[i].m_membrane_potential = 0;
+        for (unsigned int i = 0; i < neurons_.size(); i++) {
+            neurons_[i].a_ = 1;
+            neurons_[i].b_ = 0;
+            neurons_[i].timeconst_ = neurons_[i].bias_ = neurons_[i].membranePotential_ = 0;
         }
-        Clear();
+        clear();
     }
 
-    void NeuralNetwork::InitRTRLMatrix() {
+    void NeuralNetwork::initRTRLMatrix() {
         // Allocate memory for the neurons sensitivity matrices.
-        for (unsigned int i = 0; i < m_neurons.size(); i++) {
-            m_neurons[i].m_sensitivity_matrix.resize(m_neurons.size());  // first dimention
-            for (unsigned int j = 0; j < m_neurons.size(); j++) {
-                m_neurons[i].m_sensitivity_matrix[j].resize(m_neurons.size());  // second dimention
+        for (unsigned int i = 0; i < neurons_.size(); i++) {
+            neurons_[i].sensitivityMatrix_.resize(neurons_.size());  // first dimention
+            for (unsigned int j = 0; j < neurons_.size(); j++) {
+                neurons_[i].sensitivityMatrix_[j].resize(neurons_.size());  // second dimention
             }
         }
 
         // now clear it
-        FlushCube();
+        flushCube();
         // clear out the other RTRL stuff as well
-        m_total_error = 0;
-        m_total_weight_change.resize(m_connections.size());
-        for (unsigned int i = 0; i < m_connections.size(); i++) {
-            m_total_weight_change[i] = 0;
+        totalError_ = 0;
+        totalWeightChange_.resize(connections_.size());
+        for (unsigned int i = 0; i < connections_.size(); i++) {
+            totalWeightChange_[i] = 0;
         }
     }
 
-    void NeuralNetwork::ActivateFast() {
+    void NeuralNetwork::activateFast() {
         // Loop connections. Calculate each connection's output signal.
-        for (unsigned int i = 0; i < m_connections.size(); i++) {
-            m_connections[i].m_signal = m_neurons[m_connections[i].m_source_neuron_idx].m_activation * m_connections[i].m_weight;
+        for (unsigned int i = 0; i < connections_.size(); i++) {
+            connections_[i].signal_ = neurons_[connections_[i].sourceNeuronIndex_].activation_ * connections_[i].weight_;
         }
         // Loop the connections again. This time add the signals to the target neurons. This will largely require out of order memory writes. This is the one
         // loop where this will happen.
-        for (unsigned int i = 0; i < m_connections.size(); i++) {
-            m_neurons[m_connections[i].m_target_neuron_idx].m_activesum += m_connections[i].m_signal;
+        for (unsigned int i = 0; i < connections_.size(); i++) {
+            neurons_[connections_[i].targetNeuronIndex_].activesum_ += connections_[i].signal_;
         }
         // Now loop nodes_activesums, pass the signals through the activation function and store the result back to nodes_activations also skip inputs since
         // they do not get an activation
-        for (unsigned int i = m_num_inputs; i < m_neurons.size(); i++) {
-            double x = m_neurons[i].m_activesum;
-            m_neurons[i].m_activesum = 0;
+        for (unsigned int i = numInputs_; i < neurons_.size(); i++) {
+            double x = neurons_[i].activesum_;
+            neurons_[i].activesum_ = 0;
             // Apply the activation function
             double y = 0.0;
-            y = af_sigmoid_unsigned(x, m_neurons[i].m_a, m_neurons[i].m_b);
-            m_neurons[i].m_activation = y;
+            y = activationSigmoidUnsigned(x, neurons_[i].a_, neurons_[i].b_);
+            neurons_[i].activation_ = y;
         }
     }
 
-    void NeuralNetwork::Activate() {
+    void NeuralNetwork::activate() {
         // Loop connections. Calculate each connection's output signal.
-        for (unsigned int i = 0; i < m_connections.size(); i++) {
-            m_connections[i].m_signal = m_neurons[m_connections[i].m_source_neuron_idx].m_activation * m_connections[i].m_weight;
+        for (unsigned int i = 0; i < connections_.size(); i++) {
+            connections_[i].signal_ = neurons_[connections_[i].sourceNeuronIndex_].activation_ * connections_[i].weight_;
         }
         // Loop the connections again. This time add the signals to the target neurons. This will largely require out of order memory writes. This is the one
         // loop where this will happen.
-        for (unsigned int i = 0; i < m_connections.size(); i++) {
-            m_neurons[m_connections[i].m_target_neuron_idx].m_activesum += m_connections[i].m_signal;
+        for (unsigned int i = 0; i < connections_.size(); i++) {
+            neurons_[connections_[i].targetNeuronIndex_].activesum_ += connections_[i].signal_;
         }
         // Now loop nodes_activesums, pass the signals through the activation function and store the result back to nodes_activations also skip inputs since
         // they do not get an activation
-        for (unsigned int i = m_num_inputs; i < m_neurons.size(); i++) {
-            double x = m_neurons[i].m_activesum;
-            m_neurons[i].m_activesum = 0;
+        for (unsigned int i = numInputs_; i < neurons_.size(); i++) {
+            double x = neurons_[i].activesum_;
+            neurons_[i].activesum_ = 0;
             // Apply the activation function
             double y = 0.0;
-            switch (m_neurons[i].m_activation_function_type) {
+            switch (neurons_[i].activationFunctionType_) {
                 case SIGNED_SIGMOID:
-                    y = af_sigmoid_signed(x, m_neurons[i].m_a, m_neurons[i].m_b);
+                    y = activationSigmoidSigned(x, neurons_[i].a_, neurons_[i].b_);
                     break;
                 case UNSIGNED_SIGMOID:
-                    y = af_sigmoid_unsigned(x, m_neurons[i].m_a, m_neurons[i].m_b);
+                    y = activationSigmoidUnsigned(x, neurons_[i].a_, neurons_[i].b_);
                     break;
                 case TANH:
-                    y = af_tanh(x, m_neurons[i].m_a, m_neurons[i].m_b);
+                    y = activationTanh(x, neurons_[i].a_, neurons_[i].b_);
                     break;
                 case TANH_CUBIC:
-                    y = af_tanh_cubic(x, m_neurons[i].m_a, m_neurons[i].m_b);
+                    y = activationTanhCubic(x, neurons_[i].a_, neurons_[i].b_);
                     break;
                 case SIGNED_STEP:
-                    y = af_step_signed(x, m_neurons[i].m_b);
+                    y = activationStepSigned(x, neurons_[i].b_);
                     break;
                 case UNSIGNED_STEP:
-                    y = af_step_unsigned(x, m_neurons[i].m_b);
+                    y = activationStepUnsigned(x, neurons_[i].b_);
                     break;
                 case SIGNED_GAUSS:
-                    y = af_gauss_signed(x, m_neurons[i].m_a, m_neurons[i].m_b);
+                    y = activationGaussSigned(x, neurons_[i].a_, neurons_[i].b_);
                     break;
                 case UNSIGNED_GAUSS:
-                    y = af_gauss_unsigned(x, m_neurons[i].m_a, m_neurons[i].m_b);
+                    y = activationGaussUnsigned(x, neurons_[i].a_, neurons_[i].b_);
                     break;
                 case ABS:
-                    y = af_abs(x, m_neurons[i].m_b);
+                    y = activationAbs(x, neurons_[i].b_);
                     break;
                 case SIGNED_SINE:
-                    y = af_sine_signed(x, m_neurons[i].m_a, m_neurons[i].m_b);
+                    y = activationSineSigned(x, neurons_[i].a_, neurons_[i].b_);
                     break;
                 case UNSIGNED_SINE:
-                    y = af_sine_unsigned(x, m_neurons[i].m_a, m_neurons[i].m_b);
+                    y = activationSineUnsigned(x, neurons_[i].a_, neurons_[i].b_);
                     break;
                 case LINEAR:
-                    y = af_linear(x, m_neurons[i].m_b);
+                    y = activationLinear(x, neurons_[i].b_);
                     break;
                 case RELU:
-                    y = af_relu(x);
+                    y = activationRelu(x);
                     break;
                 case SOFTPLUS:
-                    y = af_softplus(x);
+                    y = activationSoftplus(x);
                     break;
                 default:
-                    y = af_sigmoid_unsigned(x, m_neurons[i].m_a, m_neurons[i].m_b);
+                    y = activationSigmoidUnsigned(x, neurons_[i].a_, neurons_[i].b_);
                     break;
             }
-            m_neurons[i].m_activation = y;
+            neurons_[i].activation_ = y;
         }
     }
 
-    void NeuralNetwork::ActivateUseInternalBias() {
+    void NeuralNetwork::activateUseInternalBias() {
         // Loop connections. Calculate each connection's output signal.
-        for (unsigned int i = 0; i < m_connections.size(); i++) {
-            m_connections[i].m_signal = m_neurons[m_connections[i].m_source_neuron_idx].m_activation * m_connections[i].m_weight;
+        for (unsigned int i = 0; i < connections_.size(); i++) {
+            connections_[i].signal_ = neurons_[connections_[i].sourceNeuronIndex_].activation_ * connections_[i].weight_;
         }
         // Loop the connections again. This time add the signals to the target neurons. This will largely require out of order memory writes. This is the one
         // loop where this will happen.
-        for (unsigned int i = 0; i < m_connections.size(); i++) {
-            m_neurons[m_connections[i].m_target_neuron_idx].m_activesum += m_connections[i].m_signal;
+        for (unsigned int i = 0; i < connections_.size(); i++) {
+            neurons_[connections_[i].targetNeuronIndex_].activesum_ += connections_[i].signal_;
         }
         // Now loop nodes_activesums, pass the signals through the activation function and store the result back to nodes_activations also skip inputs since
         // they do not get an activation
-        for (unsigned int i = m_num_inputs; i < m_neurons.size(); i++) {
-            double x = m_neurons[i].m_activesum + m_neurons[i].m_bias;
-            m_neurons[i].m_activesum = 0;
+        for (unsigned int i = numInputs_; i < neurons_.size(); i++) {
+            double x = neurons_[i].activesum_ + neurons_[i].bias_;
+            neurons_[i].activesum_ = 0;
             // Apply the activation function
             double y = 0.0;
-            switch (m_neurons[i].m_activation_function_type) {
+            switch (neurons_[i].activationFunctionType_) {
                 case SIGNED_SIGMOID:
-                    y = af_sigmoid_signed(x, m_neurons[i].m_a, m_neurons[i].m_b);
+                    y = activationSigmoidSigned(x, neurons_[i].a_, neurons_[i].b_);
                     break;
                 case UNSIGNED_SIGMOID:
-                    y = af_sigmoid_unsigned(x, m_neurons[i].m_a, m_neurons[i].m_b);
+                    y = activationSigmoidUnsigned(x, neurons_[i].a_, neurons_[i].b_);
                     break;
                 case TANH:
-                    y = af_tanh(x, m_neurons[i].m_a, m_neurons[i].m_b);
+                    y = activationTanh(x, neurons_[i].a_, neurons_[i].b_);
                     break;
                 case TANH_CUBIC:
-                    y = af_tanh_cubic(x, m_neurons[i].m_a, m_neurons[i].m_b);
+                    y = activationTanhCubic(x, neurons_[i].a_, neurons_[i].b_);
                     break;
                 case SIGNED_STEP:
-                    y = af_step_signed(x, m_neurons[i].m_b);
+                    y = activationStepSigned(x, neurons_[i].b_);
                     break;
                 case UNSIGNED_STEP:
-                    y = af_step_unsigned(x, m_neurons[i].m_b);
+                    y = activationStepUnsigned(x, neurons_[i].b_);
                     break;
                 case SIGNED_GAUSS:
-                    y = af_gauss_signed(x, m_neurons[i].m_a, m_neurons[i].m_b);
+                    y = activationGaussSigned(x, neurons_[i].a_, neurons_[i].b_);
                     break;
                 case UNSIGNED_GAUSS:
-                    y = af_gauss_unsigned(x, m_neurons[i].m_a, m_neurons[i].m_b);
+                    y = activationGaussUnsigned(x, neurons_[i].a_, neurons_[i].b_);
                     break;
                 case ABS:
-                    y = af_abs(x, m_neurons[i].m_b);
+                    y = activationAbs(x, neurons_[i].b_);
                     break;
                 case SIGNED_SINE:
-                    y = af_sine_signed(x, m_neurons[i].m_a, m_neurons[i].m_b);
+                    y = activationSineSigned(x, neurons_[i].a_, neurons_[i].b_);
                     break;
                 case UNSIGNED_SINE:
-                    y = af_sine_unsigned(x, m_neurons[i].m_a, m_neurons[i].m_b);
+                    y = activationSineUnsigned(x, neurons_[i].a_, neurons_[i].b_);
                     break;
                 case LINEAR:
-                    y = af_linear(x, m_neurons[i].m_b);
+                    y = activationLinear(x, neurons_[i].b_);
                     break;
                 case RELU:
-                    y = af_relu(x);
+                    y = activationRelu(x);
                     break;
                 case SOFTPLUS:
-                    y = af_softplus(x);
+                    y = activationSoftplus(x);
                     break;
                 default:
-                    y = af_sigmoid_unsigned(x, m_neurons[i].m_a, m_neurons[i].m_b);
+                    y = activationSigmoidUnsigned(x, neurons_[i].a_, neurons_[i].b_);
                     break;
             }
-            m_neurons[i].m_activation = y;
+            neurons_[i].activation_ = y;
         }
     }
 
-    void NeuralNetwork::ActivateLeaky(double a_dtime) {
+    void NeuralNetwork::activateLeaky(double dtime) {
         // Loop connections. Calculate each connection's output signal.
-        for (unsigned int i = 0; i < m_connections.size(); i++) {
-            m_connections[i].m_signal = m_neurons[m_connections[i].m_source_neuron_idx].m_activation * m_connections[i].m_weight;
+        for (unsigned int i = 0; i < connections_.size(); i++) {
+            connections_[i].signal_ = neurons_[connections_[i].sourceNeuronIndex_].activation_ * connections_[i].weight_;
         }
         // Loop the connections again. This time add the signals to the target neurons. This will largely require out of order memory writes. This is the one
         // loop where this will happen.
-        for (unsigned int i = 0; i < m_connections.size(); i++) {
-            m_neurons[m_connections[i].m_target_neuron_idx].m_activesum += m_connections[i].m_signal;
+        for (unsigned int i = 0; i < connections_.size(); i++) {
+            neurons_[connections_[i].targetNeuronIndex_].activesum_ += connections_[i].signal_;
         }
         // Now we have the leaky integrator step for the neurons
-        for (unsigned int i = m_num_inputs; i < m_neurons.size(); i++) {
-            double t_const = a_dtime / m_neurons[i].m_timeconst;
-            m_neurons[i].m_membrane_potential = (1.0 - t_const) * m_neurons[i].m_membrane_potential + t_const * m_neurons[i].m_activesum;
+        for (unsigned int i = numInputs_; i < neurons_.size(); i++) {
+            double timeFactor = dtime / neurons_[i].timeconst_;
+            neurons_[i].membranePotential_ = (1.0 - timeFactor) * neurons_[i].membranePotential_ + timeFactor * neurons_[i].activesum_;
         }
         // Now loop nodes_activesums, pass the signals through the activation function and store the result back to nodes_activations also skip inputs since
         // they do not get an activation
-        for (unsigned int i = m_num_inputs; i < m_neurons.size(); i++) {
-            double x = m_neurons[i].m_membrane_potential + m_neurons[i].m_bias;
-            m_neurons[i].m_activesum = 0;
+        for (unsigned int i = numInputs_; i < neurons_.size(); i++) {
+            double x = neurons_[i].membranePotential_ + neurons_[i].bias_;
+            neurons_[i].activesum_ = 0;
             // Apply the activation function
             double y = 0.0;
-            switch (m_neurons[i].m_activation_function_type) {
+            switch (neurons_[i].activationFunctionType_) {
                 case SIGNED_SIGMOID:
-                    y = af_sigmoid_signed(x, m_neurons[i].m_a, m_neurons[i].m_b);
+                    y = activationSigmoidSigned(x, neurons_[i].a_, neurons_[i].b_);
                     break;
                 case UNSIGNED_SIGMOID:
-                    y = af_sigmoid_unsigned(x, m_neurons[i].m_a, m_neurons[i].m_b);
+                    y = activationSigmoidUnsigned(x, neurons_[i].a_, neurons_[i].b_);
                     break;
                 case TANH:
-                    y = af_tanh(x, m_neurons[i].m_a, m_neurons[i].m_b);
+                    y = activationTanh(x, neurons_[i].a_, neurons_[i].b_);
                     break;
                 case TANH_CUBIC:
-                    y = af_tanh_cubic(x, m_neurons[i].m_a, m_neurons[i].m_b);
+                    y = activationTanhCubic(x, neurons_[i].a_, neurons_[i].b_);
                     break;
                 case SIGNED_STEP:
-                    y = af_step_signed(x, m_neurons[i].m_b);
+                    y = activationStepSigned(x, neurons_[i].b_);
                     break;
                 case UNSIGNED_STEP:
-                    y = af_step_unsigned(x, m_neurons[i].m_b);
+                    y = activationStepUnsigned(x, neurons_[i].b_);
                     break;
                 case SIGNED_GAUSS:
-                    y = af_gauss_signed(x, m_neurons[i].m_a, m_neurons[i].m_b);
+                    y = activationGaussSigned(x, neurons_[i].a_, neurons_[i].b_);
                     break;
                 case UNSIGNED_GAUSS:
-                    y = af_gauss_unsigned(x, m_neurons[i].m_a, m_neurons[i].m_b);
+                    y = activationGaussUnsigned(x, neurons_[i].a_, neurons_[i].b_);
                     break;
                 case ABS:
-                    y = af_abs(x, m_neurons[i].m_b);
+                    y = activationAbs(x, neurons_[i].b_);
                     break;
                 case SIGNED_SINE:
-                    y = af_sine_signed(x, m_neurons[i].m_a, m_neurons[i].m_b);
+                    y = activationSineSigned(x, neurons_[i].a_, neurons_[i].b_);
                     break;
                 case UNSIGNED_SINE:
-                    y = af_sine_unsigned(x, m_neurons[i].m_a, m_neurons[i].m_b);
+                    y = activationSineUnsigned(x, neurons_[i].a_, neurons_[i].b_);
                     break;
                 case LINEAR:
-                    y = af_linear(x, m_neurons[i].m_b);
+                    y = activationLinear(x, neurons_[i].b_);
                     break;
                 case RELU:
-                    y = af_relu(x);
+                    y = activationRelu(x);
                     break;
                 case SOFTPLUS:
-                    y = af_softplus(x);
+                    y = activationSoftplus(x);
                     break;
                 default:
-                    y = af_sigmoid_unsigned(x, m_neurons[i].m_a, m_neurons[i].m_b);
+                    y = activationSigmoidUnsigned(x, neurons_[i].a_, neurons_[i].b_);
                     break;
             }
-            m_neurons[i].m_activation = y;
+            neurons_[i].activation_ = y;
         }
     }
 
-    void NeuralNetwork::Flush() {
-        for (unsigned int i = 0; i < m_neurons.size(); i++) {
-            m_neurons[i].m_activation = 0;
-            m_neurons[i].m_activesum = 0;
-            m_neurons[i].m_membrane_potential = 0;
+    void NeuralNetwork::flush() {
+        for (unsigned int i = 0; i < neurons_.size(); i++) {
+            neurons_[i].activation_ = 0;
+            neurons_[i].activesum_ = 0;
+            neurons_[i].membranePotential_ = 0;
         }
     }
 
-    void NeuralNetwork::FlushCube() {
+    void NeuralNetwork::flushCube() {
         // clear the cube
-        for (unsigned int i = 0; i < m_neurons.size(); i++)
-            for (unsigned int j = 0; j < m_neurons.size(); j++)
-                for (unsigned int k = 0; k < m_neurons.size(); k++) m_neurons[k].m_sensitivity_matrix[i][j] = 0;
+        for (unsigned int i = 0; i < neurons_.size(); i++)
+            for (unsigned int j = 0; j < neurons_.size(); j++)
+                for (unsigned int k = 0; k < neurons_.size(); k++) neurons_[k].sensitivityMatrix_[i][j] = 0;
     }
-    void NeuralNetwork::Input(std::vector<double> &a_Inputs) {
-        unsigned mx = a_Inputs.size();
-        if (mx > m_num_inputs) {
-            mx = m_num_inputs;
+    void NeuralNetwork::input(std::vector<double> &inputs) {
+        unsigned mx = inputs.size();
+        if (mx > numInputs_) {
+            mx = numInputs_;
         }
 
         for (unsigned int i = 0; i < mx; i++) {
-            m_neurons[i].m_activation = a_Inputs[i];
+            neurons_[i].activation_ = inputs[i];
         }
     }
 
-    std::vector<double> NeuralNetwork::Output() {
-        std::vector<double> t_output;
-        for (int i = 0; i < m_num_outputs; i++) {
-            t_output.emplace_back(m_neurons[i + m_num_inputs].m_activation);
+    std::vector<double> NeuralNetwork::output() {
+        std::vector<double> output;
+        for (int i = 0; i < numOutputs_; i++) {
+            output.emplace_back(neurons_[i + numInputs_].activation_);
         }
-        return t_output;
+        return output;
     }
 
-    void NeuralNetwork::Adapt(Parameters &a_Parameters) {
+    void NeuralNetwork::adapt(Parameters &parameters) {
         // find max absolute magnitude of the weight
-        double t_max_weight = -999999999;
-        for (unsigned int i = 0; i < m_connections.size(); i++) {
-            if (fabs(m_connections[i].m_weight) > t_max_weight) {
-                t_max_weight = fabs(m_connections[i].m_weight);
+        double maxWeight = -999999999;
+        for (unsigned int i = 0; i < connections_.size(); i++) {
+            if (fabs(connections_[i].weight_) > maxWeight) {
+                maxWeight = fabs(connections_[i].weight_);
             }
         }
 
-        for (unsigned int i = 0; i < m_connections.size(); i++) {
+        for (unsigned int i = 0; i < connections_.size(); i++) {
             /////////////////////////////////////
             // modify weight of that connection
             ////
-            double t_incoming_neuron_activation = m_neurons[m_connections[i].m_source_neuron_idx].m_activation;
-            double t_outgoing_neuron_activation = m_neurons[m_connections[i].m_target_neuron_idx].m_activation;
-            if (m_connections[i].m_weight > 0)  // positive weight
+            double incomingNeuronActivation = neurons_[connections_[i].sourceNeuronIndex_].activation_;
+            double outgoingNeuronActivation = neurons_[connections_[i].targetNeuronIndex_].activation_;
+            if (connections_[i].weight_ > 0)  // positive weight
             {
-                double t_delta =
-                    (m_connections[i].m_hebb_rate * (t_max_weight - m_connections[i].m_weight) * t_incoming_neuron_activation * t_outgoing_neuron_activation) +
-                    m_connections[i].m_hebb_pre_rate * t_max_weight * t_incoming_neuron_activation * (t_outgoing_neuron_activation - 1.0);
-                m_connections[i].m_weight = (m_connections[i].m_weight + t_delta);
-            } else if (m_connections[i].m_weight < 0)  // negative weight
+                double delta = (connections_[i].hebbRate_ * (maxWeight - connections_[i].weight_) * incomingNeuronActivation * outgoingNeuronActivation) +
+                               connections_[i].hebbPreRate_ * maxWeight * incomingNeuronActivation * (outgoingNeuronActivation - 1.0);
+                connections_[i].weight_ = (connections_[i].weight_ + delta);
+            } else if (connections_[i].weight_ < 0)  // negative weight
             {
                 // In the inhibatory case, we strengthen the synapse when output is low and input is high
-                double t_delta = m_connections[i].m_hebb_pre_rate * (t_max_weight - m_connections[i].m_weight) * t_incoming_neuron_activation *
-                                     (1.0 - t_outgoing_neuron_activation) -
-                                 m_connections[i].m_hebb_rate * t_max_weight * t_incoming_neuron_activation * t_outgoing_neuron_activation;
-                m_connections[i].m_weight = -(m_connections[i].m_weight + t_delta);
+                double delta =
+                    connections_[i].hebbPreRate_ * (maxWeight - connections_[i].weight_) * incomingNeuronActivation * (1.0 - outgoingNeuronActivation) -
+                    connections_[i].hebbRate_ * maxWeight * incomingNeuronActivation * outgoingNeuronActivation;
+                connections_[i].weight_ = -(connections_[i].weight_ + delta);
             }
 
-            Clamp(m_connections[i].m_weight, -a_Parameters.MaxWeight, a_Parameters.MaxWeight);
+            clamp(connections_[i].weight_, -parameters.maxWeight, parameters.maxWeight);
         }
     }
 
-    int NeuralNetwork::ConnectionExists(int a_to, int a_from) {
-        for (unsigned int i = 0; i < m_connections.size(); i++) {
-            if ((m_connections[i].m_source_neuron_idx == a_from) && (m_connections[i].m_target_neuron_idx == a_to)) {
+    int NeuralNetwork::connectionExists(int to, int from) {
+        for (unsigned int i = 0; i < connections_.size(); i++) {
+            if ((connections_[i].sourceNeuronIndex_ == from) && (connections_[i].targetNeuronIndex_ == to)) {
                 return i;
             }
         }
@@ -539,180 +538,180 @@ namespace NEAT {
         return -1;
     }
 
-    void NeuralNetwork::RTRL_update_gradients() {
+    void NeuralNetwork::rtrlUpdateGradients() {
         // for every neuron
-        for (unsigned int k = m_num_inputs; k < m_neurons.size(); k++) {
+        for (unsigned int k = numInputs_; k < neurons_.size(); k++) {
             // for all possible connections
-            for (unsigned int i = m_num_inputs; i < m_neurons.size(); i++)
+            for (unsigned int i = numInputs_; i < neurons_.size(); i++)
                 // to
-                for (unsigned int j = 0; j < m_neurons.size(); j++)  // from
+                for (unsigned int j = 0; j < neurons_.size(); j++)  // from
                 {
-                    int t_idx = ConnectionExists(i, j);
-                    if (t_idx != -1) {
+                    int index = connectionExists(i, j);
+                    if (index != -1) {
                         // double t_derivative = unsigned_sigmoid_derivative( m_neurons[k].m_activation );
-                        double t_derivative = 0;
-                        if (m_neurons[k].m_activation_function_type == NEAT::UNSIGNED_SIGMOID) {
-                            t_derivative = unsigned_sigmoid_derivative(m_neurons[k].m_activation);
-                        } else if (m_neurons[k].m_activation_function_type == NEAT::TANH) {
-                            t_derivative = tanh_derivative(m_neurons[k].m_activation);
+                        double derivative = 0;
+                        if (neurons_[k].activationFunctionType_ == NEAT::UNSIGNED_SIGMOID) {
+                            derivative = unsignedSigmoidDerivative(neurons_[k].activation_);
+                        } else if (neurons_[k].activationFunctionType_ == NEAT::TANH) {
+                            derivative = tanhDerivative(neurons_[k].activation_);
                         }
 
-                        double t_sum = 0;
+                        double sum = 0;
                         // calculate the other sum
-                        for (unsigned int l = 0; l < m_neurons.size(); l++) {
-                            int t_l_idx = ConnectionExists(k, l);
-                            if (t_l_idx != -1) {
-                                t_sum += m_connections[t_l_idx].m_weight * m_neurons[l].m_sensitivity_matrix[i][j];
+                        for (unsigned int l = 0; l < neurons_.size(); l++) {
+                            int lIndex = connectionExists(k, l);
+                            if (lIndex != -1) {
+                                sum += connections_[lIndex].weight_ * neurons_[l].sensitivityMatrix_[i][j];
                             }
                         }
 
                         if (i == k) {
-                            t_sum += m_neurons[j].m_activation;
+                            sum += neurons_[j].activation_;
                         }
-                        m_neurons[k].m_sensitivity_matrix[i][j] = t_derivative * t_sum;
+                        neurons_[k].sensitivityMatrix_[i][j] = derivative * sum;
                     } else {
-                        m_neurons[k].m_sensitivity_matrix[i][j] = 0;
+                        neurons_[k].sensitivityMatrix_[i][j] = 0;
                     }
                 }
         }
     }
 
     // please pay attention. notice here only one output is assumed
-    void NeuralNetwork::RTRL_update_error(double a_target) {
+    void NeuralNetwork::rtrlUpdateError(double target) {
         // add to total error
-        m_total_error = (a_target - Output()[0]);
+        totalError_ = (target - output()[0]);
         // adjust each weight
-        for (unsigned int i = 0; i < m_neurons.size(); i++)  // to
+        for (unsigned int i = 0; i < neurons_.size(); i++)  // to
         {
-            for (unsigned int j = 0; j < m_neurons.size(); j++)  // from
+            for (unsigned int j = 0; j < neurons_.size(); j++)  // from
             {
-                int t_idx = ConnectionExists(i, j);
-                if (t_idx != -1) {
+                int index = connectionExists(i, j);
+                if (index != -1) {
                     // we know the first output's index is m_num_inputs
-                    double t_delta = m_total_error * m_neurons[m_num_inputs].m_sensitivity_matrix[i][j];
-                    m_total_weight_change[t_idx] += t_delta * LEARNING_RATE;
+                    double delta = totalError_ * neurons_[numInputs_].sensitivityMatrix_[i][j];
+                    totalWeightChange_[index] += delta * LEARNING_RATE;
                 }
             }
         }
     }
 
-    void NeuralNetwork::RTRL_update_weights() {
-        for (unsigned int i = 0; i < m_connections.size(); i++) {
-            m_connections[i].m_weight += m_total_weight_change[i];
-            m_total_weight_change[i] = 0;  // clear this out
+    void NeuralNetwork::rtrlUpdateWeights() {
+        for (unsigned int i = 0; i < connections_.size(); i++) {
+            connections_[i].weight_ += totalWeightChange_[i];
+            totalWeightChange_[i] = 0;  // clear this out
         }
-        m_total_error = 0;
+        totalError_ = 0;
     }
 
-    void NeuralNetwork::Save(const char *a_filename) {
-        FILE *fil = fopen(a_filename, "w");
-        Save(fil);
+    void NeuralNetwork::save(const char *filename) {
+        FILE *fil = fopen(filename, "w");
+        save(fil);
         fclose(fil);
     }
 
-    void NeuralNetwork::Save(FILE *a_file) {
-        fprintf(a_file, "NNstart\n");
+    void NeuralNetwork::save(FILE *file) {
+        fprintf(file, "NNstart\n");
         // save num inputs/outputs and stuff
-        fprintf(a_file, "%d %d\n", m_num_inputs, m_num_outputs);
+        fprintf(file, "%d %d\n", numInputs_, numOutputs_);
         // save neurons
-        for (unsigned int i = 0; i < m_neurons.size(); i++) {
+        for (unsigned int i = 0; i < neurons_.size(); i++) {
             // TYPE .. A .. B .. time_const .. bias .. activation_function_type .. split_y
-            fprintf(a_file, "neuron %d %3.18f %3.18f %3.18f %3.18f %d %3.18f\n", static_cast<int>(m_neurons[i].m_type), m_neurons[i].m_a, m_neurons[i].m_b,
-                    m_neurons[i].m_timeconst, m_neurons[i].m_bias, static_cast<int>(m_neurons[i].m_activation_function_type), m_neurons[i].m_split_y);
+            fprintf(file, "neuron %d %3.18f %3.18f %3.18f %3.18f %d %3.18f\n", static_cast<int>(neurons_[i].type_), neurons_[i].a_, neurons_[i].b_,
+                    neurons_[i].timeconst_, neurons_[i].bias_, static_cast<int>(neurons_[i].activationFunctionType_), neurons_[i].splitY_);
         }
         // save connections
-        for (unsigned int i = 0; i < m_connections.size(); i++) {
+        for (unsigned int i = 0; i < connections_.size(); i++) {
             // from .. to .. weight.. isrecur
-            fprintf(a_file, "connection %d %d %3.18f %d %3.18f %3.18f\n", m_connections[i].m_source_neuron_idx, m_connections[i].m_target_neuron_idx,
-                    m_connections[i].m_weight, static_cast<int>(m_connections[i].m_recur_flag), m_connections[i].m_hebb_rate, m_connections[i].m_hebb_pre_rate);
+            fprintf(file, "connection %d %d %3.18f %d %3.18f %3.18f\n", connections_[i].sourceNeuronIndex_, connections_[i].targetNeuronIndex_,
+                    connections_[i].weight_, static_cast<int>(connections_[i].recurFlag_), connections_[i].hebbRate_, connections_[i].hebbPreRate_);
         }
         // end
-        fprintf(a_file, "NNend\n\n");
+        fprintf(file, "NNend\n\n");
     }
 
-    bool NeuralNetwork::Load(std::ifstream &a_DataFile) {
-        std::string t_str;
-        bool t_no_start = true, t_no_end = true;
+    bool NeuralNetwork::load(std::ifstream &dataFile) {
+        std::string str;
+        bool noStart = true, noEnd = true;
 
-        if (!a_DataFile) {
-            ostringstream tStream;
-            tStream << "NN file error!" << std::endl;
+        if (!dataFile) {
+            std::ostringstream tStream;
+            tStream << "NN file error!" << '\n';
             //    throw NS::Exception(tStream.str());
         }
 
         // search for NNstart
         do {
-            a_DataFile >> t_str;
-            if (t_str == "NNstart") t_no_start = false;
+            dataFile >> str;
+            if (str == "NNstart") noStart = false;
 
-        } while ((t_str != "NNstart") && (!a_DataFile.eof()));
+        } while ((str != "NNstart") && (!dataFile.eof()));
 
-        if (t_no_start) return false;
+        if (noStart) return false;
 
-        Clear();
+        clear();
 
         // read in the input/output dimentions
-        a_DataFile >> m_num_inputs;
-        a_DataFile >> m_num_outputs;
+        dataFile >> numInputs_;
+        dataFile >> numOutputs_;
 
         // read in all data
         do {
-            a_DataFile >> t_str;
+            dataFile >> str;
 
             // a neuron?
-            if (t_str == "neuron") {
-                Neuron t_n;
+            if (str == "neuron") {
+                Neuron n;
 
                 // for type and aftype
-                int t_type, t_aftype;
+                int type, aftype;
 
-                a_DataFile >> t_type;
-                a_DataFile >> t_n.m_a;
-                a_DataFile >> t_n.m_b;
-                a_DataFile >> t_n.m_timeconst;
-                a_DataFile >> t_n.m_bias;
-                a_DataFile >> t_aftype;
-                a_DataFile >> t_n.m_split_y;
+                dataFile >> type;
+                dataFile >> n.a_;
+                dataFile >> n.b_;
+                dataFile >> n.timeconst_;
+                dataFile >> n.bias_;
+                dataFile >> aftype;
+                dataFile >> n.splitY_;
 
-                t_n.m_type = static_cast<NEAT::NeuronType>(t_type);
-                t_n.m_activation_function_type = static_cast<NEAT::ActivationFunction>(t_aftype);
+                n.type_ = static_cast<NEAT::NeuronType>(type);
+                n.activationFunctionType_ = static_cast<NEAT::ActivationFunction>(aftype);
 
-                m_neurons.emplace_back(t_n);
+                neurons_.emplace_back(n);
             }
 
             // a connection?
-            if (t_str == "connection") {
-                Connection t_c;
+            if (str == "connection") {
+                Connection c;
 
-                int t_isrecur;
+                int isrecur;
 
-                a_DataFile >> t_c.m_source_neuron_idx;
-                a_DataFile >> t_c.m_target_neuron_idx;
-                a_DataFile >> t_c.m_weight;
-                a_DataFile >> t_isrecur;
+                dataFile >> c.sourceNeuronIndex_;
+                dataFile >> c.targetNeuronIndex_;
+                dataFile >> c.weight_;
+                dataFile >> isrecur;
 
-                a_DataFile >> t_c.m_hebb_rate;
-                a_DataFile >> t_c.m_hebb_pre_rate;
+                dataFile >> c.hebbRate_;
+                dataFile >> c.hebbPreRate_;
 
-                t_c.m_recur_flag = static_cast<bool>(t_isrecur);
+                c.recurFlag_ = static_cast<bool>(isrecur);
 
-                m_connections.emplace_back(t_c);
+                connections_.emplace_back(c);
             }
 
-            if (t_str == "NNend") t_no_end = false;
-        } while ((t_str != "NNend") && (!a_DataFile.eof()));
+            if (str == "NNend") noEnd = false;
+        } while ((str != "NNend") && (!dataFile.eof()));
 
-        if (t_no_end) {
-            ostringstream tStream;
-            tStream << "NNend not found in file!" << std::endl;
+        if (noEnd) {
+            std::ostringstream tStream;
+            tStream << "NNend not found in file!" << '\n';
             //    throw NS::Exception(tStream.str());
         }
 
         return true;
     }
-    bool NeuralNetwork::Load(const char *a_filename) {
-        std::ifstream t_DataFile(a_filename);
-        return Load(t_DataFile);
+    bool NeuralNetwork::load(const char *filename) {
+        std::ifstream dataFile(filename);
+        return load(dataFile);
     }
 
 };  // namespace NEAT

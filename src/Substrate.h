@@ -27,7 +27,15 @@
 
 /*
  * File:        Substrate.h
- * Description: Definition for the Substrate class (HyperNEAT hypercube specification).
+ * Description: HyperNEAT substrate specification: the geometric layout of input/hidden/output-node
+ *              coordinates plus the connectivity policy (layer-pair flags or an explicit custom list) used
+ *              by Genome::buildHyperNEATPhenotype() to query the CPPN. Also carries the CPPN I/O
+ *              dimensionality helpers and the leaky/time-constant ranges applied to substrate neurons.
+ *
+ * References: Stanley, D'Ambrosio & Gauci, "A Hypercube-Based Encoding for Evolving Large-Scale Neural
+ *             Networks" (2009), Sections 2-4 (substrate, CPPN query, geometry); ES-HyperNEAT extensions use
+ *             the quadtree knobs in src/Parameters.h. Intra-repo users: src/Genome.h, src/Genome.cpp,
+ *             tests/TestSubstrate.cpp.
  */
 
 #pragma once
@@ -39,66 +47,68 @@
 namespace NEAT {
 
     //-----------------------------------------------------------------------
-    // The substrate describes the phenotype space that is used by HyperNEAT
-    // It basically contains 3 lists of coordinates - for the nodes.
+    // The substrate describes the phenotype space queried by HyperNEAT: three coordinate lists whose
+    // pairwise combinations become CPPN queries, filtered by the connectivity flags below.
     class Substrate {
        public:
-        std::vector<std::vector<double> > m_input_coords;
-        std::vector<std::vector<double> > m_hidden_coords;
-        std::vector<std::vector<double> > m_output_coords;
+        // Node coordinates per layer; each entry is one point in substrate space.
+        std::vector<std::vector<double> > inputCoords_;
+        std::vector<std::vector<double> > hiddenCoords_;
+        std::vector<std::vector<double> > outputCoords_;
 
-        // the substrate is made from leaky integrator neurons?
-        bool m_leaky;
+        // Build substrate neurons as leaky integrators (uses minTimeConst_/maxTimeConst_ below).
+        bool leaky_;
 
-        // the additional distance input is used?
-        // NOTE: don't use it, not working yet
-        bool m_with_distance;
+        // Append the Euclidean source-target distance to the CPPN query. NOTE: experimental, not working yet.
+        bool withDistance_;
 
-        // these flags control the connectivity of the substrate
-        bool m_allow_input_hidden_links;
-        bool m_allow_input_output_links;
-        bool m_allow_hidden_hidden_links;
-        bool m_allow_hidden_output_links;
-        bool m_allow_output_hidden_links;
-        bool m_allow_output_output_links;
-        bool m_allow_looped_hidden_links;
-        bool m_allow_looped_output_links;
+        // Layer-pair connectivity flags: each allows links from the first named layer to the second.
+        bool allowInputHiddenLinks_;
+        bool allowInputOutputLinks_;
+        bool allowHiddenHiddenLinks_;
+        bool allowHiddenOutputLinks_;
+        bool allowOutputHiddenLinks_;
+        bool allowOutputOutputLinks_;
+        bool allowLoopedHiddenLinks_;
+        bool allowLoopedOutputLinks_;
 
-        // custom connectivity if this is not empty, the phenotype builder will use this to query all connections it's a list of [src_code, src_idx, dst_code,
-        // dst_idx] where code is NeuronType (int, the enum) and idx is the index in the m_input_coords, m_hidden_coords and m_output_coords respectively
-        std::vector<std::vector<int> > m_custom_connectivity;
-        bool m_custom_conn_obeys_flags;  // if this is true, the flags restricting the topology above will still apply
+        // Explicit connectivity overriding the flags: rows of [sourceCode, sourceIndex, targetCode, targetIndex]
+        // where code is a NeuronType value and the index addresses the matching coordinate list.
+        std::vector<std::vector<int> > customConnectivity_;
+        // When true, the layer-pair flags above still filter the custom list.
+        bool customConnObeysFlags_;
 
-        // this enforces custom or full connectivity if it is true, connections are always made and the weights will be queried only
-        bool m_query_weights_only;
+        // When true, every allowed connection is created and the CPPN only supplies weights (no LEO gating).
+        bool queryWeightsOnly_;
 
-        // the activation functions of hidden/output neurons
-        ActivationFunction m_hidden_nodes_activation;
-        ActivationFunction m_output_nodes_activation;
+        // Activation functions assigned to created hidden/output neurons.
+        ActivationFunction hiddenNodesActivation_;
+        ActivationFunction outputNodesActivation_;
 
-        // additional parameters
-        double m_max_weight_and_bias;
-        double m_min_time_const;
-        double m_max_time_const;
+        // Weight/bias magnitude cap and leaky-integrator time-constant range for created neurons.
+        double maxWeightAndBias_;
+        double minTimeConst_;
+        double maxTimeConst_;
 
         Substrate();
-        Substrate(std::vector<std::vector<double> > &a_inputs, std::vector<std::vector<double> > &a_hidden, std::vector<std::vector<double> > &a_outputs);
+        Substrate(std::vector<std::vector<double> > &inputs, std::vector<std::vector<double> > &hidden, std::vector<std::vector<double> > &outputs);
 
-        // Sets a custom connectivity scheme The neurons must be set before calling this
-        void SetCustomConnectivity(std::vector<std::vector<int> > &a_conns);
+        // Replaces the connectivity scheme; the coordinate lists must already be populated.
+        void setCustomConnectivity(std::vector<std::vector<int> > &conns);
 
-        // Clears it
-        void ClearCustomConnectivity();
+        // Clears the custom scheme, restoring flag-driven connectivity.
+        void clearCustomConnectivity();
 
-        int GetMaxDims();
+        // Maximum coordinate dimensionality across all three layers.
+        int getMaxDims();
 
-        // Return the minimum input dimensionality of the CPPN
-        int GetMinCPPNInputs();
-        // Return the minimum output dimensionality of the CPPN
-        int GetMinCPPNOutputs();
+        // Minimum CPPN input dimensionality (source + target coordinates, plus bias/distance when enabled).
+        int getMinCPPNInputs();
+        // Minimum CPPN output dimensionality (weight, and LEO/link-expression outputs when enabled).
+        int getMinCPPNOutputs();
 
-        // Prints some info about itself
-        void PrintInfo();
+        // Prints the layer sizes and active connectivity policy to stdout (diagnostics only).
+        void printInfo();
     };
 
 }  // namespace NEAT

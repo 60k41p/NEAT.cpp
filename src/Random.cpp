@@ -32,27 +32,26 @@
 
 #include "Random.h"
 
-#include <math.h>
-
 #include <chrono>
+#include <cmath>
 
 #include "Utils.h"
 
 namespace NEAT {
 
     // Seeds the random number generator with this value
-    void RNG::Seed(long a_Seed) { gen.seed(a_Seed); }
+    void RNG::seed(long seed) { gen_.seed(seed); }
 
-    void RNG::TimeSeed() {
-        auto now = std::chrono::system_clock::now().time_since_epoch();
-        long ms = (long)std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
-        Seed(ms);
+    void RNG::timeSeed() {
+        const std::chrono::system_clock::duration now = std::chrono::system_clock::now().time_since_epoch();
+        long ms = static_cast<long>(std::chrono::duration_cast<std::chrono::milliseconds>(now).count());
+        seed(ms);
     }
 
     // Returns randomly either 1 or -1
-    int RNG::RandPosNeg() {
+    int RNG::randPosNeg() {
         std::uniform_int_distribution<int> dist(0, 1);
-        int choice = dist(gen);
+        int choice = dist(gen_);
         if (choice == 0)
             return -1;
         else
@@ -60,32 +59,31 @@ namespace NEAT {
     }
 
     // Returns a random integer between X and Y
-    int RNG::RandInt(int aX, int aY) {
-        std::uniform_int_distribution<int> dist(aX, aY);
-        return dist(gen);
+    int RNG::randInt(int min, int max) {
+        std::uniform_int_distribution<int> dist(min, max);
+        return dist(gen_);
     }
 
     // Returns a random number from a uniform distribution in the range of [0 .. 1]
-    double RNG::RandFloat() {
+    double RNG::randFloat() {
         std::uniform_real_distribution<double> dist(0.0, 1.0);
-        return dist(gen);
+        return dist(gen_);
     }
 
     // Returns a random number from a uniform distribution in the range of [-1 .. 1]
-    double RNG::RandFloatSigned() { return (RandFloat() - RandFloat()); }
+    double RNG::randFloatSigned() { return (randFloat() - randFloat()); }
 
     // Returns a random number from a gaussian (normal) distribution in the range of [-1 .. 1]
-    double RNG::RandGaussSigned() {
+    double RNG::randGaussSigned() {
         std::normal_distribution<double> dist;
-        double pick = dist(gen);
-        Clamp(pick, -1, 1);
+        double pick = dist(gen_);
+        clamp(pick, -1, 1);
         return pick;
     }
 
-    int RNG::Roulette(std::vector<double> &a_probs) {
-        std::discrete_distribution<int> d_dist(a_probs.begin(), a_probs.end());
-        return d_dist(gen);
+    int RNG::roulette(const std::vector<double> &probs) {
+        std::discrete_distribution<int> dDist(probs.begin(), probs.end());
+        return dDist(gen_);
     }
 
 }  // namespace NEAT
-   // namespace NEAT

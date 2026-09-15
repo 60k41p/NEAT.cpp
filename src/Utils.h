@@ -27,14 +27,21 @@
 
 /*
  * File:        Utils.h
- * Description: some handy little functions
+ * Description: Small numeric and string helpers shared by the genome, phenotype and
+ *              speciation code (range queries, clamping, scaling, rounding and
+ *              number-to-string conversion).
+ *
+ * References: Stanley & Miikkulainen, "Evolving Neural Networks through Augmenting
+ *             Topologies" (2002), Sections 3-4 (compatibility and mutation magnitudes
+ *             that these helpers support); see references/Evolving Neural Networks
+ *             through Augmenting Topologies.pdf.md. Intra-repo users: src/Genes.h
+ *             (trait initialization/mutation), src/Genome.cpp (weight handling).
  */
 
 #pragma once
 
-#include <math.h>
-#include <stdlib.h>
-
+#include <cmath>
+#include <cstdlib>
 #include <iostream>
 #include <limits>
 #include <sstream>
@@ -44,145 +51,99 @@
 #include "AssertMacros.h"
 #include "Random.h"
 
-using namespace std;
+namespace NEAT {
 
-inline void GetMaxMin(const vector<double> &a_Vals, double &a_Min, double &a_Max) {
-    // lowest() (most negative), not min() (smallest positive) — otherwise an
-    // all-negative input vector yields a bogus max equal to ~2.2e-308.
-    a_Max = std::numeric_limits<double>::lowest();
-    a_Min = std::numeric_limits<double>::max();
-    for (vector<double>::const_iterator t_It = a_Vals.begin(); t_It != a_Vals.end(); ++t_It) {
-        const double t_CurrentVal = (*t_It);
-        if (t_CurrentVal > a_Max) a_Max = t_CurrentVal;
+    // Finds the minimum and maximum of a value list.
+    // Uses lowest() (most negative) rather than min() (smallest positive) so an
+    // all-negative input still yields a correct maximum.
+    inline void getMaxMin(const std::vector<double> &vals, double &min, double &max) {
+        max = std::numeric_limits<double>::lowest();
+        min = std::numeric_limits<double>::max();
+        for (std::vector<double>::const_iterator it = vals.begin(); it != vals.end(); ++it) {
+            const double currentVal = (*it);
+            if (currentVal > max) max = currentVal;
 
-        if (t_CurrentVal < a_Min) a_Min = t_CurrentVal;
-    }
-}
-
-// converts an integer to a string
-inline std::string itos(const int a_Arg) {
-    std::ostringstream t_Buffer;
-
-    // send the int to the ostringstream
-    t_Buffer << a_Arg;
-
-    // capture the string
-    return t_Buffer.str();
-}
-
-// converts a double to a string
-inline std::string ftos(const double a_Arg) {
-    std::ostringstream t_Buffer;
-
-    // send the int to the ostringstream
-    t_Buffer << a_Arg;
-
-    // capture the string
-    return t_Buffer.str();
-}
-
-// clamps the first argument between the second two
-inline void Clamp(double &a_Arg, const double a_Min, const double a_Max) {
-    ASSERT(a_Min <= a_Max);
-
-    if (a_Arg < a_Min) {
-        a_Arg = a_Min;
-        return;
+            if (currentVal < min) min = currentVal;
+        }
     }
 
-    if (a_Arg > a_Max) {
-        a_Arg = a_Max;
-        return;
-    }
-}
+    // Converts an integer to a string.
+    inline std::string intToString(const int arg) {
+        std::ostringstream buffer;
 
-// clamps the first argument between the second two
-inline void Clamp(float &a_Arg, const float a_Min, const float a_Max) {
-    ASSERT(a_Min <= a_Max);
+        // send the int to the ostringstream
+        buffer << arg;
 
-    if (a_Arg < a_Min) {
-        a_Arg = a_Min;
-        return;
+        // capture the string
+        return buffer.str();
     }
 
-    if (a_Arg > a_Max) {
-        a_Arg = a_Max;
-        return;
-    }
-}
+    // Converts a double to a string.
+    inline std::string floatToString(const double arg) {
+        std::ostringstream buffer;
 
-// clamps the first argument between the second two
-inline void Clamp(int &a_Arg, const int a_Min, const int a_Max) {
-    ASSERT(a_Min <= a_Max);
+        // send the double to the ostringstream
+        buffer << arg;
 
-    if (a_Arg < a_Min) {
-        a_Arg = a_Min;
-        return;
+        // capture the string
+        return buffer.str();
     }
 
-    if (a_Arg > a_Max) {
-        a_Arg = a_Max;
-        return;
+    // Clamps the value between the given bounds (inclusive). Bounds convert to the value type.
+    template <typename ValueType, typename BoundType>
+    inline void clamp(ValueType &value, const BoundType min, const BoundType max) {
+        ASSERT(static_cast<ValueType>(min) <= static_cast<ValueType>(max));
+
+        if (value < min) {
+            value = min;
+            return;
+        }
+
+        if (value > max) {
+            value = max;
+            return;
+        }
     }
-}
 
-// rounds a double up or down depending on its value
-inline int Rounded(const double a_Val) {
-    const int t_Integral = static_cast<int>(a_Val);
-    const double t_Mantissa = a_Val - t_Integral;
+    // Rounds a double to the nearest integer (halves round up).
+    inline int rounded(const double val) {
+        const int integral = static_cast<int>(val);
+        const double mantissa = val - integral;
 
-    if (t_Mantissa < 0.5) {
-        return t_Integral;
+        if (mantissa < 0.5) {
+            return integral;
+        }
+
+        else {
+            return integral + 1;
+        }
     }
 
-    else {
-        return t_Integral + 1;
+    // Rounds a double up or down depending on whether its mantissa is below the offset.
+    inline int roundUnderOffset(const double val, const double offset) {
+        const int integral = static_cast<int>(val);
+        const double mantissa = val - integral;
+
+        if (mantissa < offset) {
+            return integral;
+        } else {
+            return integral + 1;
+        }
     }
-}
 
-// rounds a double up or down depending on whether its mantissa is higher or lower than offset
-inline int RoundUnderOffset(const double a_Val, const double a_Offset) {
-    // ASSERT(a_Offset < 1 && a_Offset > -1); ???!? Should this be a test for the offset
-    const int t_Integral = static_cast<int>(a_Val);
-    const double t_Mantissa = a_Val - t_Integral;
-
-    if (t_Mantissa < a_Offset) {
-        return t_Integral;
-    } else {
-        return t_Integral + 1;
+    // Scales the value "value", which lies in range [min .. max], into its relative
+    // value in the range [targetMin .. targetMax]. Example: value=2 in [0 .. 4]
+    // scaled to [-12 .. 12] gives 0.
+    template <typename ValueType>
+    inline void scale(ValueType &value, const double min, const double max, const double targetMin, const double targetMax) {
+        const double sourceRange = max - min;
+        const double targetRange = targetMax - targetMin;
+        const double relativePosition = (value - min) / sourceRange;
+        value = static_cast<ValueType>(targetMin + targetRange * relativePosition);
     }
-}
 
-// Scales the value "a", that is in range [a_min .. a_max] into its relative value in the range [tr_min .. tr_max] Example: A=2, in the range [0 .. 4] .. we
-// want to scale it to the range [-12 .. 12] .. we get 0..
-inline void Scale(double &a, const double a_min, const double a_max, const double a_tr_min, const double a_tr_max) {
-    //        ASSERT((a >= a_min) && (a <= a_max));
-    //        ASSERT(a_min <= a_max);
-    //        ASSERT(a_tr_min <= a_tr_max);
+    // Scales every entry of the vector from its current [min .. max] range into [targetMin .. targetMax].
+    // Defined in Utils.cpp.
+    void scale(std::vector<double> &values, const double targetMin, const double targetMax);
 
-    const double t_a_r = a_max - a_min;
-    const double t_r = a_tr_max - a_tr_min;
-    const double rel_a = (a - a_min) / t_a_r;
-    a = a_tr_min + t_r * rel_a;
-}
-
-// Scales the value "a", that is in range [a_min .. a_max] into its relative value in the range [tr_min .. tr_max] Example: A=2, in the range [0 .. 4] .. we
-// want to scale it to the range [-12 .. 12] .. we get 0..
-inline void Scale(float &a, const double a_min, const double a_max, const double a_tr_min, const double a_tr_max) {
-    //        ASSERT((a >= a_min) && (a <= a_max));
-    //        ASSERT(a_min <= a_max);
-    //        ASSERT(a_tr_min <= a_tr_max);
-
-    const double t_a_r = a_max - a_min;
-    const double t_r = a_tr_max - a_tr_min;
-    const double rel_a = (a - a_min) / t_a_r;
-    a = a_tr_min + t_r * rel_a;
-}
-
-inline double Abs(double x) {
-    if (x < 0) {
-        return -x;
-    } else {
-        return x;
-    }
-}
+}  // namespace NEAT

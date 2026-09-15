@@ -38,111 +38,111 @@ namespace {
     const double kXorTarget[4] = {0.0, 1.0, 1.0, 0.0};
 
     // Absolute error of a genome on XOR summed over the four patterns.
-    double XorError(Genome &g) {
+    double xorError(Genome &g) {
         NeuralNetwork net;
-        g.BuildPhenotype(net);
+        g.buildPhenotype(net);
         double err = 0.0;
         for (int p = 0; p < 4; ++p) {
-            net.Flush();
+            net.flush();
             std::vector<double> in = {kXorIn[p][0], kXorIn[p][1], 1.0};
-            net.Input(in);
-            net.Activate();
-            net.Activate();  // let any recurrent activity settle, as the reference does
-            err += std::fabs(net.Output()[0] - kXorTarget[p]);
+            net.input(in);
+            net.activate();
+            net.activate();  // let any recurrent activity settle, as the reference does
+            err += std::fabs(net.output()[0] - kXorTarget[p]);
         }
         return err;
     }
 
-    double XorFitness(Genome &g) {
-        const double rem = 4.0 - XorError(g);
+    double xorFitness(Genome &g) {
+        const double rem = 4.0 - xorError(g);
         return rem * rem;  // squared margin, as in the reference example
     }
 
-    void EvaluateXOR(Population &pop) {
-        for (unsigned i = 0; i < pop.NumGenomes(); ++i) {
-            Genome &g = pop.AccessGenomeByIndex(static_cast<int>(i));
-            g.SetFitness(XorFitness(g));
-            g.SetEvaluated();
+    void evaluateXOR(Population &pop) {
+        for (unsigned i = 0; i < pop.numGenomes(); ++i) {
+            Genome &g = pop.accessGenomeByIndex(static_cast<int>(i));
+            g.setFitness(xorFitness(g));
+            g.setEvaluated();
         }
     }
 
-    Parameters XorParams() {
+    Parameters xorParams() {
         Parameters p;
-        p.PopulationSize = 100;
-        p.DynamicCompatibility = true;
-        p.NormalizeGenomeSize = true;
-        p.WeightDiffCoeff = 0.1;
-        p.CompatTreshold = 2.0;
-        p.YoungAgeTreshold = 15;
-        p.SpeciesMaxStagnation = 15;
-        p.OldAgeTreshold = 35;
-        p.MinSpecies = 2;
-        p.MaxSpecies = 10;
-        p.RouletteWheelSelection = false;
-        p.RecurrentProb = 0.0;
-        p.OverallMutationRate = 1.0;
-        p.ArchiveEnforcement = false;
-        p.MutateWeightsProb = 0.05;
-        p.WeightMutationMaxPower = 0.5;
-        p.WeightReplacementMaxPower = 8.0;
-        p.MutateWeightsSevereProb = 0.0;
-        p.WeightMutationRate = 0.25;
-        p.WeightReplacementRate = 0.9;
-        p.MaxWeight = 8.0;
-        p.MutateAddNeuronProb = 0.001;
-        p.MutateAddLinkProb = 0.3;
-        p.MutateRemLinkProb = 0.0;
-        p.MinActivationA = 4.9;
-        p.MaxActivationA = 4.9;
-        p.ActivationFunction_SignedSigmoid_Prob = 0.0;
-        p.ActivationFunction_UnsignedSigmoid_Prob = 1.0;
-        p.ActivationFunction_Tanh_Prob = 0.0;
-        p.ActivationFunction_SignedStep_Prob = 0.0;
-        p.CrossoverRate = 0.0;
-        p.MultipointCrossoverRate = 0.0;
-        p.SurvivalRate = 0.2;
-        p.MutateNeuronTraitsProb = 0.0;
-        p.MutateLinkTraitsProb = 0.0;
-        p.AllowLoops = true;
-        p.AllowClones = true;
+        p.populationSize = 100;
+        p.dynamicCompatibility = true;
+        p.normalizeGenomeSize = true;
+        p.weightDiffCoeff = 0.1;
+        p.compatTreshold = 2.0;
+        p.youngAgeTreshold = 15;
+        p.speciesMaxStagnation = 15;
+        p.oldAgeTreshold = 35;
+        p.minSpecies = 2;
+        p.maxSpecies = 10;
+        p.rouletteWheelSelection = false;
+        p.recurrentProb = 0.0;
+        p.overallMutationRate = 1.0;
+        p.archiveEnforcement = false;
+        p.mutateWeightsProb = 0.05;
+        p.weightMutationMaxPower = 0.5;
+        p.weightReplacementMaxPower = 8.0;
+        p.mutateWeightsSevereProb = 0.0;
+        p.weightMutationRate = 0.25;
+        p.weightReplacementRate = 0.9;
+        p.maxWeight = 8.0;
+        p.mutateAddNeuronProb = 0.001;
+        p.mutateAddLinkProb = 0.3;
+        p.mutateRemLinkProb = 0.0;
+        p.minActivationA = 4.9;
+        p.maxActivationA = 4.9;
+        p.activationFunctionSignedSigmoidProb = 0.0;
+        p.activationFunctionUnsignedSigmoidProb = 1.0;
+        p.activationFunctionTanhProb = 0.0;
+        p.activationFunctionSignedStepProb = 0.0;
+        p.crossoverRate = 0.0;
+        p.multipointCrossoverRate = 0.0;
+        p.survivalRate = 0.2;
+        p.mutateNeuronTraitsProb = 0.0;
+        p.mutateLinkTraitsProb = 0.0;
+        p.allowLoops = true;
+        p.allowClones = true;
         return p;
     }
 
-    Genome MakeXorSeed() {
+    Genome makeXorSeed() {
         Parameters q;
-        q.Reset();
+        q.reset();
         GenomeInitStruct init;
-        init.NumInputs = 3;  // 2 problem inputs + bias
-        init.NumOutputs = 1;
-        init.SeedType = PERCEPTRON;
+        init.numInputs = 3;  // 2 problem inputs + bias
+        init.numOutputs = 1;
+        init.seedType = PERCEPTRON;
         return Genome(q, init);
     }
 
     // Runs XOR evolution with one seed. Returns the generation at which the
     // best fitness exceeded 15.0 (summed error < ~0.13), or -1 if the budget ran out.
-    int EvolveXor(unsigned long rng_seed, unsigned max_generations, double *best_fitness_out = nullptr) {
-        Population pop(MakeXorSeed(), XorParams(), true, 1.0, static_cast<int>(rng_seed));
-        double best_seen = -1.0;
-        for (unsigned gen = 0; gen < max_generations; ++gen) {
-            EvaluateXOR(pop);
+    int evolveXor(unsigned long rngSeed, unsigned maxGenerations, double *bestFitnessOut = nullptr) {
+        Population pop(makeXorSeed(), xorParams(), true, 1.0, static_cast<int>(rngSeed));
+        double bestSeen = -1.0;
+        for (unsigned gen = 0; gen < maxGenerations; ++gen) {
+            evaluateXOR(pop);
             double best = 0.0;
-            for (unsigned i = 0; i < pop.NumGenomes(); ++i) {
-                best = std::max(best, pop.AccessGenomeByIndex(static_cast<int>(i)).GetFitness());
+            for (unsigned i = 0; i < pop.numGenomes(); ++i) {
+                best = std::max(best, pop.accessGenomeByIndex(static_cast<int>(i)).getFitness());
             }
-            best_seen = std::max(best_seen, best);
+            bestSeen = std::max(bestSeen, best);
             if (best > 15.0) {
-                if (best_fitness_out) {
-                    *best_fitness_out = best;
+                if (bestFitnessOut) {
+                    *bestFitnessOut = best;
                 }
                 return static_cast<int>(gen);
             }
-            pop.Epoch();
+            pop.epoch();
             // The current leader can disappear when its species receives no
             // offspring. The population's historical record must not regress.
-            CHECK(pop.GetBestFitnessEver() >= best_seen - 1e-9);
+            CHECK(pop.getBestFitnessEver() >= bestSeen - 1e-9);
         }
-        if (best_fitness_out) {
-            *best_fitness_out = best_seen;
+        if (bestFitnessOut) {
+            *bestFitnessOut = bestSeen;
         }
         return -1;
     }
@@ -158,7 +158,7 @@ int TestEvolution(int argc, char *argv[]) {
     // generation < 50), so demand all five within the 300-generation budget.
     int solved = 0;
     for (unsigned long seed = 1; seed <= 5; ++seed) {
-        const int gen = EvolveXor(seed, 300);
+        const int gen = evolveXor(seed, 300);
         if (gen >= 0) {
             ++solved;
             std::cout << "XOR solved with seed " << seed << " at generation " << gen << "\n";
@@ -168,44 +168,44 @@ int TestEvolution(int argc, char *argv[]) {
 
     // The winner's phenotype must actually implement XOR.
     if (solved >= 1) {
-        Population pop(MakeXorSeed(), XorParams(), true, 1.0, 1);
+        Population pop(makeXorSeed(), xorParams(), true, 1.0, 1);
         int gens = 0;
         while (gens < 300) {
-            EvaluateXOR(pop);
+            evaluateXOR(pop);
             double best = 0.0;
-            for (unsigned i = 0; i < pop.NumGenomes(); ++i) {
-                best = std::max(best, pop.AccessGenomeByIndex(static_cast<int>(i)).GetFitness());
+            for (unsigned i = 0; i < pop.numGenomes(); ++i) {
+                best = std::max(best, pop.accessGenomeByIndex(static_cast<int>(i)).getFitness());
             }
             if (best > 15.0) {
                 break;
             }
-            pop.Epoch();
+            pop.epoch();
             ++gens;
         }
-        EvaluateXOR(pop);
-        Genome best = pop.GetBestGenome();
-        CHECK(XorError(best) < 0.13);
+        evaluateXOR(pop);
+        Genome best = pop.getBestGenome();
+        CHECK(xorError(best) < 0.13);
         // m_BestFitnessEver is only updated inside Epoch(); since we stop right
         // after evaluation, just require it tracked the earlier generations.
-        CHECK(pop.GetBestFitnessEver() > 0.0);
-        pop.SameGenomeIDCheck();
+        CHECK(pop.getBestFitnessEver() > 0.0);
+        pop.sameGenomeIDCheck();
     }
 
     // Determinism: identical seeds replay identical best fitness trajectories.
     {
-        auto first_gens_best = [](unsigned long seed, unsigned gens) {
-            Population pop(MakeXorSeed(), XorParams(), true, 1.0, static_cast<int>(seed));
+        auto firstGensBest = [](unsigned long seed, unsigned gens) {
+            Population pop(makeXorSeed(), xorParams(), true, 1.0, static_cast<int>(seed));
             double best = 0.0;
             for (unsigned g = 0; g < gens; ++g) {
-                EvaluateXOR(pop);
-                for (unsigned i = 0; i < pop.NumGenomes(); ++i) {
-                    best = std::max(best, pop.AccessGenomeByIndex(static_cast<int>(i)).GetFitness());
+                evaluateXOR(pop);
+                for (unsigned i = 0; i < pop.numGenomes(); ++i) {
+                    best = std::max(best, pop.accessGenomeByIndex(static_cast<int>(i)).getFitness());
                 }
-                pop.Epoch();
+                pop.epoch();
             }
             return best;
         };
-        CHECK(first_gens_best(77, 40) == first_gens_best(77, 40));
+        CHECK(firstGensBest(77, 40) == firstGensBest(77, 40));
     }
 
     if (g_failures != 0) {

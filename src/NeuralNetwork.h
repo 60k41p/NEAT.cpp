@@ -27,7 +27,15 @@
 
 /*
  * File:        NeuralNetwork.h
- * Description: Definition for the phenotype data structures.
+ * Description: Phenotype representation and activation: Connection/Neuron structs plus the NeuralNetwork
+ *              runtime built from a Genome (see Genome::buildPhenotype()). Supports plain feed-forward
+ *              activation (activate/activateFast), internal-bias and leaky-integrator modes, Hebbian
+ *              lifetime adaptation (adapt()) and RTRL gradient machinery for recurrent learning.
+ *
+ * References: Stanley & Miikkulainen (2002), Section 2 (phenotype decoding); Williams & Zipser, "A Learning
+ *             Algorithm for Continually Running Fully Recurrent Neural Networks" (1989) for the RTRL terms;
+ *             Hebbian updates follow the trait-gated "hebb_rate"/"hebb_pre_rate" link traits.
+ *             Intra-repo users: src/Genome.h, src/Genome.cpp, src/Substrate.h, tests/TestNeuralNetwork.cpp.
  */
 
 #pragma once
@@ -38,23 +46,28 @@
 
 namespace NEAT {
 
+    // One weighted edge of the phenotype: source/target neuron indexes plus the live signal cache.
     class Connection {
        public:
-        int m_source_neuron_idx;  // index of source neuron
-        int m_target_neuron_idx;  // index of target neuron
-        double m_weight;          // weight of the connection
-        double m_signal;          // weight * input signal
+        // Index of the source neuron in NeuralNetwork::neurons_.
+        int sourceNeuronIndex_;
+        // Index of the target neuron in NeuralNetwork::neurons_.
+        int targetNeuronIndex_;
+        // Connection weight (copied from the genome at build time).
+        double weight_;
+        // Cached weight * source activation, refreshed by activate*().
+        double signal_;
 
-        bool m_recur_flag;  // recurrence flag for displaying purposes
-        // can be ignored
+        // Recurrence flag (display/diagnostics only; activation order does not depend on it).
+        bool recurFlag_;
 
-        // Hebbian learning parameters Ignored in case there is no lifetime learning
-        double m_hebb_rate;
-        double m_hebb_pre_rate;
+        // Hebbian lifetime-learning rates (see adapt()); ignored when the link traits are absent.
+        double hebbRate_;
+        double hebbPreRate_;
 
-        // comparison operator (nessesary for boost::python)
+        // Compares by topology (source/target indexes) so tests can match structure ignoring weights.
         bool operator==(Connection const &other) const {
-            if ((m_source_neuron_idx == other.m_source_neuron_idx) && (m_target_neuron_idx == other.m_target_neuron_idx)) /*&&
+            if ((sourceNeuronIndex_ == other.sourceNeuronIndex_) && (targetNeuronIndex_ == other.targetNeuronIndex_)) /*&&
                                                                       (m_weight == other.m_weight) &&
                                                                       (m_recur_flag == other.m_recur_flag))*/
                 return true;
@@ -63,113 +76,137 @@ namespace NEAT {
         }
     };
 
+    // One node of the phenotype: live activation state plus the copied-over genome parameters.
     class Neuron {
        public:
-        double m_activesum;   // the synaptic input
-        double m_activation;  // the synaptic input passed through the activation function
+        // Summed weighted input for the current step.
+        double activesum_;
+        // activesum_ passed through the activation function.
+        double activation_;
 
-        double m_a, m_b, m_timeconst, m_bias;  // misc parameters
-        double m_membrane_potential;           // used in leaky integrator mode
-        ActivationFunction m_activation_function_type;
+        // Activation-function parameters (slope/shift/time-constant/bias slots; meaning depends on activationFunctionType_).
+        double a_, b_, timeconst_, bias_;
+        // Leaky-integrator membrane potential (activateLeaky() only).
+        double membranePotential_;
+        // Which activation function activate() applies to this neuron.
+        ActivationFunction activationFunctionType_;
 
-        // displaying and stuff
-        double m_x, m_y, m_z;
-        double m_sx, m_sy, m_sz;
-        std::vector<double> m_substrate_coords;
-        double m_split_y;
-        NeuronType m_type;
+        // Display coordinates and substrate position (HyperNEAT queries); splitY_ is network depth.
+        double x_, y_, z_;
+        double sx_, sy_, sz_;
+        std::vector<double> substrateCoords_;
+        double splitY_;
+        NeuronType type_;
 
-        // the sensitivity matrix of this neuron (for RTRL learning)
-        std::vector<std::vector<double> > m_sensitivity_matrix;
+        // Per-neuron sensitivity cube for RTRL learning (see initRTRLMatrix()).
+        std::vector<std::vector<double> > sensitivityMatrix_;
 
-        // comparison operator (nessesary for boost::python)
+        // Compares by role/depth/activation type so tests can match structure ignoring live state.
         bool operator==(Neuron const &other) const {
-            if ((m_type == other.m_type) && (m_split_y == other.m_split_y) && (m_activation_function_type == other.m_activation_function_type))
+            if ((type_ == other.type_) && (splitY_ == other.splitY_) && (activationFunctionType_ == other.activationFunctionType_))
                 return true;
             else
                 return false;
         }
     };
 
+    // The executable phenotype. Build it from a genome (Genome::buildPhenotype()), feed inputs via input(),
+    // run one of the activate*() modes, then read output(). Not thread-safe: activation mutates caches.
     class NeuralNetwork {
         /////////////////////
-        // RTRL variables
-        double m_total_error;
+        // RTRL bookkeeping (see initRTRLMatrix(); empty unless RTRL learning runs)
+        double totalError_;
 
-        // Always the size of m_connections
-        std::vector<double> m_total_weight_change;
+        // Accumulated per-connection weight change, always sized like connections_.
+        std::vector<double> totalWeightChange_;
         /////////////////////
 
-        // returns the index if that connection exists or -1 otherwise
-        int ConnectionExists(int a_to, int a_from);
+        // Returns the connection index for the (to, from) pair, or -1 when absent.
+        int connectionExists(int to, int from);
 
        public:
-        unsigned int m_num_inputs, m_num_outputs;
-        std::vector<Connection> m_connections;  // array size - number of connections
-        std::vector<Neuron> m_neurons;
+        unsigned int numInputs_, numOutputs_;
+        // All edges; indexes must stay consistent with Neuron positions in neurons_.
+        std::vector<Connection> connections_;
+        std::vector<Neuron> neurons_;
 
-        NeuralNetwork(bool a_Minimal);  // if given false, the constructor will create a standard XOR network topology.
+        NeuralNetwork(bool minimal);  // if given false, the constructor will create a standard XOR network topology.
         NeuralNetwork();
 
-        void InitRTRLMatrix();  // initializes the sensitivity cube for RTRL learning.
+        // Allocates the per-neuron sensitivity cube; call after the topology is final.
+        void initRTRLMatrix();
         // assumes that neuron and connection data are already initialized
 
-        void ActivateFast();              // assumes unsigned sigmoids everywhere.
-        void Activate();                  // any activation functions are supported
-        void ActivateUseInternalBias();   // like Activate() but uses m_bias as well
-        void ActivateLeaky(double step);  // activates in leaky integrator mode
+        // Single synchronous step assuming unsigned sigmoids everywhere (fastest; skips the type switch).
+        void activateFast();
+        // Single synchronous step honoring each neuron's activation function.
+        void activate();
+        // Like activate() but adds the neuron bias term during summation.
+        void activateUseInternalBias();
+        // Leaky-integrator step with the given time delta.
+        void activateLeaky(double step);
 
-        void RTRL_update_gradients();
-        void RTRL_update_error(double a_target);
-        void RTRL_update_weights();  // performs the backprop step
+        // RTRL gradient accumulation / error injection / weight update triplet.
+        void rtrlUpdateGradients();
+        void rtrlUpdateError(double target);
+        // Performs the backprop step.
+        void rtrlUpdateWeights();
 
-        // Hebbian learning
-        void Adapt(Parameters &a_Parameters);
+        // Hebbian lifetime adaptation gated by the link "hebb_rate" traits.
+        void adapt(Parameters &parameters);
 
-        void Flush();      // clears all activations
-        void FlushCube();  // clears the sensitivity cube
+        // Zeroes all activations (keeps topology and weights).
+        void flush();
+        // Zeroes the RTRL sensitivity cube.
+        void flushCube();
 
-        void Input(std::vector<double> &a_Inputs);
+        // Loads the input layer (size must equal numInputs()).
+        void input(std::vector<double> &inputs);
 
-        std::vector<double> Output();
+        // Reads the output layer after activation.
+        std::vector<double> output();
 
-        // accessor methods
-        void AddNeuron(const Neuron &a_n) { m_neurons.push_back(a_n); }
-        void AddConnection(const Connection &a_c) { m_connections.push_back(a_c); }
-        Connection GetConnectionByIndex(unsigned int a_idx) const { return m_connections[a_idx]; }
-        Neuron GetNeuronByIndex(unsigned int a_idx) const { return m_neurons[a_idx]; }
-        void SetInputOutputDimentions(const unsigned int a_i, const unsigned int a_o) {
-            m_num_inputs = a_i;
-            m_num_outputs = a_o;
+        // Appends one neuron/connection (no dedup; callers keep indexes consistent).
+        void addNeuron(const Neuron &n) { neurons_.push_back(n); }
+        void addConnection(const Connection &c) { connections_.push_back(c); }
+        // Copies out a single connection/neuron by position.
+        Connection getConnectionByIndex(unsigned int index) const { return connections_[index]; }
+        Neuron getNeuronByIndex(unsigned int index) const { return neurons_[index]; }
+        // Records the input/output counts (must match the leading/trailing neuron roles).
+        void setInputOutputDimensions(const unsigned int i, const unsigned int o) {
+            numInputs_ = i;
+            numOutputs_ = o;
         }
-        unsigned int NumInputs() const { return m_num_inputs; }
-        unsigned int NumOutputs() const { return m_num_outputs; }
+        unsigned int numInputs() const { return numInputs_; }
+        unsigned int numOutputs() const { return numOutputs_; }
 
-        // clears the network and makes it a minimal one
-        void Clear() {
-            m_neurons.clear();
-            m_connections.clear();
-            m_total_weight_change.clear();
-            SetInputOutputDimentions(0, 0);
+        // Resets to an empty network with zero I/O.
+        void clear() {
+            neurons_.clear();
+            connections_.clear();
+            totalWeightChange_.clear();
+            setInputOutputDimensions(0, 0);
         }
 
-        double GetConnectionLenght(Neuron source, Neuron target) {
+        // Squared Euclidean distance between two neurons' substrate coordinates (HyperNEAT diagnostics).
+        double getConnectionLength(const Neuron &source, const Neuron &target) {
             double dist = 0.0;
-            for (unsigned int i = 0; i < source.m_substrate_coords.size(); i++) {
-                dist += (target.m_substrate_coords[i] - source.m_substrate_coords[i]) * (target.m_substrate_coords[i] - source.m_substrate_coords[i]);
+            for (unsigned int i = 0; i < source.substrateCoords_.size(); i++) {
+                dist += (target.substrateCoords_[i] - source.substrateCoords_[i]) * (target.substrateCoords_[i] - source.substrateCoords_[i]);
             }
             return dist;
         }
 
-        double GetTotalConnectionLength() { return m_connections.size(); }
+        // Number of connections (legacy name spoke of length; it has always been a count).
+        double getConnectionCount() { return static_cast<double>(connections_.size()); }
 
         // one-shot save/load
-        void Save(const char *a_filename);
-        bool Load(const char *a_filename);
+        void save(const char *filename);
+        bool load(const char *filename);
 
         // save/load from already opened files for reading/writing
-        void Save(FILE *a_file);
-        bool Load(std::ifstream &a_DataFile);
+        void save(FILE *file);
+        bool load(std::ifstream &dataFile);
     };
 
 };  // namespace NEAT
