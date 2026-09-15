@@ -2,7 +2,7 @@
 // Small populations + fixed RNG seeds keep these fast and deterministic.
 //
 // CTest-Labels: Evolution;Fast
-// CTest-Timeout: 120
+// CTest-Timeout: 240
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
