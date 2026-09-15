@@ -81,6 +81,14 @@ namespace NEAT {
         double m_min_time_const;
         double m_max_time_const;
 
+        // Physical wiring budget: connections longer than this (in substrate
+        // coordinate units) are pruned by ES-HyperNEAT finalization.
+        // Negative disables pruning.
+        double m_max_connection_length;
+        // When true, axonal delays are set from length / m_conduction_velocity.
+        bool m_use_spatial_distance_for_delays;
+        double m_conduction_velocity;
+
         Substrate();
         Substrate(std::vector<std::vector<double> > &a_inputs, std::vector<std::vector<double> > &a_hidden, std::vector<std::vector<double> > &a_outputs);
 
@@ -90,7 +98,10 @@ namespace NEAT {
         // Clears it
         void ClearCustomConnectivity();
 
-        int GetMaxDims();
+        int GetMaxDims() const;
+
+        // True for three-dimensional substrates (drives octree vs quadtree).
+        bool IsThreeDimensional() const { return GetMaxDims() >= 3; }
 
         // Return the minimum input dimensionality of the CPPN
         int GetMinCPPNInputs();

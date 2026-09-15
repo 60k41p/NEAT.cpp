@@ -32,7 +32,9 @@
 
 #pragma once
 
+#include <istream>
 #include <queue>
+#include <string>
 #include <vector>
 
 #include "AssertMacros.h"
@@ -179,6 +181,10 @@ namespace NEAT {
         // Builds this genome from an opened file
         Genome(std::ifstream &a_DataFile);
 
+        // Builds this genome from any input stream (file format versions 1-4
+        // as well as the legacy format). Throws on malformed/invalid data.
+        Genome(std::istream &a_DataStream);
+
         // This creates a CTRNN fully-connected genome
 
         // Genome(int a_ID, int a_NumInputs, int a_NumHidden, int a_NumOutputs,
@@ -266,11 +272,9 @@ namespace NEAT {
                 return true;
             }
 
-            // Custom constraints
-            if (a_Parameters.CustomConstraints != NULL) {
-                if (a_Parameters.CustomConstraints(*this)) {
-                    return true;
-                }
+            // Custom constraints (function pointer or std::function callback)
+            if (a_Parameters.FailsCustomConstraints(*this)) {
+                return true;
             }
 
             // add more constraints here
@@ -297,6 +301,19 @@ namespace NEAT {
 
         // Saves this genome to an already opened file for writing
         void Save(FILE *a_fstream);
+
+        // Complete string persistence (format 4 with state and traits).
+        // Serialize validates first and throws on invalid genomes.
+        std::string Serialize() const;
+        static Genome Deserialize(const std::string &data);
+
+        // Checks structural invariants (unique IDs, I/O layout, finite
+        // parameters, valid link endpoints). Returns false with a message
+        // instead of throwing.
+        bool Validate(std::string *error = nullptr) const;
+
+        // Structural identity used for clone detection.
+        bool IsIdenticalTo(const Genome &other) const;
 
         void PrintTraits(std::map<std::string, Trait> &traits);
         void PrintAllTraits();
@@ -373,6 +390,15 @@ namespace NEAT {
         // Perturbs the genome traits
         bool Mutate_GenomeTraits(const Parameters &a_Parameters, RNG &a_RNG);
 
+        // Randomizes all spiking neuron/synapse parameters from the evolvable ranges.
+        void Randomize_SpikingParameters(const Parameters &a_Parameters, RNG &a_RNG);
+
+        // Perturbs spiking neuron parameters (thresholds, refractory, adaptation, Izhikevich, veto).
+        bool Mutate_NeuronSpikingParameters(const Parameters &a_Parameters, RNG &a_RNG);
+
+        // Perturbs spiking synapse parameters (delay, time constant, STDP).
+        bool Mutate_LinkSpikingParameters(const Parameters &a_Parameters, RNG &a_RNG);
+
         ///////////
         // Mating
         ///////////
@@ -381,6 +407,11 @@ namespace NEAT {
         // the genes are averaged Disjoint and excess genes are inherited from the fittest parent If fitness is equal, the smaller genome is assumed to be the
         // better one
         Genome Mate(Genome &a_dad, bool a_averagemating, bool a_interspecies, RNG &a_RNG, Parameters &a_Parameters);
+
+        // Mate with an explicit crossover mode for matching genes (MULTIPOINT,
+        // AVERAGE, SINGLE_POINT, BLEND or SIMULATED_BINARY). Mate() maps its
+        // boolean onto MULTIPOINT/AVERAGE.
+        Genome MateWithMode(Genome &a_dad, CrossoverMode a_mode, bool a_interspecies, RNG &a_RNG, Parameters &a_Parameters);
 
         //////////
         // Utility
@@ -397,210 +428,8 @@ namespace NEAT {
 
         void ResetEvaluated();
 
-#if 0  // disabling because of errors I can't fix right now
-
-        /////////////////////////////////////////////
-        // Evolvable Substrate HyperNEAT
-        ////////////////////////////////////////////
-
-
-        // A connection between two points. Stores weight and the coordinates of the points
-        struct TempConnection
-        {
-            std::vector<double> source;
-            std::vector<double> target;
-            double weight;
-
-            TempConnection()
-            {
-                source.reserve(3);
-                target.reserve(3);
-                weight = 0;
-            }
-
-            TempConnection(std::vector<double> t_source, std::vector<double> t_target,
-                           double t_weight)
-            {
-                source = t_source;
-                target = t_target;
-                weight = t_weight;
-                source.reserve(3);
-                target.reserve(3);
-            }
-
-            TempConnection(std::vector<double> t_source, std::vector<double> t_target, double t_weight, unsigned int coord_size)
-            {
-                source = t_source;
-                target = t_target;
-                weight = t_weight;
-            }
-
-            ~TempConnection()
-            {};
-
-            bool operator==(const TempConnection &rhs) const
-            {
-                return (source == rhs.source && target == rhs.target);
-            }
-
-            bool operator!=(const TempConnection &rhs) const
-            {
-                return (source != rhs.source && target != rhs.target);
-            }
-        };
-
-        // A quadpoint in the HyperCube.
-        struct QuadPoint
-        {
-            double x;
-            double y;
-            double z;
-            double width;
-            double weight;
-            double height;
-            double variance;
-            int level;
-            // Do I use this?
-            double leo;
-
-
-            std::vector<boost::shared_ptr<QuadPoint> > children;
-
-            QuadPoint()
-            {
-                x = y = z = width = height = weight = variance = leo = 0;
-                level = 0;
-                children.reserve(4);
-            }
-
-            QuadPoint(double t_x, double t_y, double t_width, double t_height, int t_level)
-            {
-                x = t_x;
-                y = t_y;
-                z = 0.0;
-                width = t_width;
-                height = t_height;
-                level = t_level;
-                weight = 0.0;
-                leo = 0.0;
-                variance = 0.0;
-                children.reserve(4);
-                children.clear();
-            }
-
-            // Mind the Z
-            QuadPoint(double t_x, double t_y, double t_z, double t_width, double t_height,
-                      int t_level)
-            {
-                x = t_x;
-                y = t_y;
-                z = t_z;
-                width = t_width;
-                height = t_height;
-                level = t_level;
-                weight = 0.0;
-                variance = 0.0;
-                leo = 0.0;
-                children.reserve(4);
-                children.clear();
-            }
-
-            ~QuadPoint()
-            {
-            };
-        };
-
-
-        struct nTree
-        {
-            std::vector<double> coord;
-            double weight;
-            double varience;
-            int lvl;
-            double width;
-            double leo = 0.0;
-            std::vector<boost::shared_ptr<nTree> > children;
-
-            nTree(std::vector<double> coord_in, double wdth, double level)
-            {
-                width = wdth;
-                lvl = level;
-                coord = coord_in;
-            };
-
-        public:
-
-            void set_children()
-            {
-                for(unsigned int ix = 0; ix < 2**coord.size(); ix++){
-                    std::string sum_permute = toBinary(ix, coord.size());
-                    std::vector<double> child_coords;
-                    int child_param_len = sum_permute.length();
-                    child_coords.reserve(child_param_len);
-                    for(unsigned int sign_ix = 0; sign_ix < child_param_len; sign_ix++)
-                    {
-                        if(sum_permute[sign_ix] == "0")
-                        {
-                            child_coords.push_back(coord[sign_ix] + width/2.0);
-                        }
-                        else
-                        {
-                            child_coords.push_back(coord[sign_ix] - width/2.0);
-                        }
-                        children.push_back(new nTree(child_coords, width/2.0, sslvl+1));
-                    }
-                }
-            }
-
-            string toBinary(unsigned int n, int min_len)
-            {
-                std::string r;
-                while(n!=0)
-                {
-                    r=(n%2==0 ?"0":"1")+r; n/=2;
-
-                }
-                if(r.length() < min_len)
-                {
-                    int diff = min_len - r.length();
-                    for(unsigned int x = 0; x < diff; x++)
-                    {
-                        r = '0' +r;
-                    }
-                }
-                return r;
-            }
-        };
-        void BuildESHyperNEATPhenotypeND(NeuralNetwork &a_net, Substrate &subst, Parameters &params);
-        void BuildESHyperNEATPhenotype(NeuralNetwork &a_net, Substrate &subst, Parameters &params);
-
-        void DivideInitialize(const std::vector<double> &node,
-                              boost::shared_ptr<QuadPoint> &root,
-                              NeuralNetwork &cppn, Parameters &params,
-                              const bool &outgoing, const double &z_coord);
-
-        void PruneExpress(const std::vector<double> &node,
-                          boost::shared_ptr<QuadPoint> &root, NeuralNetwork &cppn,
-                          Parameters &params, std::vector<Genome::TempConnection> &connections,
-                          const bool &outgoing);
-        void DivideInitializeND(const std::vector<double> &node,
-                              boost::shared_ptr<nTree> &root,
-                              NeuralNetwork &cppn, Parameters &params,
-                              const bool &outgoing, const double &z_coord);
-
-        void PruneExpressND(const std::vector<double> &node,
-                          boost::shared_ptr<nTree> &root, NeuralNetwork &cppn,
-                          Parameters &params, std::vector<Genome::TempConnection> &connections,
-                          const bool &outgoing);
-
-
-        void CollectValues(std::vector<double> &vals, boost::shared_ptr<QuadPoint> &point);
-
-        double Variance(boost::shared_ptr<QuadPoint> &point);
-
-        void Clean_Net(std::vector<Connection> &connections, unsigned int input_count,
-                       unsigned int output_count, unsigned int hidden_count);
-#endif
+        // Evolvable-substrate HyperNEAT phenotype (quadtree/octree subdivision with variance/band/LEO pruning).
+        void BuildESHyperNEATPhenotype(NeuralNetwork &net, Substrate &subst, Parameters &params);
     };
 
 #define DBG(x)                       \

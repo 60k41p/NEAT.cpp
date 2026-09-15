@@ -32,8 +32,11 @@
 
 #pragma once
 
+#include <cmath>
 #include <iostream>
 #include <map>
+#include <stdexcept>
+#include <string>
 #include <vector>
 
 #include "Parameters.h"
@@ -66,8 +69,24 @@ namespace NEAT {
         LINEAR,  // Linear f(x)=x      (combining coordinate frames only)
 
         RELU,  // Rectifiers
-        SOFTPLUS
+        SOFTPLUS,
+        // Stateful activation modes advanced by NeuralNetwork::StepSpiking.
+        // Appended to preserve the numeric values of every historical mode.
+        SPIKING_LIF,
+        SPIKING_ADAPTIVE_LIF,
+        SPIKING_IZHIKEVICH,
+        // The discrete-time McCulloch-Pitts model. The SPIKING_ prefix is
+        // retained as an alias so its stateful/event-driven nature is clear
+        // beside the other spiking modes without making the historical name
+        // awkward to use.
+        MCCULLOCH_PITTS,
+        SPIKING_MCCULLOCH_PITTS = MCCULLOCH_PITTS
     };
+
+    // Returns true for the stateful spiking/McCulloch-Pitts activation modes.
+    inline bool IsSpikingActivation(ActivationFunction function) {
+        return function == SPIKING_LIF || function == SPIKING_ADAPTIVE_LIF || function == SPIKING_IZHIKEVICH || function == MCCULLOCH_PITTS;
+    }
 
     //////////////////////////////////
     // Base Gene class
@@ -77,62 +96,60 @@ namespace NEAT {
         // Arbitrary traits
         std::map<std::string, Trait> m_Traits;
 
-        Gene &operator=(const Gene &a_g) {
-            if (this != &a_g) {
-                m_Traits = a_g.m_Traits;
-            }
-
-            return *this;
-        }
+        Gene &operator=(const Gene &) = default;
 
         // Randomize based on parameters
         void InitTraits(const std::map<std::string, TraitParameters> &tp, RNG &a_RNG) {
-            for (auto it = tp.begin(); it != tp.end(); it++) {
+            for (auto it = tp.begin(); it != tp.end(); ++it) {
                 // Check what kind of type is this and create such trait
                 TraitType t;
 
                 if (it->second.type == "int") {
                     IntTraitParameters itp = std::get<IntTraitParameters>(it->second.m_Details);
+                    if (itp.min > itp.max) {
+                        throw std::invalid_argument("Integer trait minimum exceeds maximum");
+                    }
                     t = a_RNG.RandInt(itp.min, itp.max);
-                }
-                if (it->second.type == "float") {
+                } else if (it->second.type == "float") {
                     FloatTraitParameters itp = std::get<FloatTraitParameters>(it->second.m_Details);
+                    if (itp.min > itp.max) {
+                        throw std::invalid_argument("Floating-point trait minimum exceeds maximum");
+                    }
                     double x = a_RNG.RandFloat();
                     Scale(x, 0, 1, itp.min, itp.max);
                     t = x;
-                }
-                if (it->second.type == "str") {
+                } else if (it->second.type == "str") {
                     StringTraitParameters itp = std::get<StringTraitParameters>(it->second.m_Details);
                     std::vector<double> probs = itp.probs;
-                    if (itp.set.size() == 0) {
+                    if (itp.set.empty()) {
                         throw std::runtime_error("Empty set of string traits");
                     }
-                    probs.resize(itp.set.size());
+                    probs.resize(itp.set.size());  // in case it didn't match length
 
                     int idx = a_RNG.Roulette(probs);
                     t = itp.set[idx];
-                }
-                if (it->second.type == "intset") {
+                } else if (it->second.type == "intset") {
                     IntSetTraitParameters itp = std::get<IntSetTraitParameters>(it->second.m_Details);
                     std::vector<double> probs = itp.probs;
-                    if (itp.set.size() == 0) {
+                    if (itp.set.empty()) {
                         throw std::runtime_error("Empty set of int traits");
                     }
                     probs.resize(itp.set.size());
 
                     int idx = a_RNG.Roulette(probs);
                     t = itp.set[idx];
-                }
-                if (it->second.type == "floatset") {
+                } else if (it->second.type == "floatset") {
                     FloatSetTraitParameters itp = std::get<FloatSetTraitParameters>(it->second.m_Details);
                     std::vector<double> probs = itp.probs;
-                    if (itp.set.size() == 0) {
+                    if (itp.set.empty()) {
                         throw std::runtime_error("Empty set of float traits");
                     }
                     probs.resize(itp.set.size());
 
                     int idx = a_RNG.Roulette(probs);
                     t = itp.set[idx];
+                } else {
+                    throw std::invalid_argument("Unknown trait type: " + it->second.type);
                 }
                 Trait tr;
                 tr.value = t;
@@ -145,13 +162,17 @@ namespace NEAT {
 
         // Traits are merged with this other parent
         void MateTraits(const std::map<std::string, Trait> &t, RNG &a_RNG) {
-            for (auto it = t.begin(); it != t.end(); it++) {
-                TraitType mine = m_Traits[it->first].value;
+            for (auto it = t.begin(); it != t.end(); ++it) {
+                // Both parents must share the key; otherwise there is nothing to mate.
+                const auto mineIt = m_Traits.find(it->first);
+                if (mineIt == m_Traits.end()) {
+                    continue;
+                }
+                TraitType mine = mineIt->second.value;
                 TraitType yours = it->second.value;
 
                 if (mine.index() != yours.index()) {
-                    // std::cout << "t1:" << mine << " t2:" << yours << "\n";
-                    throw std::runtime_error("Types of traits doesn't match");
+                    throw std::runtime_error("Types of traits don't match in mating");
                 }
 
                 {
@@ -159,30 +180,22 @@ namespace NEAT {
                     {
                         m_Traits[it->first].value = (a_RNG.RandFloat() < 0.5) ? mine : yours;
                     } else {
-                        // try to average
+                        // try to average if numeric
                         if (std::holds_alternative<int>(mine)) {
                             int m1 = std::get<int>(mine);
                             int m2 = std::get<int>(yours);
-                            m_Traits[it->first].value = (m1 + m2) / 2;
-                        }
-
-                        if (std::holds_alternative<double>(mine)) {
+                            m_Traits[it->first].value = static_cast<int>((static_cast<long long>(m1) + static_cast<long long>(m2)) / 2LL);
+                        } else if (std::holds_alternative<double>(mine)) {
                             double m1 = std::get<double>(mine);
                             double m2 = std::get<double>(yours);
                             m_Traits[it->first].value = (m1 + m2) / 2.0;
-                        }
-
-                        if (std::holds_alternative<std::string>(mine)) {
+                        } else if (std::holds_alternative<std::string>(mine)) {
                             // strings are always either-or
                             m_Traits[it->first].value = (a_RNG.RandFloat() < 0.5) ? mine : yours;
-                        }
-
-                        if (std::holds_alternative<intsetelement>(mine)) {
+                        } else if (std::holds_alternative<intsetelement>(mine)) {
                             // int sets are always either-or
                             m_Traits[it->first].value = (a_RNG.RandFloat() < 0.5) ? mine : yours;
-                        }
-
-                        if (std::holds_alternative<floatsetelement>(mine)) {
+                        } else if (std::holds_alternative<floatsetelement>(mine)) {
                             // float sets are always either-or
                             m_Traits[it->first].value = (a_RNG.RandFloat() < 0.5) ? mine : yours;
                         }
@@ -194,15 +207,20 @@ namespace NEAT {
         // Traits are mutated according to parameters
         bool MutateTraits(const std::map<std::string, TraitParameters> &tp, RNG &a_RNG) {
             bool did_mutate = false;
-            for (auto it = tp.begin(); it != tp.end(); it++) {
+            for (auto it = tp.begin(); it != tp.end(); ++it) {
+                auto traitIt = m_Traits.find(it->first);
+                if (traitIt == m_Traits.end()) {
+                    continue;
+                }
+
                 // only mutate the trait if it's enabled
                 bool doit = false;
-                if (it->second.dep_key != "") {
+                if (!it->second.dep_key.empty()) {
                     // there is such trait..
                     if (m_Traits.count(it->second.dep_key) != 0) {
                         // and it matches any of the right values?
-                        for (int ix = 0; ix < it->second.dep_values.size(); ix++) {
-                            if (m_Traits[it->second.dep_key].value == it->second.dep_values[ix]) {
+                        for (const auto &dv : it->second.dep_values) {
+                            if (m_Traits.at(it->second.dep_key).value == dv) {
                                 doit = true;
                                 break;
                             }
@@ -215,94 +233,132 @@ namespace NEAT {
                 if (doit) {
                     // Mutate?
                     if (a_RNG.RandFloat() < it->second.m_MutationProb) {
-                        if (it->second.type == "int") {
+                        const std::string &ty = it->second.type;
+                        if (ty == "int") {
                             IntTraitParameters itp = std::get<IntTraitParameters>(it->second.m_Details);
-
+                            if (itp.min > itp.max) {
+                                throw std::invalid_argument("Integer trait minimum exceeds maximum");
+                            }
+                            int val = std::get<int>(traitIt->second.value);
+                            int original = val;
                             // determine type of mutation - modify or replace, according to parameters
                             if (a_RNG.RandFloat() < itp.mut_replace_prob) {
-                                // replace
-                                int val = std::get<int>(m_Traits[it->first].value);
-                                int cur = val;
-                                while (cur == val) {
+                                // replace, guaranteeing a different value when possible
+                                if (itp.min == itp.max) {
+                                    continue;
+                                }
+                                if (original >= itp.min && original <= itp.max) {
+                                    val = a_RNG.RandInt(itp.min, itp.max - 1);
+                                    if (val >= original) {
+                                        ++val;
+                                    }
+                                } else {
                                     val = a_RNG.RandInt(itp.min, itp.max);
                                 }
-                                m_Traits[it->first].value = val;
+                                traitIt->second.value = val;
                                 did_mutate = true;
                             } else {
                                 // modify
-                                int val = std::get<int>(m_Traits[it->first].value);
-                                int cur = val;
-                                while (cur == val) {
-                                    val += a_RNG.RandInt(-itp.mut_power, itp.mut_power);
+                                if (itp.mut_power <= 0 || itp.min == itp.max) {
+                                    continue;
+                                }
+                                for (int attempt = 0; attempt < 32 && val == original; ++attempt) {
+                                    val = original + a_RNG.RandInt(-itp.mut_power, itp.mut_power);
                                     Clamp(val, itp.min, itp.max);
                                 }
-                                m_Traits[it->first].value = val;
+                                if (val == original) {
+                                    val = (original > itp.min) ? original - 1 : original + 1;
+                                    Clamp(val, itp.min, itp.max);
+                                }
+                                traitIt->second.value = val;
                                 did_mutate = true;
                             }
-                        } else if (it->second.type == "float") {
+                        } else if (ty == "float") {
                             FloatTraitParameters itp = std::get<FloatTraitParameters>(it->second.m_Details);
-
+                            if (itp.min > itp.max) {
+                                throw std::invalid_argument("Floating-point trait minimum exceeds maximum");
+                            }
+                            double val = std::get<double>(traitIt->second.value);
+                            double original = val;
                             // determine type of mutation - modify or replace, according to parameters
                             if (a_RNG.RandFloat() < itp.mut_replace_prob) {
                                 // replace
-                                double val = std::get<double>(m_Traits[it->first].value);
-                                double cur = val;
-                                while (cur == val) {
-                                    val = a_RNG.RandFloat();
-                                    Scale(val, 0.0, 1.0, itp.min, itp.max);
+                                if (itp.min == itp.max) {
+                                    continue;
                                 }
-                                m_Traits[it->first].value = val;
+                                val = a_RNG.RandFloat();
+                                Scale(val, 0.0, 1.0, itp.min, itp.max);
+                                if (val == original) {
+                                    val = std::nextafter(original, original < itp.max ? itp.max : itp.min);
+                                }
+                                traitIt->second.value = val;
                                 did_mutate = true;
                             } else {
                                 // modify
-                                double val = std::get<double>(m_Traits[it->first].value);
-                                double cur = val;
-                                while (cur == val) {
-                                    val += a_RNG.RandFloatSigned() * itp.mut_power;
+                                if (itp.mut_power <= 0.0 || itp.min == itp.max) {
+                                    continue;
+                                }
+                                for (int attempt = 0; attempt < 32 && val == original; ++attempt) {
+                                    val = original + a_RNG.RandFloatSigned() * itp.mut_power;
                                     Clamp(val, itp.min, itp.max);
                                 }
-                                m_Traits[it->first].value = val;
+                                if (val == original) {
+                                    val = std::nextafter(original, original < itp.max ? itp.max : itp.min);
+                                }
+                                traitIt->second.value = val;
                                 did_mutate = true;
                             }
 
-                        } else if (it->second.type == "str") {
+                        } else if (ty == "str") {
                             StringTraitParameters itp = std::get<StringTraitParameters>(it->second.m_Details);
-                            std::vector<double> probs = itp.probs;
-                            probs.resize(itp.set.size());
-                            std::string cur = std::get<std::string>(m_Traits[it->first].value);
-                            int idx = a_RNG.Roulette(probs);
-
-                            while (cur == itp.set[idx]) {
-                                idx = a_RNG.Roulette(probs);
+                            const std::string original = std::get<std::string>(traitIt->second.value);
+                            std::vector<std::string> alternatives;
+                            std::vector<double> probs;
+                            for (std::size_t i = 0; i < itp.set.size(); ++i) {
+                                if (itp.set[i] != original) {
+                                    alternatives.push_back(itp.set[i]);
+                                    probs.push_back(i < itp.probs.size() ? itp.probs[i] : 0.0);
+                                }
+                            }
+                            if (alternatives.empty()) {
+                                continue;
                             }
                             // now choose the new idx from the set
-                            m_Traits[it->first].value = itp.set[idx];
+                            traitIt->second.value = alternatives[static_cast<std::size_t>(a_RNG.Roulette(probs))];
                             did_mutate = true;
-                        } else if (it->second.type == "intset") {
+                        } else if (ty == "intset") {
                             IntSetTraitParameters itp = std::get<IntSetTraitParameters>(it->second.m_Details);
-                            std::vector<double> probs = itp.probs;
-                            probs.resize(itp.set.size());
-                            intsetelement cur = std::get<intsetelement>(m_Traits[it->first].value);
-                            int idx = a_RNG.Roulette(probs);
-
-                            while (cur.value == itp.set[idx].value) {
-                                idx = a_RNG.Roulette(probs);
+                            const intsetelement original = std::get<intsetelement>(traitIt->second.value);
+                            std::vector<intsetelement> alternatives;
+                            std::vector<double> probs;
+                            for (std::size_t i = 0; i < itp.set.size(); ++i) {
+                                if (itp.set[i].value != original.value) {
+                                    alternatives.push_back(itp.set[i]);
+                                    probs.push_back(i < itp.probs.size() ? itp.probs[i] : 0.0);
+                                }
+                            }
+                            if (alternatives.empty()) {
+                                continue;
                             }
                             // now choose the new idx from the set
-                            m_Traits[it->first].value = itp.set[idx];
+                            traitIt->second.value = alternatives[static_cast<std::size_t>(a_RNG.Roulette(probs))];
                             did_mutate = true;
-                        } else if (it->second.type == "floatset") {
+                        } else if (ty == "floatset") {
                             FloatSetTraitParameters itp = std::get<FloatSetTraitParameters>(it->second.m_Details);
-                            std::vector<double> probs = itp.probs;
-                            probs.resize(itp.set.size());
-                            floatsetelement cur = std::get<floatsetelement>(m_Traits[it->first].value);
-                            int idx = a_RNG.Roulette(probs);
-
-                            while (cur.value == itp.set[idx].value) {
-                                idx = a_RNG.Roulette(probs);
+                            const floatsetelement original = std::get<floatsetelement>(traitIt->second.value);
+                            std::vector<floatsetelement> alternatives;
+                            std::vector<double> probs;
+                            for (std::size_t i = 0; i < itp.set.size(); ++i) {
+                                if (itp.set[i].value != original.value) {
+                                    alternatives.push_back(itp.set[i]);
+                                    probs.push_back(i < itp.probs.size() ? itp.probs[i] : 0.0);
+                                }
+                            }
+                            if (alternatives.empty()) {
+                                continue;
                             }
                             // now choose the new idx from the set
-                            m_Traits[it->first].value = itp.set[idx];
+                            traitIt->second.value = alternatives[static_cast<std::size_t>(a_RNG.Roulette(probs))];
                             did_mutate = true;
                         }
                     }
@@ -311,26 +367,38 @@ namespace NEAT {
 
             return did_mutate;
         }
+        // Compute and return distances between each matching pair of traits.
+        // The non-const overload forwards to the const one so distance queries
+        // also work on const genes.
         std::map<std::string, double> GetTraitDistances(const std::map<std::string, Trait> &other) {
+            return static_cast<const Gene &>(*this).GetTraitDistances(other);
+        }
+
+        std::map<std::string, double> GetTraitDistances(const std::map<std::string, Trait> &other) const {
             std::map<std::string, double> dist;
-            for (auto it = other.begin(); it != other.end(); it++) {
-                TraitType mine = m_Traits[it->first].value;
+            for (auto it = other.begin(); it != other.end(); ++it) {
+                const auto mineIt = m_Traits.find(it->first);
+                if (mineIt == m_Traits.end()) {
+                    continue;
+                }
+                TraitType mine = mineIt->second.value;
                 TraitType yours = it->second.value;
 
                 if (mine.index() != yours.index()) {
-                    throw std::runtime_error("Types of traits don't match");
+                    throw std::runtime_error("Types of traits don't match in distance measure");
                 }
 
                 // only do it if the trait if it's enabled
                 // todo: not sure about the distance, think more about it
                 bool doit = false;
-                if (it->second.dep_key != "") {
+                if (!it->second.dep_key.empty()) {
                     // there is such trait..
-                    if (m_Traits.count(it->second.dep_key) != 0) {
+                    const auto mineDep = m_Traits.find(it->second.dep_key);
+                    const auto otherDep = other.find(it->second.dep_key);
+                    if (mineDep != m_Traits.end() && otherDep != other.end()) {
                         // and it has the right value? also the other genome has to have the trait turned on
-                        for (int ix = 0; ix < it->second.dep_values.size(); ix++) {
-                            if ((m_Traits[it->second.dep_key].value == it->second.dep_values[ix]) &&
-                                (other.at(it->second.dep_key).value == it->second.dep_values[ix])) {
+                        for (const auto &dv : it->second.dep_values) {
+                            if ((mineDep->second.value == dv) && (otherDep->second.value == dv)) {
                                 doit = true;
                                 break;
                             }
@@ -343,27 +411,19 @@ namespace NEAT {
                 if (doit) {
                     if (std::holds_alternative<int>(mine)) {
                         // distance between ints - calculate directly
-                        dist[it->first] = abs(std::get<int>(mine) - std::get<int>(yours));
-                    }
-                    if (std::holds_alternative<double>(mine)) {
+                        dist[it->first] = std::abs(std::get<int>(mine) - std::get<int>(yours));
+                    } else if (std::holds_alternative<double>(mine)) {
                         // distance between floats - calculate directly
-                        dist[it->first] = abs(std::get<double>(mine) - std::get<double>(yours));
-                    }
-                    if (std::holds_alternative<std::string>(mine)) {
+                        dist[it->first] = std::abs(std::get<double>(mine) - std::get<double>(yours));
+                    } else if (std::holds_alternative<std::string>(mine)) {
                         // distance between strings - matching is 0, non-matching is 1
-                        if (std::get<std::string>(mine) == std::get<std::string>(yours)) {
-                            dist[it->first] = 0.0;
-                        } else {
-                            dist[it->first] = 1.0;
-                        }
-                    }
-                    if (std::holds_alternative<intsetelement>(mine)) {
+                        dist[it->first] = (std::get<std::string>(mine) == std::get<std::string>(yours)) ? 0.0 : 1.0;
+                    } else if (std::holds_alternative<intsetelement>(mine)) {
                         // distance between ints - calculate directly
-                        dist[it->first] = abs((std::get<intsetelement>(mine)).value - (std::get<intsetelement>(yours)).value);
-                    }
-                    if (std::holds_alternative<floatsetelement>(mine)) {
+                        dist[it->first] = std::abs(std::get<intsetelement>(mine).value - std::get<intsetelement>(yours).value);
+                    } else if (std::holds_alternative<floatsetelement>(mine)) {
                         // distance between floats - calculate directly
-                        dist[it->first] = abs((std::get<floatsetelement>(mine)).value - (std::get<floatsetelement>(yours)).value);
+                        dist[it->first] = std::abs(std::get<floatsetelement>(mine).value - std::get<floatsetelement>(yours).value);
                     }
                 }
             }
@@ -395,6 +455,18 @@ namespace NEAT {
         // Is it recurrent?
         bool m_IsRecurrent;
 
+        // Spiking synapse parameters. They are inert during the historical
+        // rate-network activation paths.
+        double m_SynapticDelay;
+        double m_SynapticTimeConstant;
+        bool m_STDPEnabled;
+        double m_STDPPlus;
+        double m_STDPMinus;
+        double m_STDPTauPlus;
+        double m_STDPTauMinus;
+        double m_STDPMinWeight;
+        double m_STDPMaxWeight;
+
        public:
         double GetWeight() const { return m_Weight; }
 
@@ -407,8 +479,17 @@ namespace NEAT {
             m_FromNeuronID = 0;
             m_ToNeuronID = 0;
             m_InnovationID = 0;
-            m_Weight = 0;
+            m_Weight = 0.0;
             m_IsRecurrent = false;
+            m_SynapticDelay = 0.0;
+            m_SynapticTimeConstant = 0.005;
+            m_STDPEnabled = false;
+            m_STDPPlus = 0.01;
+            m_STDPMinus = 0.012;
+            m_STDPTauPlus = 0.02;
+            m_STDPTauMinus = 0.02;
+            m_STDPMinWeight = -8.0;
+            m_STDPMaxWeight = 8.0;
         }
 
         LinkGene(int a_InID, int a_OutID, int a_InnovID, double a_Wgt, bool a_Recurrent = false) {
@@ -418,21 +499,19 @@ namespace NEAT {
 
             m_Weight = a_Wgt;
             m_IsRecurrent = a_Recurrent;
+            m_SynapticDelay = 0.0;
+            m_SynapticTimeConstant = 0.005;
+            m_STDPEnabled = false;
+            m_STDPPlus = 0.01;
+            m_STDPMinus = 0.012;
+            m_STDPTauPlus = 0.02;
+            m_STDPTauMinus = 0.02;
+            m_STDPMinWeight = -8.0;
+            m_STDPMaxWeight = 8.0;
         }
 
         // assigment operator
-        LinkGene &operator=(const LinkGene &a_g) {
-            if (this != &a_g) {
-                m_FromNeuronID = a_g.m_FromNeuronID;
-                m_ToNeuronID = a_g.m_ToNeuronID;
-                m_Weight = a_g.m_Weight;
-                m_IsRecurrent = a_g.m_IsRecurrent;
-                m_InnovationID = a_g.m_InnovationID;
-                m_Traits = a_g.m_Traits;
-            }
-
-            return *this;
-        }
+        LinkGene &operator=(const LinkGene &) = default;
 
         //////////////
         // Methods
@@ -449,14 +528,22 @@ namespace NEAT {
 
         bool IsLoopedRecurrent() const { return m_FromNeuronID == m_ToNeuronID; }
 
-        // overload '<', '>', '!=' and '==' used for sorting and comparison (we use the innovation ID as the criteria)
+        // overload '<', '>', '!=' and '==' used for sorting and comparison.
+        // Ordering uses the innovation ID; equality compares the full field set.
         friend bool operator<(const LinkGene &a_lhs, const LinkGene &a_rhs) { return (a_lhs.m_InnovationID < a_rhs.m_InnovationID); }
 
         friend bool operator>(const LinkGene &a_lhs, const LinkGene &a_rhs) { return (a_lhs.m_InnovationID > a_rhs.m_InnovationID); }
 
-        friend bool operator!=(const LinkGene &a_lhs, const LinkGene &a_rhs) { return (a_lhs.m_InnovationID != a_rhs.m_InnovationID); }
+        friend bool operator!=(const LinkGene &a_lhs, const LinkGene &a_rhs) { return !(a_lhs == a_rhs); }
 
-        friend bool operator==(const LinkGene &a_lhs, const LinkGene &a_rhs) { return (a_lhs.m_InnovationID == a_rhs.m_InnovationID); }
+        friend bool operator==(const LinkGene &a_lhs, const LinkGene &a_rhs) {
+            return (a_lhs.m_FromNeuronID == a_rhs.m_FromNeuronID && a_lhs.m_ToNeuronID == a_rhs.m_ToNeuronID && a_lhs.m_Weight == a_rhs.m_Weight &&
+                    a_lhs.m_IsRecurrent == a_rhs.m_IsRecurrent && a_lhs.m_InnovationID == a_rhs.m_InnovationID &&
+                    a_lhs.m_SynapticDelay == a_rhs.m_SynapticDelay && a_lhs.m_SynapticTimeConstant == a_rhs.m_SynapticTimeConstant &&
+                    a_lhs.m_STDPEnabled == a_rhs.m_STDPEnabled && a_lhs.m_STDPPlus == a_rhs.m_STDPPlus && a_lhs.m_STDPMinus == a_rhs.m_STDPMinus &&
+                    a_lhs.m_STDPTauPlus == a_rhs.m_STDPTauPlus && a_lhs.m_STDPTauMinus == a_rhs.m_STDPTauMinus &&
+                    a_lhs.m_STDPMinWeight == a_rhs.m_STDPMinWeight && a_lhs.m_STDPMaxWeight == a_rhs.m_STDPMaxWeight);
+        }
     };
 
     ////////////////////////////////////
@@ -518,10 +605,42 @@ namespace NEAT {
         // The type of activation function the neuron has
         ActivationFunction m_ActFunction;
 
+        // Parameters shared by the spiking activation modes. LIF uses the
+        // threshold/reset/resting/refractory/resistance values. Adaptive LIF
+        // additionally uses the adaptation values. Izhikevich uses its
+        // canonical a/b/c/d parameterization.
+        double m_SpikeThreshold;
+        double m_ResetPotential;
+        double m_RestingPotential;
+        double m_RefractoryPeriod;
+        double m_MembraneResistance;
+        double m_AdaptationTimeConstant;
+        double m_AdaptationIncrement;
+        double m_RateTimeConstant;
+        double m_IzhikevichA;
+        double m_IzhikevichB;
+        double m_IzhikevichC;
+        double m_IzhikevichD;
+        // In the original McCulloch-Pitts calculus any active inhibitory
+        // afferent vetoes firing, irrespective of excitatory drive.
+        bool m_MCPInhibitoryVeto;
+
         ////////////////
         // Constructors
         ////////////////
-        NeuronGene() {}
+        NeuronGene() {
+            m_ID = 0;
+            m_Type = NONE;
+            x = 0;
+            y = 0;
+            m_SplitY = 0.0;
+            m_A = 0.0;
+            m_B = 0.0;
+            m_TimeConstant = 0.0;
+            m_Bias = 0.0;
+            m_ActFunction = UNSIGNED_SIGMOID;
+            InitSpikingDefaults();
+        }
 
         /*friend bool operator!=(const NeuronGene &a_lhs, const NeuronGene &a_rhs)
         {
@@ -529,14 +648,15 @@ namespace NEAT {
         }*/
 
         friend bool operator==(const NeuronGene &a_lhs, const NeuronGene &a_rhs) {
-            return (a_lhs.m_ID == a_rhs.m_ID) && (a_lhs.m_Type == a_rhs.m_Type)
-                //(a_lhs.m_SplitY == a_rhs.m_SplitY) &&
-                //(a_lhs.m_A == a_rhs.m_A) &&
-                //(a_lhs.m_B == a_rhs.m_B) &&
-                //(a_lhs.m_TimeConstant == a_rhs.m_TimeConstant) &&
-                //(a_lhs.m_Bias == a_rhs.m_Bias) &&
-                //(a_lhs.m_ActFunction == a_rhs.m_ActFunction)
-                ;
+            return (a_lhs.m_ID == a_rhs.m_ID && a_lhs.m_Type == a_rhs.m_Type && a_lhs.x == a_rhs.x && a_lhs.y == a_rhs.y && a_lhs.m_SplitY == a_rhs.m_SplitY &&
+                    a_lhs.m_A == a_rhs.m_A && a_lhs.m_B == a_rhs.m_B && a_lhs.m_TimeConstant == a_rhs.m_TimeConstant && a_lhs.m_Bias == a_rhs.m_Bias &&
+                    a_lhs.m_ActFunction == a_rhs.m_ActFunction && a_lhs.m_SpikeThreshold == a_rhs.m_SpikeThreshold &&
+                    a_lhs.m_ResetPotential == a_rhs.m_ResetPotential && a_lhs.m_RestingPotential == a_rhs.m_RestingPotential &&
+                    a_lhs.m_RefractoryPeriod == a_rhs.m_RefractoryPeriod && a_lhs.m_MembraneResistance == a_rhs.m_MembraneResistance &&
+                    a_lhs.m_AdaptationTimeConstant == a_rhs.m_AdaptationTimeConstant && a_lhs.m_AdaptationIncrement == a_rhs.m_AdaptationIncrement &&
+                    a_lhs.m_RateTimeConstant == a_rhs.m_RateTimeConstant && a_lhs.m_IzhikevichA == a_rhs.m_IzhikevichA &&
+                    a_lhs.m_IzhikevichB == a_rhs.m_IzhikevichB && a_lhs.m_IzhikevichC == a_rhs.m_IzhikevichC && a_lhs.m_IzhikevichD == a_rhs.m_IzhikevichD &&
+                    a_lhs.m_MCPInhibitoryVeto == a_rhs.m_MCPInhibitoryVeto);
         }
 
         NeuronGene(NeuronType a_type, int a_id, double a_splity) {
@@ -545,38 +665,19 @@ namespace NEAT {
             m_SplitY = a_splity;
 
             // Initialize the node specific parameters
-            m_A = 0.0f;
-            m_B = 0.0f;
-            m_TimeConstant = 0.0f;
-            m_Bias = 0.0f;
+            m_A = 0.0;
+            m_B = 0.0;
+            m_TimeConstant = 0.0;
+            m_Bias = 0.0;
             m_ActFunction = UNSIGNED_SIGMOID;
 
             x = 0;
             y = 0;
+            InitSpikingDefaults();
         }
 
         // assigment operator
-        NeuronGene &operator=(const NeuronGene &a_g) {
-            if (this != &a_g) {
-                m_ID = a_g.m_ID;
-                m_Type = a_g.m_Type;
-                m_SplitY = a_g.m_SplitY;
-
-                // maybe inputs don't need that
-                if ((m_Type != NeuronType::INPUT) && (m_Type != NeuronType::BIAS)) {
-                    x = a_g.x;
-                    y = a_g.y;
-                    m_A = a_g.m_A;
-                    m_B = a_g.m_B;
-                    m_TimeConstant = a_g.m_TimeConstant;
-                    m_Bias = a_g.m_Bias;
-                    m_ActFunction = a_g.m_ActFunction;
-                    m_Traits = a_g.m_Traits;
-                }
-            }
-
-            return *this;
-        }
+        NeuronGene &operator=(const NeuronGene &) = default;
 
         //////////////
         // Methods
@@ -596,6 +697,23 @@ namespace NEAT {
             m_TimeConstant = a_TimeConstant;
             m_Bias = a_Bias;
             m_ActFunction = a_ActFunc;
+        }
+
+        // Initializes the spiking parameters to biophysically sane defaults.
+        void InitSpikingDefaults() {
+            m_SpikeThreshold = 1.0;
+            m_ResetPotential = 0.0;
+            m_RestingPotential = 0.0;
+            m_RefractoryPeriod = 0.002;
+            m_MembraneResistance = 1.0;
+            m_AdaptationTimeConstant = 0.1;
+            m_AdaptationIncrement = 0.1;
+            m_RateTimeConstant = 0.05;
+            m_IzhikevichA = 0.02;
+            m_IzhikevichB = 0.2;
+            m_IzhikevichC = -65.0;
+            m_IzhikevichD = 8.0;
+            m_MCPInhibitoryVeto = true;
         }
     };
 

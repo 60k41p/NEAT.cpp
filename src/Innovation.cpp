@@ -33,13 +33,43 @@
 #include "Innovation.h"
 
 #include <fstream>
+#include <limits>
+#include <sstream>
+#include <stdexcept>
 #include <string>
 
 #include "Genes.h"
 #include "Genome.h"
+#include "Serialization.h"
 #include "assert.h"
 
 namespace NEAT {
+
+    std::uint64_t InnovationDatabase::EndpointKey(int a_in, int a_out) {
+        return (static_cast<std::uint64_t>(static_cast<std::uint32_t>(a_in)) << 32U) | static_cast<std::uint32_t>(a_out);
+    }
+
+    void InnovationDatabase::AppendToIndex(std::size_t a_index) const {
+        const Innovation &innovation = m_Innovations.at(a_index);
+        auto &index = (innovation.InnovType() == NEW_LINK) ? m_LinkInnovationIndex : m_NeuronInnovationIndex;
+        index[EndpointKey(innovation.FromNeuronID(), innovation.ToNeuronID())].push_back(static_cast<int>(a_index));
+    }
+
+    void InnovationDatabase::RebuildIndex() const {
+        m_LinkInnovationIndex.clear();
+        m_NeuronInnovationIndex.clear();
+        m_LinkInnovationIndex.reserve(m_Innovations.size());
+        m_NeuronInnovationIndex.reserve(m_Innovations.size());
+        for (std::size_t index = 0; index < m_Innovations.size(); ++index) AppendToIndex(index);
+        m_IndexedInnovationCount = m_Innovations.size();
+        m_IndexedInnovationData = m_Innovations.data();
+    }
+
+    void InnovationDatabase::EnsureIndex() const {
+        if (m_IndexedInnovationCount != m_Innovations.size() || m_IndexedInnovationData != m_Innovations.data()) {
+            RebuildIndex();
+        }
+    }
 
     // Creates an empty database
     InnovationDatabase::InnovationDatabase() {
@@ -73,9 +103,16 @@ namespace NEAT {
                                a_Genome.GetLinkByIndex(i).ToNeuronID(), NONE, -1);
             m_Innovations.emplace_back(t_innov);
         }
+        RebuildIndex();
 
-        m_NextNeuronID = a_Genome.GetLastNeuronID();
-        m_NextInnovationNum = a_Genome.GetLastInnovationID();
+        // GetLast* return the max used ID; the next free ID is one past that.
+        const int last_neuron = a_Genome.GetLastNeuronID();
+        const int last_innovation = a_Genome.GetLastInnovationID();
+        if (last_neuron == std::numeric_limits<int>::max() || last_innovation == std::numeric_limits<int>::max()) {
+            throw std::overflow_error("Genome has exhausted the innovation ID space");
+        }
+        m_NextNeuronID = last_neuron + 1;
+        m_NextInnovationNum = last_innovation + 1;
     }
 
     void InnovationDatabase::Init(std::ifstream &a_DataFile) {
@@ -123,6 +160,8 @@ namespace NEAT {
             }
 
         } while (t_str != "InnovationDatabaseEnd");
+
+        RebuildIndex();
     }
 
     // The file is assumed to be opened
@@ -148,32 +187,24 @@ namespace NEAT {
         ASSERT((a_In > 0) && (a_Out > 0));
         ASSERT((a_Type == NEW_NEURON) || (a_Type == NEW_LINK));
 
-        // search the list for a match
-        for (unsigned int i = 0; i < m_Innovations.size(); i++) {
-            if ((m_Innovations[i].FromNeuronID() == a_In) && (m_Innovations[i].ToNeuronID() == a_Out) && (m_Innovations[i].InnovType() == a_Type)) {
-                // match found?
-                return m_Innovations[i].ID();
-            }
-        }
-
-        // not found
-        return -1;
+        // first match wins
+        EnsureIndex();
+        const auto &index = (a_Type == NEW_LINK) ? m_LinkInnovationIndex : m_NeuronInnovationIndex;
+        const auto match = index.find(EndpointKey(a_In, a_Out));
+        if (match == index.end() || match->second.empty()) return -1;
+        return m_Innovations[static_cast<std::size_t>(match->second.front())].ID();
     }
 
     int InnovationDatabase::CheckLastInnovation(int a_In, int a_Out, InnovationType a_Type) const {
         ASSERT((a_In > 0) && (a_Out > 0));
         ASSERT((a_Type == NEW_NEURON) || (a_Type == NEW_LINK));
-        int t_ID = -1;
 
-        // search the list for a match
-        for (unsigned int i = 0; i < m_Innovations.size(); i++) {
-            if ((m_Innovations[i].FromNeuronID() == a_In) && (m_Innovations[i].ToNeuronID() == a_Out) && (m_Innovations[i].InnovType() == a_Type)) {
-                // match found?
-                t_ID = m_Innovations[i].ID();
-            }
-        }
-
-        return t_ID;
+        // last match wins
+        EnsureIndex();
+        const auto &index = (a_Type == NEW_LINK) ? m_LinkInnovationIndex : m_NeuronInnovationIndex;
+        const auto match = index.find(EndpointKey(a_In, a_Out));
+        if (match == index.end() || match->second.empty()) return -1;
+        return m_Innovations[static_cast<std::size_t>(match->second.back())].ID();
     }
 
     // returns a list of indexes in the database of identical innovations
@@ -181,18 +212,11 @@ namespace NEAT {
         ASSERT((a_In > 0) && (a_Out > 0));
         ASSERT((a_Type == NEW_NEURON) || (a_Type == NEW_LINK));
 
-        std::vector<int> t_idxs;
-        t_idxs.clear();
-
-        // search the list for a match
-        for (unsigned int i = 0; i < m_Innovations.size(); i++) {
-            if ((m_Innovations[i].FromNeuronID() == a_In) && (m_Innovations[i].ToNeuronID() == a_Out) && (m_Innovations[i].InnovType() == a_Type)) {
-                // match found?
-                t_idxs.emplace_back(i);
-            }
-        }
-
-        return t_idxs;
+        EnsureIndex();
+        const auto &index = (a_Type == NEW_LINK) ? m_LinkInnovationIndex : m_NeuronInnovationIndex;
+        const auto match = index.find(EndpointKey(a_In, a_Out));
+        if (match == index.end()) return std::vector<int>();
+        return match->second;
     }
 
     // Returns the neuron ID given the in and out neurons
@@ -200,39 +224,29 @@ namespace NEAT {
     int InnovationDatabase::FindNeuronID(int a_In, int a_Out) const {
         ASSERT((a_In > 0) && (a_Out > 0));
 
-        // search the list for a match
-        for (unsigned int i = 0; i < m_Innovations.size(); i++) {
-            if ((m_Innovations[i].FromNeuronID() == a_In) && (m_Innovations[i].ToNeuronID() == a_Out) && (m_Innovations[i].InnovType() == NEW_NEURON)) {
-                // match found?
-                return m_Innovations[i].NeuronID();
-            }
-        }
-
-        // Not found
-        return -1;
+        EnsureIndex();
+        const auto match = m_NeuronInnovationIndex.find(EndpointKey(a_In, a_Out));
+        if (match == m_NeuronInnovationIndex.end() || match->second.empty()) return -1;
+        return m_Innovations[static_cast<std::size_t>(match->second.front())].NeuronID();
     }
 
     int InnovationDatabase::FindLastNeuronID(int a_In, int a_Out) const {
         ASSERT((a_In > 0) && (a_Out > 0));
-        int t_ID = -1;
 
-        // search the list for a match
-        for (unsigned int i = 0; i < m_Innovations.size(); i++) {
-            if ((m_Innovations[i].FromNeuronID() == a_In) && (m_Innovations[i].ToNeuronID() == a_Out) && (m_Innovations[i].InnovType() == NEW_NEURON)) {
-                // match found?
-                t_ID = m_Innovations[i].NeuronID();
-            }
-        }
-
-        return t_ID;
+        EnsureIndex();
+        const auto match = m_NeuronInnovationIndex.find(EndpointKey(a_In, a_Out));
+        if (match == m_NeuronInnovationIndex.end() || match->second.empty()) return -1;
+        return m_Innovations[static_cast<std::size_t>(match->second.back())].NeuronID();
     }
 
     // Adds a new link innovation and returns its ID Increments the m_NextInnovationNum internally
     int InnovationDatabase::AddLinkInnovation(int a_In, int a_Out) {
         ASSERT((a_In > 0) && (a_Out > 0));
+        if (m_NextInnovationNum == std::numeric_limits<int>::max()) throw std::overflow_error("Innovation database has exhausted the innovation ID space");
 
         m_Innovations.emplace_back(Innovation(m_NextInnovationNum, NEW_LINK, a_In, a_Out, NONE, -1));
         m_NextInnovationNum++;
+        AppendToIndex(m_Innovations.size() - 1);
 
         return (m_NextInnovationNum - 1);
     }
@@ -242,15 +256,83 @@ namespace NEAT {
     int InnovationDatabase::AddNeuronInnovation(int a_In, int a_Out, NeuronType a_NType) {
         ASSERT((a_In > 0) && (a_Out > 0));
         ASSERT(!((a_NType == INPUT) || (a_NType == BIAS) || (a_NType == OUTPUT)));
+        if (m_NextInnovationNum == std::numeric_limits<int>::max() || m_NextNeuronID == std::numeric_limits<int>::max())
+            throw std::overflow_error("Innovation database has exhausted the innovation ID space");
 
         m_Innovations.emplace_back(Innovation(m_NextInnovationNum, NEW_NEURON, a_In, a_Out, a_NType, m_NextNeuronID));
         m_NextInnovationNum++;
         m_NextNeuronID++;
+        AppendToIndex(m_Innovations.size() - 1);
 
         return (m_NextNeuronID - 1);
     }
 
     // Clears all innovations in the database
-    void InnovationDatabase::Flush() { m_Innovations.clear(); }
+    void InnovationDatabase::Flush() {
+        m_Innovations.clear();
+        m_LinkInnovationIndex.clear();
+        m_NeuronInnovationIndex.clear();
+        m_IndexedInnovationCount = 0;
+        m_IndexedInnovationData = nullptr;
+    }
+
+    bool InnovationDatabase::ValidateInnovationState(std::string *error) const {
+        if (m_NextInnovationNum <= 0 || m_NextNeuronID <= 0) {
+            if (error != nullptr) *error = "Innovation counters must be positive";
+            return false;
+        }
+        for (const auto &innovation : m_Innovations) {
+            if (innovation.ID() <= 0 || innovation.ID() >= m_NextInnovationNum) {
+                if (error != nullptr) *error = "Innovation ID out of range";
+                return false;
+            }
+            if (innovation.InnovType() == NEW_NEURON && innovation.NeuronID() >= m_NextNeuronID) {
+                if (error != nullptr) *error = "Innovation neuron ID out of range";
+                return false;
+            }
+        }
+        return true;
+    }
+
+    std::string InnovationDatabase::Serialize() const {
+        std::ostringstream output;
+        Serialization::UseRoundTripPrecision(output);
+        output << "InnovationDatabaseStart\n";
+        output << "NextInnovNum: " << m_NextInnovationNum << "\n";
+        output << "NextNeuronID: " << m_NextNeuronID << "\n";
+        for (const auto &innovation : m_Innovations) {
+            output << "Innovation " << innovation.ID() << ' ' << static_cast<int>(innovation.InnovType()) << ' ' << innovation.FromNeuronID() << ' '
+                   << innovation.ToNeuronID() << ' ' << static_cast<int>(innovation.GetNeuronType()) << ' ' << innovation.NeuronID() << '\n';
+        }
+        output << "InnovationDatabaseEnd\n";
+        return output.str();
+    }
+
+    InnovationDatabase InnovationDatabase::Deserialize(const std::string &data) {
+        InnovationDatabase database;
+        std::istringstream input(data);
+        std::string token;
+        while (input >> token && token != "InnovationDatabaseStart") {
+        }
+        if (token != "InnovationDatabaseStart") throw std::runtime_error("InnovationDatabase: missing start marker.");
+        input >> token;
+        if (token != "NextInnovNum:") throw std::runtime_error("InnovationDatabase: missing innovation counter.");
+        input >> database.m_NextInnovationNum;
+        input >> token;
+        if (token != "NextNeuronID:") throw std::runtime_error("InnovationDatabase: missing neuron counter.");
+        input >> database.m_NextNeuronID;
+        while (input >> token && token != "InnovationDatabaseEnd") {
+            if (token != "Innovation") throw std::runtime_error("InnovationDatabase: missing Innovation marker.");
+            int id, type, from, to, neuron_type, nid;
+            input >> id >> type >> from >> to >> neuron_type >> nid;
+            if (!input) throw std::runtime_error("InnovationDatabase: malformed entry.");
+            database.m_Innovations.emplace_back(Innovation(id, static_cast<InnovationType>(type), from, to, static_cast<NeuronType>(neuron_type), nid));
+        }
+        if (token != "InnovationDatabaseEnd") throw std::runtime_error("InnovationDatabase: missing end marker.");
+        database.RebuildIndex();
+        std::string error;
+        if (!database.ValidateInnovationState(&error)) throw std::runtime_error("InnovationDatabase: " + error);
+        return database;
+    }
 
 }  // namespace NEAT

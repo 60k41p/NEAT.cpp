@@ -32,6 +32,7 @@
 
 #include "Substrate.h"
 
+#include <stdexcept>
 #include <vector>
 
 #include "NeuralNetwork.h"
@@ -59,41 +60,60 @@ namespace NEAT {
         m_max_weight_and_bias = 5.0;
         m_min_time_const = 0.1;
         m_max_time_const = 1.0;
+        m_max_connection_length = -1.0;
+        m_use_spatial_distance_for_delays = false;
+        m_conduction_velocity = 1.0;
     };
 
-    Substrate::Substrate(std::vector<std::vector<double> > &a_inputs,
-                         std::vector<std::vector<double> > &a_hidden,
-                         std::vector<std::vector<double> > &a_outputs) {
-        m_leaky = false;
-        m_with_distance = false;
-        m_query_weights_only = false;
-        m_hidden_nodes_activation = NEAT::UNSIGNED_SIGMOID;
-        m_output_nodes_activation = NEAT::UNSIGNED_SIGMOID;
-        m_allow_input_hidden_links = true;
-        m_allow_input_output_links = false;
-        m_allow_hidden_hidden_links = false;
-        m_allow_hidden_output_links = true;
-        m_allow_output_hidden_links = false;
-        m_allow_output_output_links = false;
-        m_allow_looped_hidden_links = false;
-        m_allow_looped_output_links = false;
-
-        m_max_weight_and_bias = 5.0;
-        m_min_time_const = 0.1;
-        m_max_time_const = 1.0;
-        m_custom_conn_obeys_flags = false;
-
-        m_input_coords = a_inputs;
-        m_hidden_coords = a_hidden;
-        m_output_coords = a_outputs;
-    }
+    Substrate::Substrate(std::vector<std::vector<double> > &a_inputs, std::vector<std::vector<double> > &a_hidden, std::vector<std::vector<double> > &a_outputs)
+        : m_input_coords(a_inputs),
+          m_hidden_coords(a_hidden),
+          m_output_coords(a_outputs),
+          m_leaky(false),
+          m_with_distance(false),
+          m_allow_input_hidden_links(true),
+          m_allow_input_output_links(false),
+          m_allow_hidden_hidden_links(false),
+          m_allow_hidden_output_links(true),
+          m_allow_output_hidden_links(false),
+          m_allow_output_output_links(false),
+          m_allow_looped_hidden_links(false),
+          m_allow_looped_output_links(false),
+          m_custom_conn_obeys_flags(false),
+          m_query_weights_only(false),
+          m_hidden_nodes_activation(NEAT::UNSIGNED_SIGMOID),
+          m_output_nodes_activation(NEAT::UNSIGNED_SIGMOID),
+          m_max_weight_and_bias(5.0),
+          m_min_time_const(0.1),
+          m_max_time_const(1.0),
+          m_max_connection_length(-1.0),
+          m_use_spatial_distance_for_delays(false),
+          m_conduction_velocity(1.0) {}
 
     void Substrate::SetCustomConnectivity(std::vector<std::vector<int> > &a_conns) {
+        auto coordinate_count = [this](NeuronType type) -> std::size_t {
+            switch (type) {
+                case INPUT:
+                case BIAS:
+                    return m_input_coords.size();
+                case HIDDEN:
+                    return m_hidden_coords.size();
+                case OUTPUT:
+                    return m_output_coords.size();
+                default:
+                    throw std::invalid_argument("Substrate::SetCustomConnectivity: invalid neuron type.");
+            }
+        };
+
         for (unsigned int i = 0; i < a_conns.size(); i++) {
+            if (a_conns[i].size() != 4) throw std::invalid_argument("Substrate::SetCustomConnectivity: connection entry must have 4 elements.");
             NeuronType src_type = (NeuronType)a_conns[i][0];
             int src_idx = a_conns[i][1];
             NeuronType dst_type = (NeuronType)a_conns[i][2];
             int dst_idx = a_conns[i][3];
+            if (src_idx < 0 || dst_idx < 0 || static_cast<std::size_t>(src_idx) >= coordinate_count(src_type) ||
+                static_cast<std::size_t>(dst_idx) >= coordinate_count(dst_type))
+                throw std::invalid_argument("Substrate::SetCustomConnectivity: connection index out of range.");
 
             std::vector<int> c;
             c.emplace_back(src_type);
@@ -133,7 +153,7 @@ namespace NEAT {
         }
     }
 
-    int Substrate::GetMaxDims() {
+    int Substrate::GetMaxDims() const {
         unsigned int max_dims = 0;
         for (unsigned int i = 0; i < m_input_coords.size(); i++) {
             if (max_dims < m_input_coords[i].size()) {

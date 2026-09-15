@@ -34,6 +34,7 @@
 
 #include <limits>
 #include <random>
+#include <string>
 #include <vector>
 
 namespace NEAT {
@@ -42,6 +43,10 @@ namespace NEAT {
         std::mt19937 gen;
 
        public:
+        // Default-constructs with a time-based seed so a bare RNG is usable
+        // without an explicit Seed() call. Seed() explicitly for reproducible runs.
+        RNG() { TimeSeed(); }
+
         // Seeds the random number generator with this value
         void Seed(long seed);
 
@@ -51,7 +56,7 @@ namespace NEAT {
         // Returns randomly either 1 or -1
         int RandPosNeg();
 
-        // Returns a random integer between X and Y
+        // Returns a random integer between X and Y (throws on X > Y)
         int RandInt(int x, int y);
 
         // Returns a random number from a uniform distribution in the range of [0 .. 1]
@@ -63,8 +68,21 @@ namespace NEAT {
         // Returns a random number from a gaussian (normal) distribution in the range of [-1 .. 1]
         double RandGaussSigned();
 
-        // Returns an index given a vector of probabilities
-        int Roulette(std::vector<double> &a_probs);
+        // Returns a random number from a normal distribution (throws on non-finite
+        // mean or non-positive/non-finite standard deviation)
+        double RandNormal(double mean = 0.0, double standardDeviation = 1.0);
+
+        // Returns a random number from a Cauchy distribution (throws on non-finite
+        // location or non-positive/non-finite scale; resamples non-finite draws)
+        double RandCauchy(double location = 0.0, double scale = 1.0);
+
+        // Returns an index given a vector of probabilities (throws on empty,
+        // non-finite or negative input; all-zero falls back to uniform choice)
+        int Roulette(const std::vector<double> &a_probs);
+
+        // Serializes/deserializes the engine state for deterministic checkpoints
+        std::string Serialize() const;
+        void Deserialize(const std::string &data);
     };
 
 }  // namespace NEAT

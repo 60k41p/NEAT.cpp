@@ -35,13 +35,28 @@
 #include <math.h>
 
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include <fstream>
+#include <functional>
+#include <limits>
+#include <map>
+#include <memory>
 #include <queue>
+#include <set>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
+#include <vector>
 
 #include "AssertMacros.h"
+#include "FileIO.h"
 #include "Parameters.h"
 #include "Random.h"
+#include "Serialization.h"
 #include "Utils.h"
 
 namespace NEAT {
@@ -51,6 +66,82 @@ namespace NEAT {
 
     // squared x
     inline double sqr(double x) { return x * x; }
+
+    // Uniform draw from [minimum .. maximum] (degenerate range returns the bound).
+    inline double RandomRange(RNG &rng, double minimum, double maximum) {
+        if (minimum == maximum) return minimum;
+        return minimum + rng.RandFloat() * (maximum - minimum);
+    }
+
+    // Initializes a new neuron gene's spiking parameters from the evolvable
+    // ranges (midpoint when no RNG is given, e.g. deterministic builders).
+    inline void InitializeNeuronSpiking(NeuronGene &neuron, const Parameters &parameters, RNG *rng = nullptr) {
+        const auto value = [rng](double minimum, double maximum) {
+            return rng == nullptr ? minimum + (maximum - minimum) * 0.5 : RandomRange(*rng, minimum, maximum);
+        };
+        if (IsSpikingActivation(neuron.m_ActFunction)) {
+            neuron.m_TimeConstant = value(parameters.MinSpikingTimeConstant, parameters.MaxSpikingTimeConstant);
+        }
+        neuron.m_SpikeThreshold = neuron.m_ActFunction == SPIKING_IZHIKEVICH ? value(parameters.MinIzhikevichThreshold, parameters.MaxIzhikevichThreshold)
+                                                                             : value(parameters.MinSpikeThreshold, parameters.MaxSpikeThreshold);
+        neuron.m_ResetPotential = value(parameters.MinResetPotential, parameters.MaxResetPotential);
+        neuron.m_RestingPotential = value(parameters.MinRestingPotential, parameters.MaxRestingPotential);
+        neuron.m_RefractoryPeriod = value(parameters.MinRefractoryPeriod, parameters.MaxRefractoryPeriod);
+        neuron.m_MembraneResistance = value(parameters.MinMembraneResistance, parameters.MaxMembraneResistance);
+        neuron.m_AdaptationTimeConstant = value(parameters.MinAdaptationTimeConstant, parameters.MaxAdaptationTimeConstant);
+        neuron.m_AdaptationIncrement = value(parameters.MinAdaptationIncrement, parameters.MaxAdaptationIncrement);
+        neuron.m_RateTimeConstant = value(parameters.MinSpikeRateTimeConstant, parameters.MaxSpikeRateTimeConstant);
+        neuron.m_IzhikevichA = value(parameters.MinIzhikevichA, parameters.MaxIzhikevichA);
+        neuron.m_IzhikevichB = value(parameters.MinIzhikevichB, parameters.MaxIzhikevichB);
+        neuron.m_IzhikevichC = value(parameters.MinIzhikevichC, parameters.MaxIzhikevichC);
+        neuron.m_IzhikevichD = value(parameters.MinIzhikevichD, parameters.MaxIzhikevichD);
+        if (neuron.m_ActFunction == MCCULLOCH_PITTS) {
+            neuron.m_MCPInhibitoryVeto =
+                rng == nullptr ? parameters.InitialMCPInhibitoryVetoProb >= 0.5 : rng->RandFloat() < parameters.InitialMCPInhibitoryVetoProb;
+        }
+    }
+
+    // Initializes a new link gene's synapse/STDP parameters from the evolvable ranges.
+    inline void InitializeLinkSpiking(LinkGene &link, const Parameters &parameters, RNG *rng = nullptr) {
+        const auto value = [rng](double minimum, double maximum) {
+            return rng == nullptr ? minimum + (maximum - minimum) * 0.5 : RandomRange(*rng, minimum, maximum);
+        };
+        link.m_SynapticDelay = value(parameters.MinSynapticDelay, parameters.MaxSynapticDelay);
+        link.m_SynapticTimeConstant = value(parameters.MinSynapticTimeConstant, parameters.MaxSynapticTimeConstant);
+        link.m_STDPEnabled = rng == nullptr ? parameters.InitialSTDPEnabledProb >= 1.0 : rng->RandFloat() < parameters.InitialSTDPEnabledProb;
+        link.m_STDPPlus = value(parameters.MinSTDPPlus, parameters.MaxSTDPPlus);
+        link.m_STDPMinus = value(parameters.MinSTDPMinus, parameters.MaxSTDPMinus);
+        link.m_STDPTauPlus = value(parameters.MinSTDPTau, parameters.MaxSTDPTau);
+        link.m_STDPTauMinus = value(parameters.MinSTDPTau, parameters.MaxSTDPTau);
+        link.m_STDPMinWeight = parameters.MinWeight;
+        link.m_STDPMaxWeight = parameters.MaxWeight;
+    }
+
+    // Copies a substrate coordinate into a phenotype neuron, preserving the
+    // historical x/y/z and substrate-coordinate aliases.
+    inline void SetSpatialCoordinates(Neuron &neuron, const std::vector<double> &coordinate) {
+        neuron.m_substrate_coords = coordinate;
+        neuron.m_x = coordinate.size() > 0 ? coordinate[0] : 0.0;
+        neuron.m_y = coordinate.size() > 1 ? coordinate[1] : 0.0;
+        neuron.m_z = coordinate.size() > 2 ? coordinate[2] : 0.0;
+        neuron.m_sx = neuron.m_x;
+        neuron.m_sy = neuron.m_y;
+        neuron.m_sz = neuron.m_z;
+    }
+
+    // Validates that every substrate coordinate group is non-empty and finite.
+    inline void ValidateSpatialSubstrate(const Substrate &substrate, const char *algorithm) {
+        const auto validate_group = [algorithm](const std::vector<std::vector<double>> &coordinates, const char *group) {
+            for (const auto &coordinate : coordinates) {
+                if (coordinate.empty() || !std::all_of(coordinate.begin(), coordinate.end(), [](double value) { return std::isfinite(value); })) {
+                    throw std::invalid_argument(std::string(algorithm) + " " + group + " coordinates must be non-empty and finite");
+                }
+            }
+        };
+        validate_group(substrate.m_input_coords, "input");
+        validate_group(substrate.m_output_coords, "output");
+        validate_group(substrate.m_hidden_coords, "hidden");
+    }
 
     // Create an empty genome
     Genome::Genome() {
@@ -227,7 +318,11 @@ namespace NEAT {
     }*/
 
     Genome::Genome(const Parameters &a_Parameters, const GenomeInitStruct &in) {
-        ASSERT((in.NumInputs > 1) && (in.NumOutputs > 0));
+        const int usable_inputs = a_Parameters.DontUseBiasNeuron ? in.NumInputs : in.NumInputs - 1;
+        if (usable_inputs < 1 || in.NumOutputs < 1 || in.NumHidden < 0 || in.NumLayers < 0)
+            throw std::invalid_argument("Genome: input, output, hidden, and layer counts are invalid.");
+        if (in.FS_NEAT && (in.FS_NEAT_links < 1 || static_cast<long long>(in.FS_NEAT_links) > static_cast<long long>(usable_inputs) * in.NumOutputs))
+            throw std::invalid_argument("Genome: FS_NEAT_links exceeds the number of unique input-to-output links.");
         RNG t_RNG;
         t_RNG.TimeSeed();
 
@@ -235,10 +330,14 @@ namespace NEAT {
         int t_innovnum = 1, t_nnum = 1;
         GenomeSeedType seed_type = in.SeedType;
 
+        if (seed_type != PERCEPTRON && seed_type != LAYERED) throw std::invalid_argument("Genome: unknown seed type");
+
         // override seed_type if 0 hidden units are specified
         if ((seed_type == LAYERED) && (in.NumHidden == 0)) {
             seed_type = PERCEPTRON;
         }
+
+        if (in.FS_NEAT && seed_type == LAYERED) throw std::invalid_argument("Genome: FS-NEAT initialization does not support layered seeds");
 
         if (a_Parameters.DontUseBiasNeuron == false) {
             // Create the input neurons.
@@ -278,6 +377,7 @@ namespace NEAT {
             t_ngene.Init((a_Parameters.MinActivationA + a_Parameters.MaxActivationA) / 2.0f, (a_Parameters.MinActivationB + a_Parameters.MaxActivationB) / 2.0f,
                          (a_Parameters.MinNeuronTimeConstant + a_Parameters.MaxNeuronTimeConstant) / 2.0f,
                          (a_Parameters.MinNeuronBias + a_Parameters.MaxNeuronBias) / 2.0f, in.OutputActType);
+            InitializeNeuronSpiking(t_ngene, a_Parameters);
             // Initialize the traits
             t_ngene.InitTraits(a_Parameters.NeuronTraits, t_RNG);
 
@@ -315,6 +415,7 @@ namespace NEAT {
                                  (a_Parameters.MinActivationB + a_Parameters.MaxActivationB) / 2.0f,
                                  (a_Parameters.MinNeuronTimeConstant + a_Parameters.MaxNeuronTimeConstant) / 2.0f,
                                  (a_Parameters.MinNeuronBias + a_Parameters.MaxNeuronBias) / 2.0f, in.HiddenActType);
+                    InitializeNeuronSpiking(t_ngene, a_Parameters);
                     // Initialize the traits
                     t_ngene.InitTraits(a_Parameters.NeuronTraits, t_RNG);
                     t_ngene.m_SplitY = initlt;
@@ -337,6 +438,7 @@ namespace NEAT {
                         for (unsigned int j = 0; j < prev_layer_size; j++) {
                             // add the link created with zero weights. needs future random initialization. !!!!!!!! init traits (TODO: maybe init empty traits?)
                             LinkGene l = LinkGene(j + last_src_id, i + last_dest_id, t_innovnum, 0.0, false);
+                            InitializeLinkSpiking(l, a_Parameters);
                             l.InitTraits(a_Parameters.LinkTraits, t_RNG);
                             m_LinkGenes.emplace_back(l);
                             t_innovnum++;
@@ -360,6 +462,7 @@ namespace NEAT {
                     for (unsigned int j = 0; j < prev_layer_size; j++) {
                         // add the link created with zero weights. needs future random initialization. !!!!!!!! init traits (TODO: maybe init empty traits?)
                         LinkGene l = LinkGene(j + last_src_id, i + last_dest_id, t_innovnum, 0.0, false);
+                        InitializeLinkSpiking(l, a_Parameters);
                         l.InitTraits(a_Parameters.LinkTraits, t_RNG);
                         m_LinkGenes.emplace_back(l);
                         t_innovnum++;
@@ -386,6 +489,7 @@ namespace NEAT {
                     for (unsigned int j = 0; j < in.NumInputs; j++) {
                         // add the link created with zero weights. needs future random initialization. !!!!!!!!
                         LinkGene l = LinkGene(j + 1, i + in.NumInputs + 1, t_innovnum, 0.0, false);
+                        InitializeLinkSpiking(l, a_Parameters);
                         l.InitTraits(a_Parameters.LinkTraits, t_RNG);
                         m_LinkGenes.emplace_back(l);
                         t_innovnum++;
@@ -403,7 +507,7 @@ namespace NEAT {
                 // TODO: make sure the innovations don't repeat for the same input/output pairs
                 while (linksmade < in.FS_NEAT_links) {
                     for (unsigned int i = 0; i < in.NumOutputs; i++) {
-                        int t_inp_id = t_RNG.RandInt(1, in.NumInputs - 1);
+                        int t_inp_id = t_RNG.RandInt(1, usable_inputs);
                         int t_bias_id = in.NumInputs;
                         int t_outp_id = in.NumInputs + 1 + i;
 
@@ -419,12 +523,14 @@ namespace NEAT {
                         if (!there) {
                             // created with zero weights. needs future random initialization. !!!!!!!!
                             LinkGene l = LinkGene(t_inp_id, t_outp_id, t_innovnum, 0.0, false);
+                            InitializeLinkSpiking(l, a_Parameters);
                             l.InitTraits(a_Parameters.LinkTraits, t_RNG);
                             m_LinkGenes.emplace_back(l);
                             t_innovnum++;
 
                             if (a_Parameters.DontUseBiasNeuron == false) {
                                 LinkGene bl = LinkGene(t_bias_id, t_outp_id, t_innovnum, 0.0, false);
+                                InitializeLinkSpiking(bl, a_Parameters);
                                 bl.InitTraits(a_Parameters.LinkTraits, t_RNG);
                                 m_LinkGenes.emplace_back(bl);
                                 t_innovnum++;
@@ -436,10 +542,6 @@ namespace NEAT {
                     }
                 }
             }
-        }
-
-        if (in.FS_NEAT && (in.FS_NEAT_links == 1)) {
-            throw std::runtime_error("Known bug - don't use FS-NEAT with just 1 link and 1/1/1 genome");
         }
 
         // Also initialize the Genome's traits
@@ -458,7 +560,10 @@ namespace NEAT {
         m_initial_num_links = NumLinks();
     }
 
-    void Genome::SetDepth(unsigned int a_d) { m_Depth = a_d; }
+    void Genome::SetDepth(unsigned int a_d) {
+        if (a_d > static_cast<unsigned int>(std::numeric_limits<int>::max())) throw std::out_of_range("Genome depth exceeds the supported range");
+        m_Depth = static_cast<int>(a_d);
+    }
 
     unsigned int Genome::GetDepth() const { return m_Depth; }
 
@@ -474,20 +579,13 @@ namespace NEAT {
 
     double Genome::GetFitness() const { return m_Fitness; }
 
-    void Genome::SetNeuronY(unsigned int a_idx, int a_y) {
-        ASSERT(a_idx < m_NeuronGenes.size());
-        m_NeuronGenes[a_idx].y = a_y;
-    }
+    void Genome::SetNeuronY(unsigned int a_idx, int a_y) { m_NeuronGenes.at(a_idx).y = a_y; }
 
-    void Genome::SetNeuronX(unsigned int a_idx, int a_x) {
-        ASSERT(a_idx < m_NeuronGenes.size());
-        m_NeuronGenes[a_idx].x = a_x;
-    }
+    void Genome::SetNeuronX(unsigned int a_idx, int a_x) { m_NeuronGenes.at(a_idx).x = a_x; }
 
     void Genome::SetNeuronXY(unsigned int a_idx, int a_x, int a_y) {
-        ASSERT(a_idx < m_NeuronGenes.size());
-        m_NeuronGenes[a_idx].x = a_x;
-        m_NeuronGenes[a_idx].y = a_y;
+        m_NeuronGenes.at(a_idx).x = a_x;
+        m_NeuronGenes.at(a_idx).y = a_y;
     }
 
     LinkGene Genome::GetLinkByIndex(int a_idx) const {
@@ -496,12 +594,11 @@ namespace NEAT {
     }
 
     LinkGene Genome::GetLinkByInnovID(int a_ID) const {
-        ASSERT(HasLinkByInnovID(a_ID));
         for (unsigned int i = 0; i < m_LinkGenes.size(); i++)
             if (m_LinkGenes[i].InnovationID() == a_ID) return m_LinkGenes[i];
 
         // should never reach this code
-        throw std::exception();
+        throw std::out_of_range("Genome::GetLinkByInnovID: unknown innovation ID");
     }
 
     NeuronGene Genome::GetNeuronByIndex(int a_idx) const {
@@ -510,9 +607,8 @@ namespace NEAT {
     }
 
     NeuronGene Genome::GetNeuronByID(int a_ID) const {
-        ASSERT(HasNeuronID(a_ID));
         int t_idx = GetNeuronIndex(a_ID);
-        ASSERT(t_idx != -1);
+        if (t_idx < 0) throw std::out_of_range("Genome::GetNeuronByID: unknown neuron ID");
         return m_NeuronGenes[t_idx];
     }
 
@@ -555,30 +651,26 @@ namespace NEAT {
         return -1;
     }
 
-    // returns the max neuron ID
+    // returns the max neuron ID (callers add one for the next free ID)
     int Genome::GetLastNeuronID() const {
-        ASSERT(NumNeurons() > 0);
-
         int t_maxid = 0;
 
         for (unsigned int i = 0; i < NumNeurons(); i++) {
             if (m_NeuronGenes[i].ID() > t_maxid) t_maxid = m_NeuronGenes[i].ID();
         }
 
-        return t_maxid + 1;
+        return t_maxid;
     }
 
-    // returns the max innovation Id
+    // returns the max innovation Id (callers add one for the next free ID)
     int Genome::GetLastInnovationID() const {
-        ASSERT(NumLinks() > 0);
-
         int t_maxid = 0;
 
         for (unsigned int i = 0; i < NumLinks(); i++) {
             if (m_LinkGenes[i].InnovationID() > t_maxid) t_maxid = m_LinkGenes[i].InnovationID();
         }
 
-        return t_maxid + 1;
+        return t_maxid;
     }
 
     // Returns true if the specified neuron ID is present in the genome
@@ -709,8 +801,23 @@ namespace NEAT {
             t_n.m_timeconst = m_NeuronGenes[i].m_TimeConstant;
             t_n.m_bias = m_NeuronGenes[i].m_Bias;
             t_n.m_activation_function_type = m_NeuronGenes[i].m_ActFunction;
+            t_n.m_spike_threshold = m_NeuronGenes[i].m_SpikeThreshold;
+            t_n.m_reset_potential = m_NeuronGenes[i].m_ResetPotential;
+            t_n.m_resting_potential = m_NeuronGenes[i].m_RestingPotential;
+            t_n.m_refractory_period = m_NeuronGenes[i].m_RefractoryPeriod;
+            t_n.m_membrane_resistance = m_NeuronGenes[i].m_MembraneResistance;
+            t_n.m_adaptation_time_constant = m_NeuronGenes[i].m_AdaptationTimeConstant;
+            t_n.m_adaptation_increment = m_NeuronGenes[i].m_AdaptationIncrement;
+            t_n.m_rate_time_constant = m_NeuronGenes[i].m_RateTimeConstant;
+            t_n.m_izhikevich_a = m_NeuronGenes[i].m_IzhikevichA;
+            t_n.m_izhikevich_b = m_NeuronGenes[i].m_IzhikevichB;
+            t_n.m_izhikevich_c = m_NeuronGenes[i].m_IzhikevichC;
+            t_n.m_izhikevich_d = m_NeuronGenes[i].m_IzhikevichD;
+            t_n.m_mcp_inhibitory_veto = m_NeuronGenes[i].m_MCPInhibitoryVeto;
             t_n.m_split_y = m_NeuronGenes[i].SplitY();
             t_n.m_type = m_NeuronGenes[i].Type();
+            t_n.m_x = static_cast<double>(m_NeuronGenes[i].x);
+            t_n.m_y = static_cast<double>(m_NeuronGenes[i].y);
 
             a_Net.AddNeuron(t_n);
         }
@@ -721,10 +828,24 @@ namespace NEAT {
 
             const int t_from = m_LinkGenes[i].FromNeuronID();
             const int t_to = m_LinkGenes[i].ToNeuronID();
-            t_c.m_source_neuron_idx = (t_from >= 0 && t_from <= t_max_id) ? t_id_to_index[static_cast<size_t>(t_from)] : GetNeuronIndex(t_from);
-            t_c.m_target_neuron_idx = (t_to >= 0 && t_to <= t_max_id) ? t_id_to_index[static_cast<size_t>(t_to)] : GetNeuronIndex(t_to);
+            const int t_from_idx = (t_from >= 0 && t_from <= t_max_id) ? t_id_to_index[static_cast<size_t>(t_from)] : -1;
+            const int t_to_idx = (t_to >= 0 && t_to <= t_max_id) ? t_id_to_index[static_cast<size_t>(t_to)] : -1;
+            if (t_from_idx < 0 || t_to_idx < 0) {
+                throw std::runtime_error("Genome contains a link whose endpoint neuron does not exist");
+            }
+            t_c.m_source_neuron_idx = t_from_idx;
+            t_c.m_target_neuron_idx = t_to_idx;
             t_c.m_weight = m_LinkGenes[i].GetWeight();
             t_c.m_recur_flag = m_LinkGenes[i].IsRecurrent();
+            t_c.m_synaptic_delay = m_LinkGenes[i].m_SynapticDelay;
+            t_c.m_synaptic_time_constant = m_LinkGenes[i].m_SynapticTimeConstant;
+            t_c.m_stdp_enabled = m_LinkGenes[i].m_STDPEnabled;
+            t_c.m_stdp_plus = m_LinkGenes[i].m_STDPPlus;
+            t_c.m_stdp_minus = m_LinkGenes[i].m_STDPMinus;
+            t_c.m_stdp_tau_plus = m_LinkGenes[i].m_STDPTauPlus;
+            t_c.m_stdp_tau_minus = m_LinkGenes[i].m_STDPTauMinus;
+            t_c.m_stdp_min_weight = m_LinkGenes[i].m_STDPMinWeight;
+            t_c.m_stdp_max_weight = m_LinkGenes[i].m_STDPMaxWeight;
 
             //////////////////////
             // default values
@@ -734,16 +855,16 @@ namespace NEAT {
             // if a float trait "hebb_rate" exists
             if (m_LinkGenes[i].m_Traits.count("hebb_rate") == 1) {
                 try {
-                    t_c.m_hebb_rate = std::get<double>(m_LinkGenes[i].m_Traits["hebb_rate"].value);
-                } catch (std::exception e) {
+                    t_c.m_hebb_rate = std::get<double>(m_LinkGenes[i].m_Traits.at("hebb_rate").value);
+                } catch (...) {
                     // do nothing
                 }
             }
             // if a float trait "hebb_pre_rate" exists
             if (m_LinkGenes[i].m_Traits.count("hebb_pre_rate") == 1) {
                 try {
-                    t_c.m_hebb_pre_rate = std::get<double>(m_LinkGenes[i].m_Traits["hebb_pre_rate"].value);
-                } catch (std::exception e) {
+                    t_c.m_hebb_pre_rate = std::get<double>(m_LinkGenes[i].m_Traits.at("hebb_pre_rate").value);
+                } catch (...) {
                     // do nothing
                 }
             }
@@ -767,20 +888,24 @@ namespace NEAT {
     // uses signed activation outputs
     void Genome::BuildHyperNEATPhenotype(NeuralNetwork &net, Substrate &subst) {
         // We need a substrate with at least one input and output
-        ASSERT(subst.m_input_coords.size() > 0);
-        ASSERT(subst.m_output_coords.size() > 0);
+        if (subst.m_input_coords.empty() || subst.m_output_coords.empty())
+            throw std::invalid_argument("A HyperNEAT substrate requires input and output coordinates");
+        ValidateSpatialSubstrate(subst, "HyperNEAT");
 
         int max_dims = subst.GetMaxDims();
 
         // Make sure the CPPN dimensionality is right
-        ASSERT(subst.GetMinCPPNInputs() > 0);
-        ASSERT(NumInputs() >= subst.GetMinCPPNInputs());
-        ASSERT(NumOutputs() >= subst.GetMinCPPNOutputs());
+        if (static_cast<int>(m_NumInputs) < subst.GetMinCPPNInputs() || static_cast<int>(m_NumOutputs) < subst.GetMinCPPNOutputs())
+            throw std::invalid_argument("The CPPN does not provide enough inputs or outputs for the substrate");
+        if (!std::isfinite(subst.m_max_weight_and_bias) || subst.m_max_weight_and_bias < 0.0 || !std::isfinite(subst.m_min_time_const) ||
+            !std::isfinite(subst.m_max_time_const) || subst.m_min_time_const > subst.m_max_time_const)
+            throw std::invalid_argument("The substrate weight, bias, or time-constant range is invalid");
         if (subst.m_leaky) {
             ASSERT(NumOutputs() >= subst.GetMinCPPNOutputs());
         }
 
         // Now we create the substrate (net)
+        net.Clear();
         net.SetInputOutputDimentions(static_cast<unsigned short>(subst.m_input_coords.size()), static_cast<unsigned short>(subst.m_output_coords.size()));
 
         // Inputs
@@ -789,8 +914,7 @@ namespace NEAT {
 
             t_n.m_a = 1;
             t_n.m_b = 0;
-            t_n.m_substrate_coords = subst.m_input_coords[i];
-            ASSERT(t_n.m_substrate_coords.size() > 0);  // prevent 0D points
+            SetSpatialCoordinates(t_n, subst.m_input_coords[i]);
             t_n.m_activation_function_type = NEAT::LINEAR;
             t_n.m_type = NEAT::INPUT;
 
@@ -803,8 +927,7 @@ namespace NEAT {
 
             t_n.m_a = 1;
             t_n.m_b = 0;
-            t_n.m_substrate_coords = subst.m_output_coords[i];
-            ASSERT(t_n.m_substrate_coords.size() > 0);  // prevent 0D points
+            SetSpatialCoordinates(t_n, subst.m_output_coords[i]);
             t_n.m_activation_function_type = subst.m_output_nodes_activation;
             t_n.m_type = NEAT::OUTPUT;
 
@@ -817,8 +940,7 @@ namespace NEAT {
 
             t_n.m_a = 1;
             t_n.m_b = 0;
-            t_n.m_substrate_coords = subst.m_hidden_coords[i];
-            ASSERT(t_n.m_substrate_coords.size() > 0);  // prevent 0D points
+            SetSpatialCoordinates(t_n, subst.m_hidden_coords[i]);
             t_n.m_activation_function_type = subst.m_hidden_nodes_activation;
             t_n.m_type = NEAT::HIDDEN;
 
@@ -929,10 +1051,12 @@ namespace NEAT {
         } else {
             // use the custom connectivity
             for (unsigned int idx = 0; idx < subst.m_custom_connectivity.size(); idx++) {
+                if (subst.m_custom_connectivity[idx].size() != 4) throw std::invalid_argument("Malformed custom substrate connection");
                 NeuronType src_type = (NeuronType)subst.m_custom_connectivity[idx][0];
                 int src_idx = subst.m_custom_connectivity[idx][1];
                 NeuronType dst_type = (NeuronType)subst.m_custom_connectivity[idx][2];
                 int dst_idx = subst.m_custom_connectivity[idx][3];
+                if (src_idx < 0 || dst_idx < 0) throw std::invalid_argument("Custom substrate connection index out of range");
 
                 // determine the indices in the NN
                 int j = 0;  // src
@@ -1064,6 +1188,7 @@ namespace NEAT {
     // WARNING! Using this too often in conjuction with RTRL can confuse evolution.
     void Genome::DerivePhenotypicChanges(NeuralNetwork &a_Net) {
         // the a_Net and the genome must have identical topology. if the topology differs, no changes will be made to the genome
+        if (a_Net.m_connections.size() != m_LinkGenes.size()) return;
 
         // Since we don't have a comparison operator yet, we are going to assume
         // identical topolgy
@@ -1097,8 +1222,8 @@ namespace NEAT {
         // New - if there is a behavior in the genomes, return their distance
 
         // iterators for moving through the genomes' genes
-        std::vector<LinkGene>::iterator t_g1;
-        std::vector<LinkGene>::iterator t_g2;
+        std::vector<LinkGene>::const_iterator t_g1;
+        std::vector<LinkGene>::const_iterator t_g2;
 
         // this variable is the total distance between the genomes if it passes beyond the compatibility treshold, the function returns false
         double t_total_distance = 0.0;
@@ -1109,6 +1234,8 @@ namespace NEAT {
         double t_total_A_difference = 0.0;
         double t_total_B_difference = 0.0;
         double t_total_num_activation_difference = 0.0;
+        double t_total_spiking_neuron_difference = 0.0;
+        double t_total_spiking_link_difference = 0.0;
         std::map<std::string, double> t_total_neuron_trait_difference;
         std::map<std::string, double> t_total_link_trait_difference;
         std::map<std::string, double> t_genome_link_trait_difference;
@@ -1129,14 +1256,32 @@ namespace NEAT {
         t_g1 = m_LinkGenes.begin();
         t_g2 = a_G.m_LinkGenes.begin();
 
+        auto by_innovation = [](const LinkGene &lhs, const LinkGene &rhs) { return lhs.InnovationID() < rhs.InnovationID(); };
+        // Sort copies when a genome is unsorted so the merge below classifies
+        // disjoint/excess correctly instead of misreading order as divergence.
+        std::vector<LinkGene> t_sorted_1, t_sorted_2;
+        const std::vector<LinkGene> *t_links_1 = &m_LinkGenes;
+        const std::vector<LinkGene> *t_links_2 = &a_G.m_LinkGenes;
+        if (!std::is_sorted(m_LinkGenes.begin(), m_LinkGenes.end(), by_innovation)) {
+            t_sorted_1 = m_LinkGenes;
+            std::sort(t_sorted_1.begin(), t_sorted_1.end(), by_innovation);
+            t_links_1 = &t_sorted_1;
+        }
+        if (!std::is_sorted(a_G.m_LinkGenes.begin(), a_G.m_LinkGenes.end(), by_innovation)) {
+            t_sorted_2 = a_G.m_LinkGenes;
+            std::sort(t_sorted_2.begin(), t_sorted_2.end(), by_innovation);
+            t_links_2 = &t_sorted_2;
+        }
+        t_g1 = t_links_1->begin();
+        t_g2 = t_links_2->begin();
         // Step through the genes until both genomes end
-        while (!((t_g1 == m_LinkGenes.end()) && ((t_g2 == a_G.m_LinkGenes.end())))) {
+        while (!((t_g1 == t_links_1->end()) && ((t_g2 == t_links_2->end())))) {
             // end of first genome?
-            if (t_g1 == m_LinkGenes.end()) {
+            if (t_g1 == t_links_1->end()) {
                 // add to the total distance
                 t_num_excess++;
                 t_g2++;
-            } else if (t_g2 == a_G.m_LinkGenes.end())
+            } else if (t_g2 == t_links_2->end())
             // end of second genome?
             {
                 // add to the total distance
@@ -1155,6 +1300,26 @@ namespace NEAT {
                         double t_wdiff = (t_g1->GetWeight() - t_g2->GetWeight());
                         if (t_wdiff < 0) t_wdiff = -t_wdiff;  // make sure it is positive
                         t_total_weight_difference += t_wdiff;
+                    }
+
+                    if (a_Parameters.SpikingLinkDiffCoeff > 0.0) {
+                        const LinkGene &t_first = *t_g1;
+                        const LinkGene &t_second = *t_g2;
+                        auto normalized = [](double lhs, double rhs, double minimum, double maximum) {
+                            const double span = maximum - minimum;
+                            return span > 0.0 ? std::abs(lhs - rhs) / span : (lhs == rhs ? 0.0 : 1.0);
+                        };
+                        double difference = 0.0;
+                        difference +=
+                            normalized(t_first.m_SynapticDelay, t_second.m_SynapticDelay, a_Parameters.MinSynapticDelay, a_Parameters.MaxSynapticDelay);
+                        difference += normalized(t_first.m_SynapticTimeConstant, t_second.m_SynapticTimeConstant, a_Parameters.MinSynapticTimeConstant,
+                                                 a_Parameters.MaxSynapticTimeConstant);
+                        difference += (t_first.m_STDPEnabled == t_second.m_STDPEnabled) ? 0.0 : 1.0;
+                        difference += normalized(t_first.m_STDPPlus, t_second.m_STDPPlus, a_Parameters.MinSTDPPlus, a_Parameters.MaxSTDPPlus);
+                        difference += normalized(t_first.m_STDPMinus, t_second.m_STDPMinus, a_Parameters.MinSTDPMinus, a_Parameters.MaxSTDPMinus);
+                        difference += normalized(t_first.m_STDPTauPlus, t_second.m_STDPTauPlus, a_Parameters.MinSTDPTau, a_Parameters.MaxSTDPTau);
+                        difference += normalized(t_first.m_STDPTauMinus, t_second.m_STDPTauMinus, a_Parameters.MinSTDPTau, a_Parameters.MaxSTDPTau);
+                        t_total_spiking_link_difference += difference / 7.0;
                     }
 
                     // calculate link trait difference here
@@ -1238,6 +1403,28 @@ namespace NEAT {
                         }
                     }
 
+                    if (a_Parameters.SpikingNeuronDiffCoeff > 0.0 &&
+                        (IsSpikingActivation(m_NeuronGenes[i].m_ActFunction) || IsSpikingActivation(t_other_gene.m_ActFunction))) {
+                        const NeuronGene &t_mine = m_NeuronGenes[i];
+                        auto normalized = [](double lhs, double rhs, double minimum, double maximum) {
+                            const double span = maximum - minimum;
+                            return span > 0.0 ? std::abs(lhs - rhs) / span : (lhs == rhs ? 0.0 : 1.0);
+                        };
+                        double difference = 0.0;
+                        difference +=
+                            normalized(t_mine.m_SpikeThreshold, t_other_gene.m_SpikeThreshold, a_Parameters.MinSpikeThreshold, a_Parameters.MaxSpikeThreshold);
+                        difference +=
+                            normalized(t_mine.m_ResetPotential, t_other_gene.m_ResetPotential, a_Parameters.MinResetPotential, a_Parameters.MaxResetPotential);
+                        difference += normalized(t_mine.m_RestingPotential, t_other_gene.m_RestingPotential, a_Parameters.MinRestingPotential,
+                                                 a_Parameters.MaxRestingPotential);
+                        difference += normalized(t_mine.m_RefractoryPeriod, t_other_gene.m_RefractoryPeriod, a_Parameters.MinRefractoryPeriod,
+                                                 a_Parameters.MaxRefractoryPeriod);
+                        difference += normalized(t_mine.m_MembraneResistance, t_other_gene.m_MembraneResistance, a_Parameters.MinMembraneResistance,
+                                                 a_Parameters.MaxMembraneResistance);
+                        difference += (t_mine.m_MCPInhibitoryVeto == t_other_gene.m_MCPInhibitoryVeto) ? 0.0 : 1.0;
+                        t_total_spiking_neuron_difference += difference / 6.0;
+                    }
+
                     // calculate and add node trait difference here
                     std::map<std::string, double> neuron_trait_difference = m_NeuronGenes[i].GetTraitDistances(t_other_gene.m_Traits);
                     // add to the totals
@@ -1271,22 +1458,31 @@ namespace NEAT {
             (a_Parameters.WeightDiffCoeff * (t_total_weight_difference * tnml)) + (a_Parameters.ActivationADiffCoeff * (t_total_A_difference * tnmn)) +
             (a_Parameters.ActivationBDiffCoeff * (t_total_B_difference * tnmn)) +
             (a_Parameters.TimeConstantDiffCoeff * (t_total_timeconstant_difference * tnmn)) + (a_Parameters.BiasDiffCoeff * (t_total_bias_difference * tnmn)) +
-            (a_Parameters.ActivationFunctionDiffCoeff * (t_total_num_activation_difference * tnmn));
+            (a_Parameters.ActivationFunctionDiffCoeff * (t_total_num_activation_difference * tnmn)) +
+            (a_Parameters.SpikingNeuronDiffCoeff * (t_total_spiking_neuron_difference * tnmn)) +
+            (a_Parameters.SpikingLinkDiffCoeff * (t_total_spiking_link_difference * tnml));
 
-        // add trait differences according to each one's coeff
+        // add trait differences according to each one's coeff (find-guarded:
+        // genomes may carry traits absent from the schema)
 
         for (auto it = t_total_link_trait_difference.begin(); it != t_total_link_trait_difference.end(); it++) {
-            double n = (a_Parameters.LinkTraits[it->first].m_ImportanceCoeff * it->second) * tnml;
+            const auto schema = a_Parameters.LinkTraits.find(it->first);
+            if (schema == a_Parameters.LinkTraits.end()) continue;
+            double n = (schema->second.m_ImportanceCoeff * it->second) * tnml;
             if (std::isnan(n) || std::isinf(n)) n = 0.0;
             t_total_distance += n;
         }
         for (auto it = t_total_neuron_trait_difference.begin(); it != t_total_neuron_trait_difference.end(); it++) {
-            double n = (a_Parameters.NeuronTraits[it->first].m_ImportanceCoeff * it->second) * tnmn;
+            const auto schema = a_Parameters.NeuronTraits.find(it->first);
+            if (schema == a_Parameters.NeuronTraits.end()) continue;
+            double n = (schema->second.m_ImportanceCoeff * it->second) * tnmn;
             if (std::isnan(n) || std::isinf(n)) n = 0.0;
             t_total_distance += n;
         }
         for (auto it = t_genome_link_trait_difference.begin(); it != t_genome_link_trait_difference.end(); it++) {
-            double n = (a_Parameters.GenomeTraits[it->first].m_ImportanceCoeff * it->second);
+            const auto schema = a_Parameters.GenomeTraits.find(it->first);
+            if (schema == a_Parameters.GenomeTraits.end()) continue;
+            double n = (schema->second.m_ImportanceCoeff * it->second);
             if (std::isnan(n) || std::isinf(n)) n = 0.0;
             t_total_distance += n;
         }
@@ -1302,12 +1498,10 @@ namespace NEAT {
         // full compatibility cases
         if (this == &a_G) return true;
 
-        if (GetID() == a_G.GetID()) return true;
+        double t_total_distance = CompatibilityDistance(a_G, a_Parameters);
 
         /*if ((NumLinks() == 0) && (a_G.NumLinks() == 0))
             return true;*/
-
-        double t_total_distance = CompatibilityDistance(a_G, a_Parameters);
 
         if (t_total_distance <= a_Parameters.CompatTreshold)
             return true;  // compatible
@@ -1333,6 +1527,18 @@ namespace NEAT {
         t_probs.emplace_back(a_Parameters.ActivationFunction_Linear_Prob);
         t_probs.emplace_back(a_Parameters.ActivationFunction_Relu_Prob);
         t_probs.emplace_back(a_Parameters.ActivationFunction_Softplus_Prob);
+        t_probs.emplace_back(a_Parameters.ActivationFunction_SpikingLIF_Prob);
+        t_probs.emplace_back(a_Parameters.ActivationFunction_SpikingAdaptiveLIF_Prob);
+        t_probs.emplace_back(a_Parameters.ActivationFunction_SpikingIzhikevich_Prob);
+        t_probs.emplace_back(a_Parameters.ActivationFunction_McCullochPitts_Prob);
+
+        double total = 0.0;
+        for (const double probability : t_probs) {
+            if (!std::isfinite(probability) || probability < 0.0)
+                throw std::invalid_argument("Activation-function probabilities must be finite and non-negative");
+            total += probability;
+        }
+        if (!std::isfinite(total) || total <= 0.0) throw std::invalid_argument("At least one activation function must have positive probability");
 
         return (NEAT::ActivationFunction)a_RNG.Roulette(t_probs);
     }
@@ -1340,7 +1546,7 @@ namespace NEAT {
     // Adds a new neuron to the genome returns true if succesful
     bool Genome::Mutate_AddNeuron(InnovationDatabase &a_Innovs, const Parameters &a_Parameters, RNG &a_RNG) {
         // No links to split - go away..
-        if (NumLinks() == 0) return false;
+        if (NumLinks() == 0 || a_Parameters.NeuronTries <= 0) return false;
 
         // Also we need at least one neuron with 2 incoming links before we split any
         /*bool good=false;
@@ -1358,42 +1564,38 @@ namespace NEAT {
         // First find a link that to be split
         ////////////////////
 
-        // Select a random link for now
-        bool t_link_found = false;
-        int t_link_num = 0;
+        // Collect splittable links up front (skipping bias sources and
+        // disallowed recurrent links) and pick one uniformly, instead of
+        // rejection-sampling up to 256 times.
+        std::vector<std::size_t> t_eligible_links;
+        t_eligible_links.reserve(m_LinkGenes.size());
+        for (std::size_t t_index = 0; t_index < m_LinkGenes.size(); ++t_index) {
+            const LinkGene &t_link = m_LinkGenes[t_index];
+            const int t_source_index = GetNeuronIndex(t_link.FromNeuronID());
+            if (t_source_index < 0) continue;
+            if (!a_Parameters.DontUseBiasNeuron && m_NeuronGenes[static_cast<std::size_t>(t_source_index)].Type() == BIAS) {
+                continue;
+            }
+            if (t_link.IsRecurrent()) {
+                if (t_link.IsLoopedRecurrent()) {
+                    if (!a_Parameters.SplitLoopedRecurrent) continue;
+                } else if (!a_Parameters.SplitRecurrent) {
+                    continue;
+                }
+            }
+            t_eligible_links.push_back(t_index);
+        }
+        if (t_eligible_links.empty()) return false;
+
+        const std::size_t t_link_num = t_eligible_links[static_cast<std::size_t>(a_RNG.RandInt(0, static_cast<int>(t_eligible_links.size()) - 1))];
         int t_in = 0, t_out = 0;
         LinkGene t_chosenlink(0, 0, -1, 0, false);  // to save it for later
 
-        // number of tries to find a good link or give up
-        int t_tries = 256;
-        while (!t_link_found) {
-            if (NumLinks() == 1) {
-                t_link_num = 0;
-            }
-            /*else if (NumLinks() == 2)
-            {
-                t_link_num = Rounded(a_RNG.RandFloat());
-            }*/
-            else {
-                // if (NumLinks() > 8)
-                {
-                    t_link_num = a_RNG.RandInt(0, NumLinks() - 1);  // random selection
-                }
-                /*else
-            {
-                // this selects older links for splitting
-                double t_r = abs(RandGaussSigned()/3.0);
-                Clamp(t_r, 0, 1);
-                t_link_num =  static_cast<int>(t_r * (NumLinks()-1));
-            }*/
-            }
-
+        {
             t_in = m_LinkGenes[t_link_num].FromNeuronID();
             t_out = m_LinkGenes[t_link_num].ToNeuronID();
 
             ASSERT((t_in > 0) && (t_out > 0));
-
-            t_link_found = true;
 
             // In case there is only one link, coming from a bias - just quit
 
@@ -1402,25 +1604,6 @@ namespace NEAT {
                 if ((m_NeuronGenes[GetNeuronIndex(t_in)].Type() == BIAS) && (NumLinks() == 1)) {
                     return false;
                 }
-
-                // Do not allow splitting a link coming from a bias
-                if (m_NeuronGenes[GetNeuronIndex(t_in)].Type() == BIAS) {
-                    t_link_found = false;
-                }
-            }
-
-            // Do not allow splitting of recurrent links
-            if (!a_Parameters.SplitRecurrent) {
-                if (m_LinkGenes[t_link_num].IsRecurrent()) {
-                    if ((!a_Parameters.SplitLoopedRecurrent) && (t_in == t_out)) {
-                        t_link_found = false;
-                    }
-                }
-            }
-
-            t_tries--;
-            if (t_tries <= 0) {
-                return false;
             }
         }
         // Now the link has been selected
@@ -1430,16 +1613,8 @@ namespace NEAT {
         t_chosenlink = m_LinkGenes[t_link_num];  // save the whole link
 
         // remove the link from the genome
-        // find it first and then erase it
         // TODO: add option to keep the link, but disabled
-        std::vector<LinkGene>::iterator t_iter;
-        for (t_iter = m_LinkGenes.begin(); t_iter != m_LinkGenes.end(); t_iter++) {
-            if (t_iter->InnovationID() == m_LinkGenes[t_link_num].InnovationID()) {
-                // found it! now erase..
-                m_LinkGenes.erase(t_iter);
-                break;
-            }
-        }
+        RemoveLinkGene(m_LinkGenes[t_link_num].InnovationID());
 
         // Check if an innovation of this type already occured somewhere in the population
         int t_innovid = a_Innovs.CheckInnovation(t_in, t_out, NEW_NEURON);
@@ -1481,6 +1656,7 @@ namespace NEAT {
 
             // Initialize the neuron gene's properties
             t_ngene.Init(t_A, t_B, t_TC, t_Bs, GetRandomActivation(a_Parameters, a_RNG));
+            InitializeNeuronSpiking(t_ngene, a_Parameters, &a_RNG);
 
             // Initialize the traits
             // if (a_RNG.RandFloat() < 0.5)
@@ -1505,12 +1681,31 @@ namespace NEAT {
             LinkGene l1 = LinkGene(t_in, t_nid, t_l1id, 1.0, t_recurrentflag);
             // make sure this weight is in the allowed interval
             Clamp(l1.m_Weight, a_Parameters.MinWeight, a_Parameters.MaxWeight);
+            // Split synapses inherit the parent delay (halved) and STDP state.
+            l1.m_SynapticDelay = t_chosenlink.m_SynapticDelay * 0.5;
+            l1.m_SynapticTimeConstant = t_chosenlink.m_SynapticTimeConstant;
+            l1.m_STDPEnabled = t_chosenlink.m_STDPEnabled;
+            l1.m_STDPPlus = t_chosenlink.m_STDPPlus;
+            l1.m_STDPMinus = t_chosenlink.m_STDPMinus;
+            l1.m_STDPTauPlus = t_chosenlink.m_STDPTauPlus;
+            l1.m_STDPTauMinus = t_chosenlink.m_STDPTauMinus;
+            l1.m_STDPMinWeight = t_chosenlink.m_STDPMinWeight;
+            l1.m_STDPMaxWeight = t_chosenlink.m_STDPMaxWeight;
             // Init the link's traits
             l1.InitTraits(a_Parameters.LinkTraits, a_RNG);
             m_LinkGenes.emplace_back(l1);
 
             // Second link
             LinkGene l2 = LinkGene(t_nid, t_out, t_l2id, t_orig_weight, t_recurrentflag);
+            l2.m_SynapticDelay = t_chosenlink.m_SynapticDelay * 0.5;
+            l2.m_SynapticTimeConstant = t_chosenlink.m_SynapticTimeConstant;
+            l2.m_STDPEnabled = t_chosenlink.m_STDPEnabled;
+            l2.m_STDPPlus = t_chosenlink.m_STDPPlus;
+            l2.m_STDPMinus = t_chosenlink.m_STDPMinus;
+            l2.m_STDPTauPlus = t_chosenlink.m_STDPTauPlus;
+            l2.m_STDPTauMinus = t_chosenlink.m_STDPTauMinus;
+            l2.m_STDPMinWeight = t_chosenlink.m_STDPMinWeight;
+            l2.m_STDPMaxWeight = t_chosenlink.m_STDPMaxWeight;
             // Init the link's traits
             l2.InitTraits(a_Parameters.LinkTraits, a_RNG);
             m_LinkGenes.emplace_back(l2);
@@ -1583,6 +1778,7 @@ namespace NEAT {
 
             // Initialize the neuron gene's properties
             t_ngene.Init(t_A, t_B, t_TC, t_Bs, GetRandomActivation(a_Parameters, a_RNG));
+            InitializeNeuronSpiking(t_ngene, a_Parameters, &a_RNG);
 
             // Initialize the traits
             // if (a_RNG.RandFloat() < 0.5)
@@ -1600,15 +1796,34 @@ namespace NEAT {
 
             // Add the NeuronGene
             m_NeuronGenes.emplace_back(t_ngene);
-            // First link
             LinkGene l1 = LinkGene(t_in, t_nid, t_l1id, 1.0, t_recurrentflag);
             // make sure this weight is in the allowed interval
             Clamp(l1.m_Weight, a_Parameters.MinWeight, a_Parameters.MaxWeight);
+            // Split synapses inherit the parent delay (halved) and STDP state.
+            l1.m_SynapticDelay = t_chosenlink.m_SynapticDelay * 0.5;
+            l1.m_SynapticTimeConstant = t_chosenlink.m_SynapticTimeConstant;
+            l1.m_STDPEnabled = t_chosenlink.m_STDPEnabled;
+            l1.m_STDPPlus = t_chosenlink.m_STDPPlus;
+            l1.m_STDPMinus = t_chosenlink.m_STDPMinus;
+            l1.m_STDPTauPlus = t_chosenlink.m_STDPTauPlus;
+            l1.m_STDPTauMinus = t_chosenlink.m_STDPTauMinus;
+            l1.m_STDPMinWeight = t_chosenlink.m_STDPMinWeight;
+            l1.m_STDPMaxWeight = t_chosenlink.m_STDPMaxWeight;
             // initialize the link's traits
             l1.InitTraits(a_Parameters.LinkTraits, a_RNG);
             m_LinkGenes.emplace_back(l1);
+
             // Second link
             LinkGene l2 = LinkGene(t_nid, t_out, t_l2id, t_orig_weight, t_recurrentflag);
+            l2.m_SynapticDelay = t_chosenlink.m_SynapticDelay * 0.5;
+            l2.m_SynapticTimeConstant = t_chosenlink.m_SynapticTimeConstant;
+            l2.m_STDPEnabled = t_chosenlink.m_STDPEnabled;
+            l2.m_STDPPlus = t_chosenlink.m_STDPPlus;
+            l2.m_STDPMinus = t_chosenlink.m_STDPMinus;
+            l2.m_STDPTauPlus = t_chosenlink.m_STDPTauPlus;
+            l2.m_STDPTauMinus = t_chosenlink.m_STDPTauMinus;
+            l2.m_STDPMinWeight = t_chosenlink.m_STDPMinWeight;
+            l2.m_STDPMaxWeight = t_chosenlink.m_STDPMaxWeight;
             // initialize the link's traits
             l2.InitTraits(a_Parameters.LinkTraits, a_RNG);
             m_LinkGenes.emplace_back(l2);
@@ -1619,8 +1834,7 @@ namespace NEAT {
 
     // Adds a new link to the genome returns true if succesful
     bool Genome::Mutate_AddLink(InnovationDatabase &a_Innovs, const Parameters &a_Parameters, RNG &a_RNG) {
-        // this variable tells where is the first noninput node
-        int t_first_noninput = 0;
+        if (m_NeuronGenes.empty() || a_Parameters.LinkTries == 0) return false;
 
         // The pair of neurons that has to be connected (1 - in, 2 - out)
         // It may be the same neuron - this means that the connection is a looped recurrent one.
@@ -1636,9 +1850,6 @@ namespace NEAT {
         // Should it come from the bias neuron?
         bool t_MakeBias = false;
 
-        // Counter of tries to find a candidate pair of neuron/s to connect.
-        unsigned int t_NumTries = 0;
-
         // Decide whether the connection will be recurrent or not..
         if (a_RNG.RandFloat() < a_Parameters.RecurrentProb) {
             t_MakeRecurrent = true;
@@ -1651,119 +1862,156 @@ namespace NEAT {
         // if such link doesn't already exist.
         // in case such link exists, search for a standard feed-forward connection place
         else {
-            if (a_RNG.RandFloat() < a_Parameters.MutateAddLinkFromBiasProb) {
+            if (!a_Parameters.DontUseBiasNeuron && a_RNG.RandFloat() < a_Parameters.MutateAddLinkFromBiasProb) {
                 t_MakeBias = true;
             }
         }
 
-        // Try to find a good pair of neurons
-        bool t_Found = false;
+        // Find a good pair of neurons. Forward-reachability for all neurons is
+        // computed once (reverse-topological bitset DP); bounded random
+        // sampling then finds a pair fast in the common case, with an
+        // exhaustive two-pass uniform fallback guaranteeing completeness.
+        // Forward links can never close a directed cycle through the
+        // feedforward links.
+        const auto t_is_non_input = [](NeuronType type) { return type != INPUT && type != BIAS; };
 
-        // Find the first noninput node
-        for (unsigned int i = 0; i < NumNeurons(); i++) {
-            if ((m_NeuronGenes[i].Type() == INPUT) || (m_NeuronGenes[i].Type() == BIAS)) {
-                t_first_noninput++;
-            } else {
-                break;
+        std::unordered_map<int, std::size_t> t_id_to_index;
+        t_id_to_index.reserve(m_NeuronGenes.size() * 2);
+        for (std::size_t i = 0; i < m_NeuronGenes.size(); ++i) t_id_to_index.emplace(m_NeuronGenes[i].ID(), i);
+        const std::size_t t_vertex_count = m_NeuronGenes.size();
+        std::vector<std::vector<std::size_t>> t_successors(t_vertex_count);
+        std::vector<std::size_t> t_indegree(t_vertex_count, 0);
+        for (const LinkGene &t_link : m_LinkGenes) {
+            if (t_link.IsRecurrent()) continue;
+            const auto t_source = t_id_to_index.find(t_link.FromNeuronID());
+            const auto t_target = t_id_to_index.find(t_link.ToNeuronID());
+            if (t_source == t_id_to_index.end() || t_target == t_id_to_index.end()) continue;
+            t_successors[t_source->second].push_back(t_target->second);
+            ++t_indegree[t_target->second];
+        }
+        // Kahn order (feedforward links are acyclic by construction, but
+        // tolerate legacy cycles by appending leftovers in index order).
+        std::vector<std::size_t> t_topo;
+        t_topo.reserve(t_vertex_count);
+        std::vector<std::size_t> t_order_stack;
+        for (std::size_t i = 0; i < t_vertex_count; ++i) {
+            if (t_indegree[i] == 0) t_order_stack.push_back(i);
+        }
+        while (!t_order_stack.empty()) {
+            const std::size_t current = t_order_stack.back();
+            t_order_stack.pop_back();
+            t_topo.push_back(current);
+            for (std::size_t next : t_successors[current]) {
+                if (--t_indegree[next] == 0) t_order_stack.push_back(next);
             }
         }
-
-        // A forward link is characterized with the fact that the From neuron has less or equal SplitY value
-
-        // find a good pair of nodes for a forward link
-        if (!t_MakeRecurrent) {
-            // first see if this should come from the bias or not
-            bool t_found_bias = true;
-            t_n1idx = static_cast<int>(NumInputs() - 1);  // the bias is always the last input
-            // try to find a neuron that is not connected to the bias already
-            t_NumTries = 0;
-            do {
-                t_n2idx = a_RNG.RandInt(t_first_noninput, static_cast<int>(NumNeurons() - 1));
-                t_NumTries++;
-
-                if (t_NumTries >= a_Parameters.LinkTries) {
-                    // couldn't find anything
-                    t_found_bias = false;
+        for (std::size_t i = 0; i < t_vertex_count; ++i) {
+            bool seen = false;
+            for (std::size_t t : t_topo) {
+                if (t == i) {
+                    seen = true;
                     break;
                 }
-            } while ((HasLink(m_NeuronGenes[t_n1idx].ID(), m_NeuronGenes[t_n2idx].ID())));  // already present?
-
-            // so if we found that link, we can skip the rest of the things
-            if (t_found_bias && t_MakeBias) {
-                t_Found = true;
             }
-            // otherwise continue trying to find a normal forward link
-            else {
-                t_NumTries = 0;
-                // try to find a standard forward connection
-                do {
-                    t_n1idx = a_RNG.RandInt(0, static_cast<int>(NumNeurons() - 1));
-                    t_n2idx = a_RNG.RandInt(t_first_noninput, static_cast<int>(NumNeurons() - 1));
-                    t_NumTries++;
+            if (!seen) t_topo.push_back(i);
+        }
+        const std::size_t t_words = (t_vertex_count + 63) / 64;
+        std::vector<std::uint64_t> t_reach(t_vertex_count * t_words, 0);
+        for (std::size_t ti = t_vertex_count; ti > 0; --ti) {
+            const std::size_t u = t_topo[ti - 1];
+            for (std::size_t v : t_successors[u]) {
+                t_reach[u * t_words + v / 64] |= 1ULL << (v % 64);
+                const std::uint64_t *row_v = &t_reach[v * t_words];
+                std::uint64_t *row_u = &t_reach[u * t_words];
+                for (std::size_t w = 0; w < t_words; ++w) row_u[w] |= row_v[w];
+            }
+        }
 
-                    if (t_NumTries >= a_Parameters.LinkTries) {
-                        // couldn't find anything say goodbye
-                        return false;
+        const auto t_endpoint_key = [](int source, int target) {
+            return (static_cast<std::uint64_t>(static_cast<std::uint32_t>(source)) << 32U) | static_cast<std::uint32_t>(target);
+        };
+        std::vector<std::uint64_t> t_existing_links;
+        t_existing_links.reserve(m_LinkGenes.size());
+        for (const LinkGene &t_link : m_LinkGenes) {
+            t_existing_links.push_back(t_endpoint_key(t_link.FromNeuronID(), t_link.ToNeuronID()));
+        }
+        std::sort(t_existing_links.begin(), t_existing_links.end());
+        const auto t_link_exists = [&](std::size_t source, std::size_t target) {
+            return std::binary_search(t_existing_links.begin(), t_existing_links.end(), t_endpoint_key(m_NeuronGenes[source].ID(), m_NeuronGenes[target].ID()));
+        };
+
+        const auto t_pair_valid = [&](std::size_t source, std::size_t target) {
+            const NeuronType source_type = m_NeuronGenes[source].Type();
+            const NeuronType target_type = m_NeuronGenes[target].Type();
+            if (!t_is_non_input(target_type)) return false;
+            if (t_MakeBias) return source_type == BIAS && !t_link_exists(source, target);
+            if (!t_MakeRecurrent) {
+                if (source == target || source_type == OUTPUT) return false;
+                const bool closes_cycle = ((t_reach[target * t_words + source / 64] >> (source % 64)) & 1ULL) != 0;
+                return !closes_cycle && !t_link_exists(source, target);
+            }
+            if (!t_is_non_input(source_type)) return false;
+            if (t_LoopedRecurrent) return source == target && !t_link_exists(source, target);
+            return source != target && !t_link_exists(source, target);
+        };
+
+        bool t_found = false;
+        {
+            // Collect non-input indexes once for the sampling draws.
+            std::vector<std::size_t> t_non_inputs;
+            std::vector<std::size_t> t_biases;
+            t_non_inputs.reserve(t_vertex_count);
+            for (std::size_t i = 0; i < t_vertex_count; ++i) {
+                if (t_is_non_input(m_NeuronGenes[i].Type())) t_non_inputs.push_back(i);
+                if (m_NeuronGenes[i].Type() == BIAS) t_biases.push_back(i);
+            }
+            const int t_count = static_cast<int>(t_vertex_count);
+            const int t_non_input_count = static_cast<int>(t_non_inputs.size());
+            const int t_bias_count = static_cast<int>(t_biases.size());
+            for (unsigned int attempt = 0; attempt < a_Parameters.LinkTries && !t_found; ++attempt) {
+                std::size_t source = 0, target = 0;
+                if (t_LoopedRecurrent) {
+                    if (t_non_inputs.empty()) break;
+                    source = target = t_non_inputs[static_cast<std::size_t>(a_RNG.RandInt(0, t_non_input_count - 1))];
+                } else if (t_MakeRecurrent) {
+                    if (t_non_inputs.empty()) break;
+                    source = t_non_inputs[static_cast<std::size_t>(a_RNG.RandInt(0, t_non_input_count - 1))];
+                    target = t_non_inputs[static_cast<std::size_t>(a_RNG.RandInt(0, t_non_input_count - 1))];
+                } else if (t_MakeBias) {
+                    if (t_biases.empty() || t_non_inputs.empty()) break;
+                    source = t_biases[static_cast<std::size_t>(a_RNG.RandInt(0, t_bias_count - 1))];
+                    target = t_non_inputs[static_cast<std::size_t>(a_RNG.RandInt(0, t_non_input_count - 1))];
+                } else {
+                    if (t_non_inputs.empty()) break;
+                    source = static_cast<std::size_t>(a_RNG.RandInt(0, t_count - 1));
+                    target = t_non_inputs[static_cast<std::size_t>(a_RNG.RandInt(0, t_non_input_count - 1))];
+                }
+                if (t_pair_valid(source, target)) {
+                    t_n1idx = static_cast<int>(source);
+                    t_n2idx = static_cast<int>(target);
+                    t_found = true;
+                }
+            }
+        }
+
+        if (!t_found) {
+            // Reservoir sampling: single source-major pass, uniform over the
+            // valid pairs with no candidate storage.
+            std::size_t t_seen = 0;
+            bool t_picked = false;
+            for (std::size_t source = 0; source < t_vertex_count; ++source) {
+                for (std::size_t target = 0; target < t_vertex_count; ++target) {
+                    if (!t_pair_valid(source, target)) continue;
+                    ++t_seen;
+                    if (t_seen > static_cast<std::size_t>(std::numeric_limits<int>::max())) return false;
+                    if (static_cast<std::size_t>(a_RNG.RandInt(0, static_cast<int>(t_seen) - 1)) == 0) {
+                        t_n1idx = static_cast<int>(source);
+                        t_n2idx = static_cast<int>(target);
+                        t_picked = true;
                     }
-                } while (
-                    //(m_NeuronGenes[t_n1idx].SplitY() > m_NeuronGenes[t_n2idx].SplitY()) // backward?
-                    //||
-                    (HasLink(m_NeuronGenes[t_n1idx].ID(), m_NeuronGenes[t_n2idx].ID()))  // already present?
-                    || (m_NeuronGenes[t_n1idx].Type() == OUTPUT)                         // consider connections out of outputs recurrent
-                    || (t_n1idx == t_n2idx)                                              // make sure they differ
-                );
-
-                // it found a good pair of neurons
-                t_Found = true;
-            }
-        }
-        // find a good pair of nodes for a recurrent link (non-looped)
-        else if (t_MakeRecurrent && !t_LoopedRecurrent) {
-            t_NumTries = 0;
-            do {
-                t_n1idx = a_RNG.RandInt(t_first_noninput, static_cast<int>(NumNeurons() - 1));
-                t_n2idx = a_RNG.RandInt(t_first_noninput, static_cast<int>(NumNeurons() - 1));
-                t_NumTries++;
-
-                if (t_NumTries >= a_Parameters.LinkTries) {
-                    // couldn't find anything say goodbye
-                    return false;
                 }
             }
-            // NOTE: this considers output-output connections as forward. Should be fixed.
-            while (
-                //(m_NeuronGenes[t_n1idx].SplitY() <= m_NeuronGenes[t_n2idx].SplitY()) // forward?
-                //||
-                (HasLink(m_NeuronGenes[t_n1idx].ID(), m_NeuronGenes[t_n2idx].ID()))  // already present?
-                || (t_n1idx == t_n2idx)                                              // they should differ
-            );
-
-            // it found a good pair of neurons
-            t_Found = true;
-        }
-        // find a good neuron to make a looped recurrent link
-        else if (t_MakeRecurrent && t_LoopedRecurrent) {
-            t_NumTries = 0;
-            do {
-                t_n1idx = t_n2idx = a_RNG.RandInt(t_first_noninput, static_cast<int>(NumNeurons() - 1));
-                t_NumTries++;
-
-                if (t_NumTries >= a_Parameters.LinkTries) {
-                    // couldn't find anything say goodbye
-                    return false;
-                }
-            } while ((HasLink(m_NeuronGenes[t_n1idx].ID(), m_NeuronGenes[t_n2idx].ID()))  // already present?
-                                                                                          //||
-                     //(m_NeuronGenes[t_n1idx].Type() == OUTPUT) // do not allow looped recurrent on the outputs (experimental)
-            );
-
-            // it found a good pair of neurons
-            t_Found = true;
-        }
-
-        // To make sure it is all right
-        if (!t_Found) {
-            return false;
+            if (!t_picked) return false;
         }
 
         // This link MUST NOT be a part of the genome by any reason
@@ -1788,6 +2036,7 @@ namespace NEAT {
 
         // Create and add the link
         LinkGene l = LinkGene(t_n1id, t_n2id, t_innovid, t_weight, t_MakeRecurrent);
+        InitializeLinkSpiking(l, a_Parameters, &a_RNG);
         // init the link's traits
         l.InitTraits(a_Parameters.LinkTraits, a_RNG);
         m_LinkGenes.emplace_back(l);
@@ -1875,76 +2124,68 @@ namespace NEAT {
     bool Genome::IsDeadEndNeuron(int a_ID) const {
         bool t_no_incoming = true;
         bool t_no_outgoing = true;
-
-        // ID->type table so the link scan below does not rescan the neuron list
-        // for every connection (was O(links x neurons) per query).
-        int t_max_id = 0;
-        for (unsigned int i = 0; i < NumNeurons(); i++) {
-            if (m_NeuronGenes[i].ID() > t_max_id) {
-                t_max_id = m_NeuronGenes[i].ID();
+        int bias_id = -1;
+        for (const NeuronGene &neuron : m_NeuronGenes) {
+            if (neuron.Type() == BIAS) {
+                bias_id = neuron.ID();
+                break;
             }
         }
-        std::vector<int> t_id_to_type(static_cast<size_t>(t_max_id) + 1, -1);
-        for (unsigned int i = 0; i < NumNeurons(); i++) {
-            t_id_to_type[static_cast<size_t>(m_NeuronGenes[i].ID())] = static_cast<int>(m_NeuronGenes[i].Type());
-        }
 
-        // search the links and prove both are wrong
-        for (unsigned int i = 0; i < NumLinks(); i++) {
-            const int t_from = m_LinkGenes[i].FromNeuronID();
-            const int t_from_type =
-                (t_from >= 0 && t_from <= t_max_id) ? t_id_to_type[static_cast<size_t>(t_from)] : static_cast<int>(GetNeuronByID(t_from).Type());
-            // there is a link going to this neuron, so there are incoming don't count the link if it is recurrent or coming from a bias
-            if ((m_LinkGenes[i].ToNeuronID() == a_ID) && (!m_LinkGenes[i].IsLoopedRecurrent()) && (t_from_type != static_cast<int>(BIAS))) {
+        for (size_t i = 0, end = m_LinkGenes.size(); i < end; ++i) {
+            const LinkGene &l = m_LinkGenes[i];
+            // there is a link going to this neuron, so there are incoming; don't count the link if it is looped recurrent or coming from a bias
+            if ((l.ToNeuronID() == a_ID) && (!l.IsLoopedRecurrent()) && l.FromNeuronID() != bias_id) {
                 t_no_incoming = false;
             }
 
-            // there is a link going from this neuron, so there are outgoing don't count the link if it is recurrent or coming from a bias
-            if ((m_LinkGenes[i].FromNeuronID() == a_ID) && (!m_LinkGenes[i].IsLoopedRecurrent()) && (t_from_type != static_cast<int>(BIAS))) {
+            // there is a link going from this neuron, so there are outgoing; don't count the link if it is looped recurrent
+            if ((l.FromNeuronID() == a_ID) && (!l.IsLoopedRecurrent())) {
                 t_no_outgoing = false;
             }
+            if (!t_no_incoming && !t_no_outgoing) return false;
         }
 
         // if just one of these is true, this neuron is a dead end
-        if (t_no_incoming || t_no_outgoing) {
-            return true;
-        } else {
-            return false;
-        }
+        return (t_no_incoming || t_no_outgoing);
     }
 
     // Search the genome for isolated structure and clean it up Returns true is something was removed
     bool Genome::Cleanup() {
         bool t_removed = false;
 
-        // remove any dead-end hidden neurons
-        for (unsigned int i = 0; i < NumNeurons(); i++) {
-            if (m_NeuronGenes[i].Type() == HIDDEN) {
-                if (IsDeadEndNeuron(m_NeuronGenes[i].ID())) {
-                    RemoveNeuronGene(m_NeuronGenes[i].ID());
-                    t_removed = true;
-                }
+        // remove any dead-end hidden neurons (index-free loop: erasing shifts
+        // later elements, so only advance when nothing was removed)
+        for (std::size_t i = 0; i < m_NeuronGenes.size();) {
+            if (m_NeuronGenes[i].Type() == HIDDEN && IsDeadEndNeuron(m_NeuronGenes[i].ID())) {
+                RemoveNeuronGene(m_NeuronGenes[i].ID());
+                t_removed = true;
+                continue;
             }
+            ++i;
         }
 
         // a special case are isolated outputs - these are outputs having
         // one and only one looped recurrent connection
         // we simply remove these connections and leave the outputs naked.
-        for (unsigned int i = 0; i < NumNeurons(); i++) {
+        for (std::size_t i = 0; i < m_NeuronGenes.size(); ++i) {
             if (m_NeuronGenes[i].Type() == OUTPUT) {
                 // Only outputs with 1 input and 1 output connection are considered.
                 if ((LinksInputtingFrom(m_NeuronGenes[i].ID()) == 1) && (LinksOutputtingTo(m_NeuronGenes[i].ID()) == 1)) {
                     // that must be a lonely looped recurrent,
                     // because we know that the outputs are the dead end of the network
                     // find this link
-                    for (unsigned int j = 0; j < NumLinks(); j++) {
+                    for (std::size_t j = 0; j < m_LinkGenes.size(); ++j) {
                         if (m_LinkGenes[j].ToNeuronID() == m_NeuronGenes[i].ID()) {
                             // Remove it.
                             RemoveLinkGene(m_LinkGenes[j].InnovationID());
                             t_removed = true;
+                            break;
                         }
                     }
                 }
+                if (NumOutputs() == 1)
+                    if ((LinksInputtingFrom(m_NeuronGenes[i].ID()) == 0) && (LinksOutputtingTo(m_NeuronGenes[i].ID()) == 0)) return true;
             }
         }
 
@@ -1991,11 +2232,8 @@ namespace NEAT {
         // at least 2 links must be present in the genome
         if (NumLinks() < 2) return false;
 
-        // find a random link to remove with tendency to remove older connections
-        double t_randnum = a_RNG.RandFloat();  // RandGaussSigned()/4;
-        Clamp(t_randnum, 0, 1);
-
-        int t_link_index = static_cast<int>(t_randnum * static_cast<double>(NumLinks() - 1));  // RandInt(0, static_cast<int>(NumLinks()-1));
+        // find a uniformly random link to remove
+        int t_link_index = a_RNG.RandInt(0, static_cast<int>(NumLinks()) - 1);
 
         // remove it
         RemoveLinkGene(m_LinkGenes[t_link_index].InnovationID());
@@ -2043,12 +2281,8 @@ namespace NEAT {
         // If the list is empty, say goodbye
         if (t_neurons_to_delete.size() == 0) return false;
 
-        // Now choose a random one to delete
-        int t_choice;
-        if (t_neurons_to_delete.size() == 2)
-            t_choice = Rounded(a_RNG.RandFloat());
-        else
-            t_choice = a_RNG.RandInt(0, static_cast<int>(t_neurons_to_delete.size() - 1));
+        // Now choose a random one to delete (uniform over candidates)
+        int t_choice = a_RNG.RandInt(0, static_cast<int>(t_neurons_to_delete.size() - 1));
 
         // the links in & out
         int t_l1idx = -1, t_l2idx = -1;
@@ -2069,6 +2303,23 @@ namespace NEAT {
         }
 
         ASSERT((t_l1idx >= 0) && (t_l2idx >= 0));
+        if (t_l1idx < 0 || t_l2idx < 0) return false;
+
+        const LinkGene t_incoming = m_LinkGenes[t_l1idx];
+        const LinkGene t_outgoing = m_LinkGenes[t_l2idx];
+        // Combines the two removed synapses' spiking state into a replacement link.
+        const auto t_apply_combined_spiking = [&](LinkGene &link) {
+            link.m_SynapticDelay = t_incoming.m_SynapticDelay + t_outgoing.m_SynapticDelay;
+            Clamp(link.m_SynapticDelay, a_Parameters.MinSynapticDelay, a_Parameters.MaxSynapticDelay);
+            link.m_SynapticTimeConstant = (t_incoming.m_SynapticTimeConstant + t_outgoing.m_SynapticTimeConstant) * 0.5;
+            link.m_STDPEnabled = t_incoming.m_STDPEnabled || t_outgoing.m_STDPEnabled;
+            link.m_STDPPlus = (t_incoming.m_STDPPlus + t_outgoing.m_STDPPlus) * 0.5;
+            link.m_STDPMinus = (t_incoming.m_STDPMinus + t_outgoing.m_STDPMinus) * 0.5;
+            link.m_STDPTauPlus = (t_incoming.m_STDPTauPlus + t_outgoing.m_STDPTauPlus) * 0.5;
+            link.m_STDPTauMinus = (t_incoming.m_STDPTauMinus + t_outgoing.m_STDPTauMinus) * 0.5;
+            link.m_STDPMinWeight = a_Parameters.MinWeight;
+            link.m_STDPMaxWeight = a_Parameters.MaxWeight;
+        };
 
         // OK now see if a link connecting the original 2 nodes is present. If it is, we will just delete the neuron and quit.
         if (HasLink(m_LinkGenes[t_l1idx].FromNeuronID(), m_LinkGenes[t_l2idx].ToNeuronID())) {
@@ -2095,6 +2346,7 @@ namespace NEAT {
                 // Add the innovation and the link gene
                 int t_newinnov = a_Innovs.AddLinkInnovation(from, to);
                 LinkGene lg = LinkGene(from, to, t_newinnov, t_weight, false);
+                t_apply_combined_spiking(lg);
                 lg.InitTraits(a_Parameters.LinkTraits, a_RNG);
 
                 m_LinkGenes.emplace_back(lg);
@@ -2113,6 +2365,7 @@ namespace NEAT {
 
                 // Add the link
                 LinkGene lg = LinkGene(from, to, t_innovid, t_weight, false);
+                t_apply_combined_spiking(lg);
                 lg.InitTraits(a_Parameters.LinkTraits, a_RNG);
                 m_LinkGenes.emplace_back(lg);
 
@@ -2128,56 +2381,80 @@ namespace NEAT {
 
     // Perturbs the weights
     bool Genome::Mutate_LinkWeights(const Parameters &a_Parameters, RNG &a_RNG) {
-        // The end part of the genome
-        int t_genometail = 0;
-        if (NumLinks() > m_initial_num_links) {
-            t_genometail = (int)(((double)(NumLinks())) * 0.8);
-        }
-        if (t_genometail < m_initial_num_links) {
-            t_genometail = m_initial_num_links;
-        }
-
         bool did_mutate = false;
+        bool severe = (a_RNG.RandFloat() < a_Parameters.MutateWeightsSevereProb);
+        // The end part of the genome (newer genes get replaced more often)
+        int tailstart = 0;
+        if (NumLinks() > static_cast<unsigned int>(std::max(0, m_initial_num_links))) tailstart = static_cast<int>(NumLinks() * 0.9);
+        if (tailstart <= m_initial_num_links) tailstart = m_initial_num_links;
+        for (size_t i = 0, end = m_LinkGenes.size(); i < end; ++i) {
+            if (!severe && (a_RNG.RandFloat() < a_Parameters.WeightMutationRate)) {
+                const double original = m_LinkGenes[i].GetWeight();
+                double w = original;
+                bool in_tail = (static_cast<int>(i) >= tailstart);
+                if (in_tail || a_RNG.RandFloat() < a_Parameters.WeightReplacementRate)
+                    w = a_RNG.RandFloatSigned() * a_Parameters.WeightReplacementMaxPower;
+                else {
+                    switch (a_Parameters.WeightMutationDistribution) {
+                        case UNIFORM_MUTATION:
+                            w += a_RNG.RandFloatSigned() * a_Parameters.WeightMutationMaxPower;
+                            break;
 
-        // This tells us if this mutation will shake things up
-        bool t_severe_mutation;
+                        case GAUSSIAN_MUTATION:
+                            if (a_Parameters.WeightMutationMaxPower > 0.0) {
+                                w += a_RNG.RandNormal(0.0, a_Parameters.WeightMutationSigma * a_Parameters.WeightMutationMaxPower);
+                            }
+                            break;
 
-        if (a_RNG.RandFloat() < a_Parameters.MutateWeightsSevereProb) {
-            t_severe_mutation = true;
-        } else {
-            t_severe_mutation = false;
-        }
+                        case CAUCHY_MUTATION:
+                            if (a_Parameters.WeightMutationMaxPower > 0.0) {
+                                w += a_RNG.RandCauchy(0.0, a_Parameters.WeightMutationCauchyScale * a_Parameters.WeightMutationMaxPower);
+                            }
+                            break;
 
-        // For all links..
-        for (unsigned int i = 0; i < m_LinkGenes.size(); i++) {
-            if ((!t_severe_mutation) && (a_RNG.RandFloat() < a_Parameters.WeightMutationRate)) {
-                bool ontail = false;  //(i >= t_genometail);
-                double t_LinkGenesWeight = m_LinkGenes[i].GetWeight();
+                        case POLYNOMIAL_MUTATION: {
+                            const double range = a_Parameters.MaxWeight - a_Parameters.MinWeight;
+                            if (range <= 0.0 || a_Parameters.WeightMutationMaxPower <= 0.0) break;
+                            Clamp(w, a_Parameters.MinWeight, a_Parameters.MaxWeight);
+                            const double delta_lower = (w - a_Parameters.MinWeight) / range;
+                            const double delta_upper = (a_Parameters.MaxWeight - w) / range;
+                            const double draw = a_RNG.RandFloat();
+                            const double exponent = 1.0 / (a_Parameters.WeightMutationPolynomialEta + 1.0);
+                            double delta = 0.0;
+                            if (draw <= 0.5) {
+                                const double value =
+                                    2.0 * draw + (1.0 - 2.0 * draw) * std::pow(1.0 - delta_lower, a_Parameters.WeightMutationPolynomialEta + 1.0);
+                                delta = std::pow(value, exponent) - 1.0;
+                            } else {
+                                const double value =
+                                    2.0 * (1.0 - draw) + 2.0 * (draw - 0.5) * std::pow(1.0 - delta_upper, a_Parameters.WeightMutationPolynomialEta + 1.0);
+                                delta = 1.0 - std::pow(value, exponent);
+                            }
+                            w += delta * std::min(range, a_Parameters.WeightMutationMaxPower);
+                            break;
+                        }
 
-                if (ontail || (a_RNG.RandFloat() < a_Parameters.WeightReplacementRate)) {
-                    t_LinkGenesWeight = a_RNG.RandFloatSigned() * a_Parameters.WeightReplacementMaxPower;
-
-                    // t_LinkGenesWeight = a_RNG.RandFloat();
-                    // Scale(t_LinkGenesWeight, 0.0, 1.0, a_Parameters.MinWeight, a_Parameters.MaxWeight);
-                } else {
-                    t_LinkGenesWeight += a_RNG.RandFloatSigned() * a_Parameters.WeightMutationMaxPower;
+                        default:
+                            throw std::invalid_argument("Unsupported weight mutation distribution");
+                    }
                 }
-
-                Clamp(t_LinkGenesWeight, a_Parameters.MinWeight, a_Parameters.MaxWeight);
-                m_LinkGenes[i].SetWeight(t_LinkGenesWeight);
-
-                did_mutate = true;
-            } else if (t_severe_mutation) {
-                if (a_RNG.RandFloat() < a_Parameters.WeightMutationRate) {
-                    double t_LinkGenesWeight = a_RNG.RandFloat();
-                    Scale(t_LinkGenesWeight, 0.0, 1.0, a_Parameters.MinWeight, a_Parameters.MaxWeight);
-                    m_LinkGenes[i].SetWeight(t_LinkGenesWeight);
-
+                Clamp(w, a_Parameters.MinWeight, a_Parameters.MaxWeight);
+                if (w != original) {
+                    m_LinkGenes[i].SetWeight(w);
                     did_mutate = true;
+                }
+            } else if (severe) {
+                if (a_RNG.RandFloat() < a_Parameters.WeightMutationRate) {
+                    const double original = m_LinkGenes[i].GetWeight();
+                    double w = a_RNG.RandFloat();
+                    Scale(w, 0.0, 1.0, a_Parameters.MinWeight, a_Parameters.MaxWeight);
+                    if (w != original) {
+                        m_LinkGenes[i].SetWeight(w);
+                        did_mutate = true;
+                    }
                 }
             }
         }
-
         return did_mutate;
     }
 
@@ -2240,9 +2517,10 @@ namespace NEAT {
 
     // Changes the activation function type for a random neuron
     bool Genome::Mutate_NeuronActivation_Type(const Parameters &a_Parameters, RNG &a_RNG) {
+        if (m_NeuronGenes.size() <= static_cast<std::size_t>(m_NumInputs)) return false;
         // the first non-input neuron
         int t_first_idx = NumInputs();
-        int t_choice = a_RNG.RandInt(t_first_idx, m_NeuronGenes.size() - 1);
+        int t_choice = a_RNG.RandInt(t_first_idx, static_cast<int>(m_NeuronGenes.size()) - 1);
 
         int cur = m_NeuronGenes[t_choice].m_ActFunction;
 
@@ -2251,6 +2529,8 @@ namespace NEAT {
         {
             return false;
         } else {
+            // A new spiking mode needs valid spiking state from the evolvable ranges.
+            InitializeNeuronSpiking(m_NeuronGenes[t_choice], a_Parameters, &a_RNG);
             return true;
         }
     }
@@ -2265,7 +2545,10 @@ namespace NEAT {
 
                 m_NeuronGenes[i].m_TimeConstant += t_randnum;
 
-                Clamp(m_NeuronGenes[i].m_TimeConstant, a_Parameters.MinNeuronTimeConstant, a_Parameters.MaxNeuronTimeConstant);
+                if (IsSpikingActivation(m_NeuronGenes[i].m_ActFunction))
+                    Clamp(m_NeuronGenes[i].m_TimeConstant, a_Parameters.MinSpikingTimeConstant, a_Parameters.MaxSpikingTimeConstant);
+                else
+                    Clamp(m_NeuronGenes[i].m_TimeConstant, a_Parameters.MinNeuronTimeConstant, a_Parameters.MaxNeuronTimeConstant);
             }
         }
 
@@ -2310,11 +2593,90 @@ namespace NEAT {
 
     bool Genome::Mutate_GenomeTraits(const Parameters &a_Parameters, RNG &a_RNG) { return m_GenomeGene.MutateTraits(a_Parameters.GenomeTraits, a_RNG); }
 
+    void Genome::Randomize_SpikingParameters(const Parameters &a_Parameters, RNG &a_RNG) {
+        for (auto &neuron : m_NeuronGenes) {
+            if (neuron.Type() != INPUT && neuron.Type() != BIAS) InitializeNeuronSpiking(neuron, a_Parameters, &a_RNG);
+        }
+        for (auto &link : m_LinkGenes) InitializeLinkSpiking(link, a_Parameters, &a_RNG);
+    }
+
+    bool Genome::Mutate_NeuronSpikingParameters(const Parameters &a_Parameters, RNG &a_RNG) {
+        bool mutated = false;
+        const auto perturb = [&](double &value, double minimum, double maximum) {
+            if (a_RNG.RandFloat() >= a_Parameters.SpikingParameterMutationRate) return;
+            const double original = value;
+            const double span = maximum - minimum;
+            value += a_RNG.RandFloatSigned() * span * a_Parameters.SpikingParameterMutationPower;
+            Clamp(value, minimum, maximum);
+            if (value == original && minimum < maximum) value = RandomRange(a_RNG, minimum, maximum);
+            mutated = mutated || value != original;
+        };
+        for (auto &neuron : m_NeuronGenes) {
+            if (neuron.Type() == INPUT || neuron.Type() == BIAS) continue;
+            if (IsSpikingActivation(neuron.m_ActFunction))
+                perturb(neuron.m_TimeConstant, a_Parameters.MinSpikingTimeConstant, a_Parameters.MaxSpikingTimeConstant);
+            if (neuron.m_ActFunction == SPIKING_IZHIKEVICH)
+                perturb(neuron.m_SpikeThreshold, a_Parameters.MinIzhikevichThreshold, a_Parameters.MaxIzhikevichThreshold);
+            else
+                perturb(neuron.m_SpikeThreshold, a_Parameters.MinSpikeThreshold, a_Parameters.MaxSpikeThreshold);
+            perturb(neuron.m_ResetPotential, a_Parameters.MinResetPotential, a_Parameters.MaxResetPotential);
+            perturb(neuron.m_RestingPotential, a_Parameters.MinRestingPotential, a_Parameters.MaxRestingPotential);
+            perturb(neuron.m_RefractoryPeriod, a_Parameters.MinRefractoryPeriod, a_Parameters.MaxRefractoryPeriod);
+            perturb(neuron.m_MembraneResistance, a_Parameters.MinMembraneResistance, a_Parameters.MaxMembraneResistance);
+            perturb(neuron.m_AdaptationTimeConstant, a_Parameters.MinAdaptationTimeConstant, a_Parameters.MaxAdaptationTimeConstant);
+            perturb(neuron.m_AdaptationIncrement, a_Parameters.MinAdaptationIncrement, a_Parameters.MaxAdaptationIncrement);
+            perturb(neuron.m_RateTimeConstant, a_Parameters.MinSpikeRateTimeConstant, a_Parameters.MaxSpikeRateTimeConstant);
+            perturb(neuron.m_IzhikevichA, a_Parameters.MinIzhikevichA, a_Parameters.MaxIzhikevichA);
+            perturb(neuron.m_IzhikevichB, a_Parameters.MinIzhikevichB, a_Parameters.MaxIzhikevichB);
+            perturb(neuron.m_IzhikevichC, a_Parameters.MinIzhikevichC, a_Parameters.MaxIzhikevichC);
+            perturb(neuron.m_IzhikevichD, a_Parameters.MinIzhikevichD, a_Parameters.MaxIzhikevichD);
+            if (neuron.m_ActFunction == MCCULLOCH_PITTS && a_RNG.RandFloat() < a_Parameters.MutateMCPInhibitoryVetoProb) {
+                neuron.m_MCPInhibitoryVeto = !neuron.m_MCPInhibitoryVeto;
+                mutated = true;
+            }
+        }
+        return mutated;
+    }
+
+    bool Genome::Mutate_LinkSpikingParameters(const Parameters &a_Parameters, RNG &a_RNG) {
+        bool mutated = false;
+        const auto perturb = [&](double &value, double minimum, double maximum) {
+            if (a_RNG.RandFloat() >= a_Parameters.SpikingParameterMutationRate) return;
+            const double original = value;
+            value += a_RNG.RandFloatSigned() * (maximum - minimum) * a_Parameters.SpikingParameterMutationPower;
+            Clamp(value, minimum, maximum);
+            if (value == original && minimum < maximum) value = RandomRange(a_RNG, minimum, maximum);
+            mutated = mutated || value != original;
+        };
+        for (auto &link : m_LinkGenes) {
+            perturb(link.m_SynapticDelay, a_Parameters.MinSynapticDelay, a_Parameters.MaxSynapticDelay);
+            perturb(link.m_SynapticTimeConstant, a_Parameters.MinSynapticTimeConstant, a_Parameters.MaxSynapticTimeConstant);
+            perturb(link.m_STDPPlus, a_Parameters.MinSTDPPlus, a_Parameters.MaxSTDPPlus);
+            perturb(link.m_STDPMinus, a_Parameters.MinSTDPMinus, a_Parameters.MaxSTDPMinus);
+            perturb(link.m_STDPTauPlus, a_Parameters.MinSTDPTau, a_Parameters.MaxSTDPTau);
+            perturb(link.m_STDPTauMinus, a_Parameters.MinSTDPTau, a_Parameters.MaxSTDPTau);
+            if (a_RNG.RandFloat() < a_Parameters.SpikingParameterMutationRate) {
+                link.m_STDPEnabled = !link.m_STDPEnabled;
+                mutated = true;
+            }
+            link.m_STDPMinWeight = a_Parameters.MinWeight;
+            link.m_STDPMaxWeight = a_Parameters.MaxWeight;
+        }
+        return mutated;
+    }
+
     // Mate this genome with dad and return the baby
     // This is multipoint mating - genes inherited randomly
     // Disjoint and excess genes are inherited from the fittest parent
     // If fitness is equal, the smaller genome is assumed to be the better one
     Genome Genome::Mate(Genome &a_Dad, bool a_MateAverage, bool a_InterSpecies, RNG &a_RNG, Parameters &a_Parameters) {
+        return MateWithMode(a_Dad, a_MateAverage ? AVERAGE : MULTIPOINT, a_InterSpecies, a_RNG, a_Parameters);
+    }
+
+    Genome Genome::MateWithMode(Genome &a_Dad, CrossoverMode a_Mode, bool a_InterSpecies, RNG &a_RNG, Parameters &a_Parameters) {
+        if (a_Mode < MULTIPOINT || a_Mode > SIMULATED_BINARY) throw std::invalid_argument("Unsupported crossover mode");
+        if (m_NumInputs != a_Dad.m_NumInputs || m_NumOutputs != a_Dad.m_NumOutputs)
+            throw std::invalid_argument("Cannot mate genomes with different input/output dimensions");
         // Cannot mate with itself
         if (GetID() == a_Dad.GetID()) return *this;
 
@@ -2330,180 +2692,130 @@ namespace NEAT {
         // This empty genome will hold the baby
         Genome t_baby;
 
-        // create iterators so we can step through each parents genes and set them to the first gene of each parent
-        std::vector<LinkGene>::iterator t_curMom = m_LinkGenes.begin();
-        std::vector<LinkGene>::iterator t_curDad = a_Dad.m_LinkGenes.begin();
-
-        // this will hold a copy of the gene we wish to add at each step
-        LinkGene t_selectedgene(0, 0, -1, 0, false);
-
-        // Mate the GenomeGene first Determine if it will pick either gene or mate it
-        if (a_RNG.RandFloat() < a_Parameters.MultipointCrossoverRate) {
-            // pick
-            Gene n;
-
-            if (a_RNG.RandFloat() < a_Parameters.PreferFitterParentRate) {
-                n = (GetFitness() > a_Dad.GetFitness()) ? m_GenomeGene : a_Dad.m_GenomeGene;
+        // if they are of equal fitness use the shorter (because we want to keep the networks as small as possible)
+        if (GetFitness() == a_Dad.GetFitness()) {
+            // if they are of equal fitness and length just choose one at random
+            if (NumLinks() == a_Dad.NumLinks()) {
+                t_better = (a_RNG.RandFloat() < 0.5) ? MOM : DAD;
             } else {
-                n = (a_RNG.RandFloat() < 0.5) ? m_GenomeGene : a_Dad.m_GenomeGene;
+                t_better = (NumLinks() < a_Dad.NumLinks()) ? MOM : DAD;
             }
+        } else {
+            t_better = (GetFitness() > a_Dad.GetFitness()) ? MOM : DAD;
+        }
+
+        // Sort copies so the merge below classifies disjoint/excess correctly
+        // even if a parent's genes are unsorted.
+        std::vector<LinkGene> mom_links = m_LinkGenes;
+        std::vector<LinkGene> dad_links = a_Dad.m_LinkGenes;
+        std::sort(mom_links.begin(), mom_links.end());
+        std::sort(dad_links.begin(), dad_links.end());
+        auto t_curMom = mom_links.begin();
+        auto t_curDad = dad_links.begin();
+
+        const bool average_traits = a_Mode == AVERAGE || a_Mode == BLEND || a_Mode == SIMULATED_BINARY;
+        const bool prefer_fitter_neurons = a_Mode == MULTIPOINT || a_Mode == SINGLE_POINT;
+
+        // Mate the GenomeGene first.
+        if (!average_traits) {
+            Gene n;
+            if (a_RNG.RandFloat() < a_Parameters.PreferFitterParentRate)
+                n = (t_better == MOM) ? m_GenomeGene : a_Dad.m_GenomeGene;
+            else
+                n = (a_RNG.RandFloat() < 0.5) ? m_GenomeGene : a_Dad.m_GenomeGene;
             t_baby.m_GenomeGene = n;
         } else {
-            // mate
             Gene n = m_GenomeGene;
             n.MateTraits(a_Dad.m_GenomeGene.m_Traits, a_RNG);
             t_baby.m_GenomeGene = n;
         }
 
-        // Make sure all inputs/outputs are present in the baby
-        // Essential to FS-NEAT
-
-        if (!a_Parameters.DontUseBiasNeuron) {
-            // the inputs
-            unsigned int i = 0;
-            for (i = 0; i < m_NumInputs - 1; i++) {
-                // Determine if it will pick either gene or mate it
-                /*if (a_RNG.RandFloat() < a_Parameters.MultipointCrossoverRate)
-                {
-                    // pick
-                    NeuronGene n;
-                    // most of the time pick from the fitter parent
-                    if (a_RNG.RandFloat() < a_Parameters.PreferFitterParentRate)
-                    {
-                        n = (GetFitness() > a_Dad.GetFitness())? m_NeuronGenes[i] : a_Dad.m_NeuronGenes[i];
-                    }
-                    else
-                    {
-                        // pick randomly
-                        n = (a_RNG.RandFloat() < 0.5)? m_NeuronGenes[i] : a_Dad.m_NeuronGenes[i];
-                    }
-
-                    t_baby.m_NeuronGenes.emplace_back(n);
-                }
-                else
-                {*/
-                // mate
-                // n.MateTraits(a_Dad.m_NeuronGenes[i].m_Traits, a_RNG);
-                t_baby.m_NeuronGenes.emplace_back(m_NeuronGenes[i]);
-                //}
+        // I/O neurons come first by index in both parents; they must agree.
+        t_baby.m_NeuronGenes.reserve(static_cast<std::size_t>(m_NumInputs + m_NumOutputs));
+        for (int index = 0; index < m_NumInputs + m_NumOutputs; ++index) {
+            const NeuronGene mom = GetNeuronByIndex(index);
+            const NeuronGene dad = a_Dad.GetNeuronByIndex(index);
+            if (mom.ID() != dad.ID() || mom.Type() != dad.Type()) throw std::invalid_argument("Cannot mate genomes with incompatible input/output neurons");
+            NeuronGene child = mom;
+            if (average_traits) {
+                child.MateTraits(dad.m_Traits, a_RNG);
+            } else if (a_RNG.RandFloat() < a_Parameters.PreferFitterParentRate) {
+                child = (t_better == MOM) ? mom : dad;
+            } else {
+                child = (a_RNG.RandFloat() < 0.5) ? mom : dad;
             }
-            /*if (a_RNG.RandFloat() < a_Parameters.MultipointCrossoverRate)
-            {
-                // the bias
-                NeuronGene nb;
-                if (a_RNG.RandFloat() < a_Parameters.PreferFitterParentRate)
-                {
-                    nb = (GetFitness() > a_Dad.GetFitness())? m_NeuronGenes[i] : a_Dad.m_NeuronGenes[i];
-                }
-                else
-                {
-                    nb = (a_RNG.RandFloat() < 0.5) ? m_NeuronGenes[i] : a_Dad.m_NeuronGenes[i];
-                }
-                t_baby.m_NeuronGenes.emplace_back(nb);
-            }
-            else
-            {*/
-            // mate
-            // nb.MateTraits(a_Dad.m_NeuronGenes[i].m_Traits, a_RNG);
-            t_baby.m_NeuronGenes.emplace_back(m_NeuronGenes[i]);
-            //}
-        } else {
-            // the inputs
-            for (unsigned int i = 0; i < m_NumInputs; i++) {
-                /*if (a_RNG.RandFloat() < a_Parameters.MultipointCrossoverRate)
-                {
-                    NeuronGene n;
-                    if (a_RNG.RandFloat() < a_Parameters.PreferFitterParentRate)
-                    {
-                        n = (GetFitness() > a_Dad.GetFitness())? m_NeuronGenes[i] : a_Dad.m_NeuronGenes[i];
-                    }
-                    else
-                    {
-                        n = (a_RNG.RandFloat() < 0.5) ? m_NeuronGenes[i] : a_Dad.m_NeuronGenes[i];
-                    }
-                    t_baby.m_NeuronGenes.emplace_back(n);
-                }
-                else
-                {*/
-                // n.MateTraits(a_Dad.m_NeuronGenes[i].m_Traits, a_RNG);
-                t_baby.m_NeuronGenes.emplace_back(m_NeuronGenes[i]);
-                //}
-            }
+            t_baby.m_NeuronGenes.push_back(child);
         }
 
-        // the outputs
-        for (unsigned int i = 0; i < m_NumOutputs; i++) {
-            NeuronGene t_tempneuron(OUTPUT, 0, 1);
-
-            if (a_RNG.RandFloat() < a_Parameters.MultipointCrossoverRate) {
-                if (a_RNG.RandFloat() < a_Parameters.PreferFitterParentRate) {
-                    if (GetFitness() > a_Dad.GetFitness()) {
-                        // from mother
-                        t_tempneuron = GetNeuronByIndex(i + m_NumInputs);
-                    } else {
-                        // from father
-                        t_tempneuron = a_Dad.GetNeuronByIndex(i + m_NumInputs);
-                    }
+        // SINGLE_POINT setup: count matching links, then draw the cut point and side.
+        std::size_t matching_link_count = 0;
+        if (a_Mode == SINGLE_POINT) {
+            auto mom = mom_links.begin();
+            auto dad = dad_links.begin();
+            while (mom != mom_links.end() && dad != dad_links.end()) {
+                if (mom->InnovationID() == dad->InnovationID()) {
+                    ++matching_link_count;
+                    ++mom;
+                    ++dad;
+                } else if (mom->InnovationID() < dad->InnovationID()) {
+                    ++mom;
                 } else {
-                    // random pick
-                    if (a_RNG.RandFloat() < 0.5) {
-                        // from mother
-                        t_tempneuron = GetNeuronByIndex(i + m_NumInputs);
-                    } else {
-                        // from father
-                        t_tempneuron = a_Dad.GetNeuronByIndex(i + m_NumInputs);
-                    }
+                    ++dad;
                 }
-            } else {
-                // mating from mother
-                t_tempneuron = GetNeuronByIndex(i + m_NumInputs);
-                t_tempneuron.MateTraits(a_Dad.GetNeuronByIndex(i + m_NumInputs).m_Traits, a_RNG);
-            }
-
-            t_baby.m_NeuronGenes.emplace_back(t_tempneuron);
-        }
-
-        // if they are of equal fitness use the shorter (because we want to keep the networks as small as possible)
-        if (GetFitness() == a_Dad.GetFitness()) {
-            // if they are of equal fitness and length just choose one at random
-            if (NumLinks() == a_Dad.NumLinks()) {
-                if (a_RNG.RandFloat() < 0.5) {
-                    t_better = MOM;
-                } else {
-                    t_better = DAD;
-                }
-            } else {
-                if (NumLinks() < a_Dad.NumLinks()) {
-                    t_better = MOM;
-                } else {
-                    t_better = DAD;
-                }
-            }
-        } else {
-            if (GetFitness() > a_Dad.GetFitness()) {
-                t_better = MOM;
-            } else {
-                t_better = DAD;
             }
         }
+        const std::size_t single_point =
+            (a_Mode != SINGLE_POINT || matching_link_count == 0) ? 0 : static_cast<std::size_t>(a_RNG.RandInt(0, static_cast<int>(matching_link_count)));
+        const bool mom_before_single_point = (a_Mode != SINGLE_POINT || a_RNG.RandFloat() < 0.5);
+        std::size_t matching_link_index = 0;
 
-        //////////////////////////////////////////////////////////
-        // The better genome has been chosen. Now we mate them.
-        //////////////////////////////////////////////////////////
+        // Endpoint lookup tables and baby dedup sets.
+        std::unordered_map<int, const NeuronGene *> mom_neurons;
+        std::unordered_map<int, const NeuronGene *> dad_neurons;
+        mom_neurons.reserve(m_NeuronGenes.size());
+        dad_neurons.reserve(a_Dad.m_NeuronGenes.size());
+        for (const auto &neuron : m_NeuronGenes) mom_neurons.emplace(neuron.ID(), &neuron);
+        for (const auto &neuron : a_Dad.m_NeuronGenes) dad_neurons.emplace(neuron.ID(), &neuron);
 
-        // for cleaning up
+        std::unordered_set<int> child_neuron_ids;
+        child_neuron_ids.reserve(m_NeuronGenes.size() + a_Dad.m_NeuronGenes.size());
+        for (const auto &neuron : t_baby.m_NeuronGenes) child_neuron_ids.insert(neuron.ID());
+        std::unordered_set<std::uint64_t> child_endpoints;
+        child_endpoints.reserve(m_LinkGenes.size() + a_Dad.m_LinkGenes.size());
+        const auto endpoint_key = [](int source, int target) {
+            return (static_cast<std::uint64_t>(static_cast<std::uint32_t>(source)) << 32U) | static_cast<std::uint32_t>(target);
+        };
+        const auto add_child_neuron = [&](int neuron_id) {
+            if (child_neuron_ids.count(neuron_id) != 0) return;
+            const auto mom = mom_neurons.find(neuron_id);
+            const auto dad = dad_neurons.find(neuron_id);
+            const NeuronGene *selected = nullptr;
+            if (mom != mom_neurons.end() && dad != dad_neurons.end()) {
+                if (prefer_fitter_neurons) {
+                    selected = (t_better == MOM) ? mom->second : dad->second;
+                } else {
+                    selected = (a_RNG.RandFloat() < 0.5) ? mom->second : dad->second;
+                }
+            } else if (mom != mom_neurons.end()) {
+                selected = mom->second;
+            } else if (dad != dad_neurons.end()) {
+                selected = dad->second;
+            }
+            if (selected == nullptr) throw std::logic_error("Crossover selected a link with a missing endpoint");
+            t_baby.m_NeuronGenes.push_back(*selected);
+            child_neuron_ids.insert(neuron_id);
+        };
+
+        // this will hold a copy of the gene we wish to add at each step
         LinkGene t_emptygene(0, 0, -1, 0, false);
-        bool t_skip = false;
-        int t_innov_mom, t_innov_dad;
 
         // step through each parents link genes until we reach the end of both
-        while (!((t_curMom == m_LinkGenes.end()) && (t_curDad == a_Dad.m_LinkGenes.end()))) {
-            t_selectedgene = t_emptygene;
-            t_skip = false;
-            t_innov_mom = t_innov_dad = 0;
+        while (!((t_curMom == mom_links.end()) && (t_curDad == dad_links.end()))) {
+            LinkGene t_selectedgene = t_emptygene;
+            bool t_skip = false;
 
             // the end of mum's genes have been reached EXCESS
-            if (t_curMom == m_LinkGenes.end()) {
+            if (t_curMom == mom_links.end()) {
                 // select dads gene
                 t_selectedgene = *t_curDad;
                 // move onto dad's next gene
@@ -2516,7 +2828,7 @@ namespace NEAT {
             }
 
             // the end of dads's genes have been reached EXCESS
-            else if (t_curDad == a_Dad.m_LinkGenes.end()) {
+            else if (t_curDad == dad_links.end()) {
                 // add mums gene
                 t_selectedgene = *t_curMom;
                 // move onto mum's next gene
@@ -2528,35 +2840,59 @@ namespace NEAT {
                 }
             } else {
                 // extract the innovation numbers
-                t_innov_mom = t_curMom->InnovationID();
-                t_innov_dad = t_curDad->InnovationID();
+                const int t_innov_mom = t_curMom->InnovationID();
+                const int t_innov_dad = t_curDad->InnovationID();
 
                 // if both innovations match
                 if (t_innov_mom == t_innov_dad) {
-                    // get a gene from either parent or average
-                    if (a_RNG.RandFloat() < a_Parameters.MultipointCrossoverRate) {
-                        if (a_RNG.RandFloat() < a_Parameters.PreferFitterParentRate) {
-                            // Prefer the *fitter* parent's gene (was inverted: picked the mom when she was worse)
-                            if (GetFitness() > a_Dad.GetFitness()) {
-                                t_selectedgene = *t_curMom;
-                            } else {
-                                t_selectedgene = *t_curDad;
-                            }
-                        } else {
-                            if (a_RNG.RandFloat() < 0.5) {
-                                t_selectedgene = *t_curMom;
-                            } else {
-                                t_selectedgene = *t_curDad;
-                            }
+                    switch (a_Mode) {
+                        case MULTIPOINT:
+                            if (a_RNG.RandFloat() < a_Parameters.PreferFitterParentRate)
+                                t_selectedgene = (t_better == MOM) ? *t_curMom : *t_curDad;
+                            else
+                                t_selectedgene = (a_RNG.RandFloat() < 0.5) ? *t_curMom : *t_curDad;
+                            break;
+                        case AVERAGE:
+                            t_selectedgene = *t_curMom;
+                            t_selectedgene.SetWeight((t_curDad->GetWeight() + t_curMom->GetWeight()) / 2.0);
+                            t_selectedgene.MateTraits(t_curDad->m_Traits, a_RNG);
+                            break;
+                        case SINGLE_POINT: {
+                            const bool take_mom = (matching_link_index < single_point) == mom_before_single_point;
+                            t_selectedgene = take_mom ? *t_curMom : *t_curDad;
+                            break;
                         }
-                    } else {
-                        t_selectedgene = *t_curMom;
-                        const double t_Weight = (t_curDad->GetWeight() + t_curMom->GetWeight()) / 2.0;
-                        t_selectedgene.SetWeight(t_Weight);
-                        // Mate traits here
-                        t_selectedgene.MateTraits(t_curDad->m_Traits, a_RNG);
+                        case BLEND: {
+                            t_selectedgene = *t_curMom;
+                            const double mom_weight = t_curMom->GetWeight();
+                            const double dad_weight = t_curDad->GetWeight();
+                            const double minimum = std::min(mom_weight, dad_weight);
+                            const double maximum = std::max(mom_weight, dad_weight);
+                            const double span = maximum - minimum;
+                            double weight =
+                                minimum - a_Parameters.CrossoverBlendAlpha * span + a_RNG.RandFloat() * (span * (1.0 + 2.0 * a_Parameters.CrossoverBlendAlpha));
+                            Clamp(weight, a_Parameters.MinWeight, a_Parameters.MaxWeight);
+                            t_selectedgene.SetWeight(weight);
+                            t_selectedgene.MateTraits(t_curDad->m_Traits, a_RNG);
+                            break;
+                        }
+                        case SIMULATED_BINARY: {
+                            t_selectedgene = *t_curMom;
+                            const double draw = a_RNG.RandFloat();
+                            const double exponent = 1.0 / (a_Parameters.CrossoverSBXEta + 1.0);
+                            const double beta = draw <= 0.5 ? std::pow(2.0 * draw, exponent) : std::pow(1.0 / (2.0 * (1.0 - draw)), exponent);
+                            const double first = t_curMom->GetWeight();
+                            const double second = t_curDad->GetWeight();
+                            double weight = a_RNG.RandFloat() < 0.5 ? 0.5 * ((1.0 + beta) * first + (1.0 - beta) * second)
+                                                                    : 0.5 * ((1.0 - beta) * first + (1.0 + beta) * second);
+                            Clamp(weight, a_Parameters.MinWeight, a_Parameters.MaxWeight);
+                            t_selectedgene.SetWeight(weight);
+                            t_selectedgene.MateTraits(t_curDad->m_Traits, a_RNG);
+                            break;
+                        }
                     }
 
+                    ++matching_link_index;
                     // move onto next gene of each parent
                     t_curMom++;
                     t_curDad++;
@@ -2585,166 +2921,23 @@ namespace NEAT {
             }
 
             // If the selected gene's innovation number is negative,
-            // this means that no gene is selected (should be skipped)
-            // also check the baby if it already has this link (maybe unnecessary)
-            if ((t_selectedgene.InnovationID() > 0) && (!t_baby.HasLink(t_selectedgene.FromNeuronID(), t_selectedgene.ToNeuronID()))) {
-                if (!t_skip) {
-                    t_baby.m_LinkGenes.emplace_back(t_selectedgene);
-
+            // this means that no gene is selected (should be skipped).
+            // The endpoint set also guards against duplicate links.
+            if ((t_selectedgene.InnovationID() > 0) && (!t_skip)) {
+                const std::uint64_t key = endpoint_key(t_selectedgene.FromNeuronID(), t_selectedgene.ToNeuronID());
+                if (child_endpoints.insert(key).second) {
+                    t_baby.m_LinkGenes.push_back(t_selectedgene);
                     // Check if we already have the nodes referred to in t_selectedgene. If not, they need to be added.
-
-                    // NeuronGene t_ngene1(NONE, 0, 0);
-                    // NeuronGene t_ngene2(NONE, 0, 0);
-
-                    // mom has a neuron ID not present in the baby? From
-                    if ((!t_baby.HasNeuronID(t_selectedgene.FromNeuronID())) && (HasNeuronID(t_selectedgene.FromNeuronID()))) {
-                        // See if dad has the same neuron.
-                        if (a_Dad.HasNeuronID(t_selectedgene.FromNeuronID())) {
-                            // if so, then choose randomly which neuron the baby shoud inherit
-                            if (a_RNG.RandFloat() < a_Parameters.MultipointCrossoverRate) {
-                                if (a_RNG.RandFloat() < a_Parameters.PreferFitterParentRate) {
-                                    if (GetFitness() > a_Dad.GetFitness()) {
-                                        // add mom's neuron to the baby
-                                        t_baby.m_NeuronGenes.emplace_back(m_NeuronGenes[GetNeuronIndex(t_selectedgene.FromNeuronID())]);
-                                    } else {
-                                        // add dad's neuron to the baby
-                                        t_baby.m_NeuronGenes.emplace_back(a_Dad.m_NeuronGenes[a_Dad.GetNeuronIndex(t_selectedgene.FromNeuronID())]);
-                                    }
-                                } else {
-                                    if (a_RNG.RandFloat() < 0.5) {
-                                        // add mom's neuron to the baby
-                                        t_baby.m_NeuronGenes.emplace_back(m_NeuronGenes[GetNeuronIndex(t_selectedgene.FromNeuronID())]);
-                                    } else {
-                                        // add dad's neuron to the baby
-                                        t_baby.m_NeuronGenes.emplace_back(a_Dad.m_NeuronGenes[a_Dad.GetNeuronIndex(t_selectedgene.FromNeuronID())]);
-                                    }
-                                }
-                            } else {
-                                // mate the neurons
-                                NeuronGene t_1 = m_NeuronGenes[GetNeuronIndex(t_selectedgene.FromNeuronID())];
-                                NeuronGene t_2 = a_Dad.m_NeuronGenes[a_Dad.GetNeuronIndex(t_selectedgene.FromNeuronID())];
-                                t_1.MateTraits(t_2.m_Traits, a_RNG);
-                                t_baby.m_NeuronGenes.emplace_back(t_1);
-                            }
-                        } else {
-                            // add mom's neuron to the baby
-                            t_baby.m_NeuronGenes.emplace_back(m_NeuronGenes[GetNeuronIndex(t_selectedgene.FromNeuronID())]);
-                        }
-                    }
-
-                    // To
-                    if ((!t_baby.HasNeuronID(t_selectedgene.ToNeuronID())) && (HasNeuronID(t_selectedgene.ToNeuronID()))) {
-                        // See if dad has the same neuron.
-                        if (a_Dad.HasNeuronID(t_selectedgene.ToNeuronID())) {
-                            if (a_RNG.RandFloat() < a_Parameters.MultipointCrossoverRate) {
-                                if (a_RNG.RandFloat() < a_Parameters.PreferFitterParentRate) {
-                                    if (GetFitness() > a_Dad.GetFitness()) {
-                                        // add mom's neuron to the baby
-                                        t_baby.m_NeuronGenes.emplace_back(m_NeuronGenes[GetNeuronIndex(t_selectedgene.ToNeuronID())]);
-                                    } else {
-                                        // add dad's neuron to the baby
-                                        t_baby.m_NeuronGenes.emplace_back(a_Dad.m_NeuronGenes[a_Dad.GetNeuronIndex(t_selectedgene.ToNeuronID())]);
-                                    }
-                                } else {
-                                    // if so, then choose randomly which neuron the baby shoud inherit
-                                    if (a_RNG.RandFloat() < 0.5) {
-                                        // add mom's neuron to the baby
-                                        t_baby.m_NeuronGenes.emplace_back(m_NeuronGenes[GetNeuronIndex(t_selectedgene.ToNeuronID())]);
-                                    } else {
-                                        // add dad's neuron to the baby
-                                        t_baby.m_NeuronGenes.emplace_back(a_Dad.m_NeuronGenes[a_Dad.GetNeuronIndex(t_selectedgene.ToNeuronID())]);
-                                    }
-                                }
-                            } else {
-                                // mate the neurons
-                                NeuronGene t_1 = m_NeuronGenes[GetNeuronIndex(t_selectedgene.ToNeuronID())];
-                                NeuronGene t_2 = a_Dad.m_NeuronGenes[a_Dad.GetNeuronIndex(t_selectedgene.ToNeuronID())];
-                                t_1.MateTraits(t_2.m_Traits, a_RNG);
-                                t_baby.m_NeuronGenes.emplace_back(t_1);
-                            }
-                        } else {
-                            // add mom's neuron to the baby
-                            t_baby.m_NeuronGenes.emplace_back(m_NeuronGenes[GetNeuronIndex(t_selectedgene.ToNeuronID())]);
-                        }
-                    }
-
-                    // dad has a neuron ID not present in the baby? From
-                    if ((!t_baby.HasNeuronID(t_selectedgene.FromNeuronID())) && (a_Dad.HasNeuronID(t_selectedgene.FromNeuronID()))) {
-                        // See if mom has the same neuron
-                        if (HasNeuronID(t_selectedgene.FromNeuronID())) {
-                            if (a_RNG.RandFloat() < a_Parameters.MultipointCrossoverRate) {
-                                if (a_RNG.RandFloat() < a_Parameters.PreferFitterParentRate) {
-                                    if (GetFitness() < a_Dad.GetFitness()) {
-                                        // add dad's neuron to the baby
-                                        t_baby.m_NeuronGenes.emplace_back(a_Dad.m_NeuronGenes[a_Dad.GetNeuronIndex(t_selectedgene.FromNeuronID())]);
-                                    } else {
-                                        // add mom's neuron to the baby
-                                        t_baby.m_NeuronGenes.emplace_back(m_NeuronGenes[GetNeuronIndex(t_selectedgene.FromNeuronID())]);
-                                    }
-                                } else {
-                                    // if so, then choose randomly which neuron the baby shoud inherit
-                                    if (a_RNG.RandFloat() < 0.5) {
-                                        // add dad's neuron to the baby
-                                        t_baby.m_NeuronGenes.emplace_back(a_Dad.m_NeuronGenes[a_Dad.GetNeuronIndex(t_selectedgene.FromNeuronID())]);
-                                    } else {
-                                        // add mom's neuron to the baby
-                                        t_baby.m_NeuronGenes.emplace_back(m_NeuronGenes[GetNeuronIndex(t_selectedgene.FromNeuronID())]);
-                                    }
-                                }
-                            } else {
-                                // mate the neurons
-                                NeuronGene t_1 = a_Dad.m_NeuronGenes[a_Dad.GetNeuronIndex(t_selectedgene.FromNeuronID())];
-                                NeuronGene t_2 = m_NeuronGenes[GetNeuronIndex(t_selectedgene.FromNeuronID())];
-                                t_1.MateTraits(t_2.m_Traits, a_RNG);
-                                t_baby.m_NeuronGenes.emplace_back(t_1);
-                            }
-                        } else {
-                            // add dad's neuron to the baby
-                            t_baby.m_NeuronGenes.emplace_back(a_Dad.m_NeuronGenes[a_Dad.GetNeuronIndex(t_selectedgene.FromNeuronID())]);
-                        }
-                    }
-
-                    // To
-                    if ((!t_baby.HasNeuronID(t_selectedgene.ToNeuronID())) && (a_Dad.HasNeuronID(t_selectedgene.ToNeuronID()))) {
-                        // See if mom has the same neuron
-                        if (HasNeuronID(t_selectedgene.ToNeuronID())) {
-                            if (a_RNG.RandFloat() < a_Parameters.MultipointCrossoverRate) {
-                                if (a_RNG.RandFloat() < a_Parameters.PreferFitterParentRate) {
-                                    if (GetFitness() < a_Dad.GetFitness()) {
-                                        // add dad's neuron to the baby
-                                        t_baby.m_NeuronGenes.emplace_back(a_Dad.m_NeuronGenes[a_Dad.GetNeuronIndex(t_selectedgene.ToNeuronID())]);
-                                    } else {
-                                        // add mom's neuron to the baby
-                                        t_baby.m_NeuronGenes.emplace_back(m_NeuronGenes[GetNeuronIndex(t_selectedgene.ToNeuronID())]);
-                                    }
-                                } else {
-                                    // if so, then choose randomly which neuron the baby shoud inherit
-                                    if (a_RNG.RandFloat() < 0.5) {
-                                        // add dad's neuron to the baby
-                                        t_baby.m_NeuronGenes.emplace_back(a_Dad.m_NeuronGenes[a_Dad.GetNeuronIndex(t_selectedgene.ToNeuronID())]);
-                                    } else {
-                                        // add mom's neuron to the baby
-                                        t_baby.m_NeuronGenes.emplace_back(m_NeuronGenes[GetNeuronIndex(t_selectedgene.ToNeuronID())]);
-                                    }
-                                }
-                            } else {
-                                // mate neurons
-                                NeuronGene t_1 = a_Dad.m_NeuronGenes[a_Dad.GetNeuronIndex(t_selectedgene.ToNeuronID())];
-                                NeuronGene t_2 = m_NeuronGenes[GetNeuronIndex(t_selectedgene.ToNeuronID())];
-                                t_1.MateTraits(t_2.m_Traits, a_RNG);
-                                t_baby.m_NeuronGenes.emplace_back(t_1);
-                            }
-                        } else {
-                            // add dad's neuron to the baby
-                            t_baby.m_NeuronGenes.emplace_back(a_Dad.m_NeuronGenes[a_Dad.GetNeuronIndex(t_selectedgene.ToNeuronID())]);
-                        }
-                    }
+                    add_child_neuron(t_selectedgene.FromNeuronID());
+                    add_child_neuron(t_selectedgene.ToNeuronID());
                 }
             }
         }  // end while
 
         t_baby.m_NumInputs = m_NumInputs;
         t_baby.m_NumOutputs = m_NumOutputs;
+        t_baby.m_initial_num_neurons = m_initial_num_neurons;
+        t_baby.m_initial_num_links = m_initial_num_links;
 
         // Sort the baby's genes
         t_baby.SortGenes();
@@ -2796,32 +2989,48 @@ namespace NEAT {
     }
 
     void Genome::CalculateDepth() {
-        unsigned int t_max_depth = 0;
-        unsigned int t_cur_depth = 0;
-
-        // The quick case - if no hidden neurons,
-        // the depth is 1
-        if (NumNeurons() == (m_NumInputs + m_NumOutputs)) {
-            m_Depth = 1;
+        if (m_NeuronGenes.empty()) {
+            m_Depth = 0;
             return;
         }
-
-        // make a list of all output IDs
-        std::vector<int> t_output_ids;
-        for (unsigned int i = 0; i < NumNeurons(); i++) {
-            if (m_NeuronGenes[i].Type() == OUTPUT) {
-                t_output_ids.emplace_back(m_NeuronGenes[i].ID());
+        // Iterative Kahn topological pass over the non-recurrent links:
+        // no recursion depth limit, recurrent links skipped, and a cycle made
+        // of non-recurrent links throws instead of silently capping at 16384.
+        std::map<int, std::size_t> neuron_indices;
+        for (std::size_t i = 0; i < m_NeuronGenes.size(); ++i) neuron_indices[m_NeuronGenes[i].ID()] = i;
+        std::vector<std::vector<std::size_t>> outgoing(m_NeuronGenes.size());
+        std::vector<std::size_t> indegree(m_NeuronGenes.size(), 0);
+        for (const auto &link : m_LinkGenes) {
+            if (link.IsRecurrent()) continue;
+            const auto source = neuron_indices.find(link.FromNeuronID());
+            const auto target = neuron_indices.find(link.ToNeuronID());
+            if (source == neuron_indices.end() || target == neuron_indices.end())
+                throw std::runtime_error("Genome contains a link whose endpoint neuron does not exist");
+            outgoing[source->second].push_back(target->second);
+            ++indegree[target->second];
+        }
+        std::vector<std::size_t> queue;
+        queue.reserve(m_NeuronGenes.size());
+        for (std::size_t i = 0; i < indegree.size(); ++i) {
+            if (indegree[i] == 0) queue.push_back(i);
+        }
+        std::vector<unsigned int> depth(m_NeuronGenes.size(), 0);
+        std::size_t head = 0;
+        while (head < queue.size()) {
+            const std::size_t source = queue[head++];
+            for (std::size_t target : outgoing[source]) {
+                depth[target] = std::max(depth[target], depth[source] + 1);
+                if (--indegree[target] == 0) queue.push_back(target);
             }
         }
-
-        // For each output
-        for (unsigned int i = 0; i < t_output_ids.size(); i++) {
-            t_cur_depth = NeuronDepth(t_output_ids[i], 0);
-
-            if (t_cur_depth > t_max_depth) t_max_depth = t_cur_depth;
+        if (queue.size() != m_NeuronGenes.size()) {
+            throw std::runtime_error("Genome contains a cycle made of non-recurrent links");
         }
-
-        m_Depth = t_max_depth;
+        unsigned int maximum = 0;
+        for (std::size_t i = 0; i < m_NeuronGenes.size(); ++i) {
+            if (m_NeuronGenes[i].Type() == OUTPUT) maximum = std::max(maximum, depth[i]);
+        }
+        m_Depth = static_cast<int>(std::max(1U, maximum));
     }
 
     //////////////////////////////////////////////////////////////////////////////////
@@ -2887,7 +3096,13 @@ namespace NEAT {
 
                 m_NeuronGenes.emplace_back(t_neuron);
             }
-
+            if (t_Str == "NeuronSpiking") {
+                if (m_NeuronGenes.empty()) throw std::runtime_error("Genome file error: NeuronSpiking appears before a neuron.");
+                NeuronGene &t_neuron = m_NeuronGenes.back();
+                a_DataFile >> t_neuron.m_SpikeThreshold >> t_neuron.m_ResetPotential >> t_neuron.m_RestingPotential >> t_neuron.m_RefractoryPeriod >>
+                    t_neuron.m_MembraneResistance >> t_neuron.m_AdaptationTimeConstant >> t_neuron.m_AdaptationIncrement >> t_neuron.m_RateTimeConstant >>
+                    t_neuron.m_IzhikevichA >> t_neuron.m_IzhikevichB >> t_neuron.m_IzhikevichC >> t_neuron.m_IzhikevichD;
+            }
             if (t_Str == "Link") {
                 int t_from, t_to, t_innov, t_isrecur;
                 double t_weight;
@@ -2901,6 +3116,15 @@ namespace NEAT {
                 // TODO read link traits
 
                 m_LinkGenes.emplace_back(LinkGene(t_from, t_to, t_innov, t_weight, static_cast<bool>(t_isrecur)));
+            }
+
+            if (t_Str == "LinkSpiking") {
+                if (m_LinkGenes.empty()) throw std::runtime_error("Genome file error: LinkSpiking appears before a link.");
+                LinkGene &t_link = m_LinkGenes.back();
+                int t_stdp_enabled = 0;
+                a_DataFile >> t_link.m_SynapticDelay >> t_link.m_SynapticTimeConstant >> t_stdp_enabled >> t_link.m_STDPPlus >> t_link.m_STDPMinus >>
+                    t_link.m_STDPTauPlus >> t_link.m_STDPTauMinus >> t_link.m_STDPMinWeight >> t_link.m_STDPMaxWeight;
+                t_link.m_STDPEnabled = (t_stdp_enabled != 0);
             }
         } while (t_Str != "GenomeEnd");
 
@@ -2928,8 +3152,9 @@ namespace NEAT {
 
     // Saves this genome to a file
     void Genome::Save(const char *a_FileName) {
-        FILE *t_file;
-        t_file = fopen(a_FileName, "w");
+        if (a_FileName == nullptr) throw std::invalid_argument("Genome filename is null");
+        FILE *t_file = detail::OpenFile(a_FileName, "w");
+        if (t_file == nullptr) throw std::runtime_error("Cannot open genome file for writing");
         Save(t_file);
         fclose(t_file);
     }
@@ -2940,21 +3165,262 @@ namespace NEAT {
 
         // loop over the neurons and save each one
         for (unsigned int i = 0; i < NumNeurons(); i++) {
+            const NeuronGene &ng = m_NeuronGenes[i];
             // Save neuron
-            fprintf(a_file, "Neuron %d %d %3.8f %d %3.8f %3.8f %3.8f %3.8f\n", m_NeuronGenes[i].ID(), static_cast<int>(m_NeuronGenes[i].Type()),
-                    m_NeuronGenes[i].SplitY(), static_cast<int>(m_NeuronGenes[i].m_ActFunction), m_NeuronGenes[i].m_A, m_NeuronGenes[i].m_B,
-                    m_NeuronGenes[i].m_TimeConstant, m_NeuronGenes[i].m_Bias);
+            fprintf(a_file, "Neuron %d %d %3.8f %d %3.8f %3.8f %3.8f %3.8f\n", ng.ID(), static_cast<int>(ng.Type()), ng.SplitY(),
+                    static_cast<int>(ng.m_ActFunction), ng.m_A, ng.m_B, ng.m_TimeConstant, ng.m_Bias);
             // TODO write neuron traits
+            fprintf(a_file,
+                    "NeuronSpiking %3.18f %3.18f %3.18f %3.18f %3.18f "
+                    "%3.18f %3.18f %3.18f %3.18f %3.18f %3.18f %3.18f\n",
+                    ng.m_SpikeThreshold, ng.m_ResetPotential, ng.m_RestingPotential, ng.m_RefractoryPeriod, ng.m_MembraneResistance,
+                    ng.m_AdaptationTimeConstant, ng.m_AdaptationIncrement, ng.m_RateTimeConstant, ng.m_IzhikevichA, ng.m_IzhikevichB, ng.m_IzhikevichC,
+                    ng.m_IzhikevichD);
         }
 
         // loop over the connections and save each one
         for (unsigned int i = 0; i < NumLinks(); i++) {
-            fprintf(a_file, "Link %d %d %d %d %3.8f\n", m_LinkGenes[i].FromNeuronID(), m_LinkGenes[i].ToNeuronID(), m_LinkGenes[i].InnovationID(),
-                    static_cast<int>(m_LinkGenes[i].IsRecurrent()), m_LinkGenes[i].GetWeight());
+            const LinkGene &lg = m_LinkGenes[i];
+            fprintf(a_file, "Link %d %d %d %d %3.8f\n", lg.FromNeuronID(), lg.ToNeuronID(), lg.InnovationID(), static_cast<int>(lg.IsRecurrent()),
+                    lg.GetWeight());
             // TODO write link traits
+            fprintf(a_file,
+                    "LinkSpiking %3.18f %3.18f %d %3.18f %3.18f "
+                    "%3.18f %3.18f %3.18f %3.18f\n",
+                    lg.m_SynapticDelay, lg.m_SynapticTimeConstant, static_cast<int>(lg.m_STDPEnabled), lg.m_STDPPlus, lg.m_STDPMinus, lg.m_STDPTauPlus,
+                    lg.m_STDPTauMinus, lg.m_STDPMinWeight, lg.m_STDPMaxWeight);
         }
 
         fprintf(a_file, "GenomeEnd\n\n");
+    }
+
+    // Builds this genome from any input stream (format versions 1-4 and legacy).
+    Genome::Genome(std::istream &data) : Genome() {
+        if (!data) throw std::runtime_error("Invalid input stream provided to Genome constructor.");
+
+        std::string token;
+        while (data >> token && token != "GenomeStart") {
+        }
+        if (token != "GenomeStart") throw std::runtime_error("Genome: missing GenomeStart marker.");
+
+        data >> m_ID;
+        if (!data) throw std::runtime_error("Genome: missing genome ID.");
+
+        int format_version = 1;
+        bool has_state = false;
+        bool found_end = false;
+        int last_neuron = -1;
+        int last_link = -1;
+        while (data >> token) {
+            if (token == "GenomeEnd") {
+                found_end = true;
+                break;
+            }
+            if (token == "GenomeFormat") {
+                data >> format_version;
+                if (format_version < 1 || format_version > 4) throw std::runtime_error("Genome: unsupported serialization format.");
+            } else if (token == "GenomeState") {
+                int evaluated = 0;
+                data >> m_Fitness >> m_AdjustedFitness >> m_OffspringAmount >> m_Depth >> m_NumInputs >> m_NumOutputs >> evaluated >> m_initial_num_neurons >>
+                    m_initial_num_links;
+                m_Evaluated = evaluated != 0;
+                has_state = true;
+            } else if (token == "GenomeTraits") {
+                m_GenomeGene.m_Traits = Serialization::ReadTraits(data);
+            } else if (token == "Neuron") {
+                int id, type, activation;
+                double split_y, a, b, time_constant, bias;
+                data >> id >> type >> split_y >> activation >> a >> b >> time_constant >> bias;
+                NeuronGene neuron(static_cast<NeuronType>(type), id, split_y);
+                neuron.m_ActFunction = static_cast<ActivationFunction>(activation);
+                neuron.m_A = a;
+                neuron.m_B = b;
+                neuron.m_TimeConstant = time_constant;
+                neuron.m_Bias = bias;
+                if (format_version >= 2) data >> neuron.x >> neuron.y;
+                if (format_version >= 3) {
+                    data >> neuron.m_SpikeThreshold >> neuron.m_ResetPotential >> neuron.m_RestingPotential >> neuron.m_RefractoryPeriod >>
+                        neuron.m_MembraneResistance >> neuron.m_AdaptationTimeConstant >> neuron.m_AdaptationIncrement >> neuron.m_RateTimeConstant >>
+                        neuron.m_IzhikevichA >> neuron.m_IzhikevichB >> neuron.m_IzhikevichC >> neuron.m_IzhikevichD;
+                }
+                if (format_version >= 4) {
+                    int inhibitory_veto = 1;
+                    data >> inhibitory_veto;
+                    neuron.m_MCPInhibitoryVeto = inhibitory_veto != 0;
+                }
+                m_NeuronGenes.push_back(neuron);
+                last_neuron = static_cast<int>(m_NeuronGenes.size()) - 1;
+            } else if (token == "NeuronTraits") {
+                if (last_neuron < 0) throw std::runtime_error("Genome: NeuronTraits appears before a neuron.");
+                m_NeuronGenes[static_cast<std::size_t>(last_neuron)].m_Traits = Serialization::ReadTraits(data);
+            } else if (token == "NeuronSpiking") {
+                if (last_neuron < 0) throw std::runtime_error("Genome: NeuronSpiking appears before a neuron.");
+                NeuronGene &neuron = m_NeuronGenes[static_cast<std::size_t>(last_neuron)];
+                data >> neuron.m_SpikeThreshold >> neuron.m_ResetPotential >> neuron.m_RestingPotential >> neuron.m_RefractoryPeriod >>
+                    neuron.m_MembraneResistance >> neuron.m_AdaptationTimeConstant >> neuron.m_AdaptationIncrement >> neuron.m_RateTimeConstant >>
+                    neuron.m_IzhikevichA >> neuron.m_IzhikevichB >> neuron.m_IzhikevichC >> neuron.m_IzhikevichD;
+            } else if (token == "Link") {
+                int from, to, innovation, recurrent;
+                double weight;
+                data >> from >> to >> innovation >> recurrent >> weight;
+                m_LinkGenes.emplace_back(from, to, innovation, weight, recurrent != 0);
+                last_link = static_cast<int>(m_LinkGenes.size()) - 1;
+                if (format_version >= 3) {
+                    LinkGene &link = m_LinkGenes[static_cast<std::size_t>(last_link)];
+                    int stdp_enabled = 0;
+                    data >> link.m_SynapticDelay >> link.m_SynapticTimeConstant >> stdp_enabled >> link.m_STDPPlus >> link.m_STDPMinus >> link.m_STDPTauPlus >>
+                        link.m_STDPTauMinus >> link.m_STDPMinWeight >> link.m_STDPMaxWeight;
+                    link.m_STDPEnabled = stdp_enabled != 0;
+                }
+            } else if (token == "LinkTraits") {
+                if (last_link < 0) throw std::runtime_error("Genome: LinkTraits appears before a link.");
+                m_LinkGenes[static_cast<std::size_t>(last_link)].m_Traits = Serialization::ReadTraits(data);
+            } else if (token == "LinkSpiking") {
+                if (last_link < 0) throw std::runtime_error("Genome: LinkSpiking appears before a link.");
+                LinkGene &link = m_LinkGenes[static_cast<std::size_t>(last_link)];
+                int stdp_enabled = 0;
+                data >> link.m_SynapticDelay >> link.m_SynapticTimeConstant >> stdp_enabled >> link.m_STDPPlus >> link.m_STDPMinus >> link.m_STDPTauPlus >>
+                    link.m_STDPTauMinus >> link.m_STDPMinWeight >> link.m_STDPMaxWeight;
+                link.m_STDPEnabled = stdp_enabled != 0;
+            } else {
+                std::string ignored;
+                std::getline(data, ignored);
+            }
+            if (!data) throw std::runtime_error("Genome: malformed serialized data.");
+        }
+        if (!found_end) throw std::runtime_error("Genome: missing GenomeEnd marker.");
+        if (!has_state) {
+            m_NumInputs = 0;
+            m_NumOutputs = 0;
+            for (const auto &neuron : m_NeuronGenes) {
+                if (neuron.Type() == INPUT || neuron.Type() == BIAS)
+                    ++m_NumInputs;
+                else if (neuron.Type() == OUTPUT)
+                    ++m_NumOutputs;
+            }
+            m_initial_num_neurons = static_cast<int>(m_NeuronGenes.size());
+            m_initial_num_links = static_cast<int>(m_LinkGenes.size());
+        }
+        m_PhenotypeBehavior = NULL;
+        std::string validation_error;
+        if (!Validate(&validation_error)) throw std::runtime_error("Genome: invalid serialized data: " + validation_error);
+    }
+
+    std::string Genome::Serialize() const {
+        std::string validation_error;
+        if (!Validate(&validation_error)) throw std::runtime_error("Genome::Serialize: " + validation_error);
+        std::ostringstream output;
+        Serialization::UseRoundTripPrecision(output);
+        output << "GenomeStart " << GetID() << "\n";
+        output << "GenomeFormat 4\n";
+        output << "GenomeState " << m_Fitness << ' ' << m_AdjustedFitness << ' ' << m_OffspringAmount << ' ' << m_Depth << ' ' << m_NumInputs << ' '
+               << m_NumOutputs << ' ' << static_cast<int>(m_Evaluated) << ' ' << m_initial_num_neurons << ' ' << m_initial_num_links << '\n';
+        Serialization::WriteTraits(output, "GenomeTraits", m_GenomeGene.m_Traits);
+        for (const auto &neuron : m_NeuronGenes) {
+            output << "Neuron " << neuron.m_ID << ' ' << static_cast<int>(neuron.m_Type) << ' ' << neuron.m_SplitY << ' '
+                   << static_cast<int>(neuron.m_ActFunction) << ' ' << neuron.m_A << ' ' << neuron.m_B << ' ' << neuron.m_TimeConstant << ' ' << neuron.m_Bias
+                   << ' ' << neuron.x << ' ' << neuron.y << ' ' << neuron.m_SpikeThreshold << ' ' << neuron.m_ResetPotential << ' ' << neuron.m_RestingPotential
+                   << ' ' << neuron.m_RefractoryPeriod << ' ' << neuron.m_MembraneResistance << ' ' << neuron.m_AdaptationTimeConstant << ' '
+                   << neuron.m_AdaptationIncrement << ' ' << neuron.m_RateTimeConstant << ' ' << neuron.m_IzhikevichA << ' ' << neuron.m_IzhikevichB << ' '
+                   << neuron.m_IzhikevichC << ' ' << neuron.m_IzhikevichD << ' ' << static_cast<int>(neuron.m_MCPInhibitoryVeto) << '\n';
+            Serialization::WriteTraits(output, "NeuronTraits", neuron.m_Traits);
+        }
+        for (const auto &link : m_LinkGenes) {
+            output << "Link " << link.m_FromNeuronID << ' ' << link.m_ToNeuronID << ' ' << link.m_InnovationID << ' ' << static_cast<int>(link.m_IsRecurrent)
+                   << ' ' << link.m_Weight << ' ' << link.m_SynapticDelay << ' ' << link.m_SynapticTimeConstant << ' ' << static_cast<int>(link.m_STDPEnabled)
+                   << ' ' << link.m_STDPPlus << ' ' << link.m_STDPMinus << ' ' << link.m_STDPTauPlus << ' ' << link.m_STDPTauMinus << ' '
+                   << link.m_STDPMinWeight << ' ' << link.m_STDPMaxWeight << '\n';
+            Serialization::WriteTraits(output, "LinkTraits", link.m_Traits);
+        }
+        output << "GenomeEnd\n";
+        return output.str();
+    }
+
+    Genome Genome::Deserialize(const std::string &data) {
+        std::istringstream input(data);
+        return Genome(input);
+    }
+
+    bool Genome::Validate(std::string *error) const {
+        const auto fail = [error](const std::string &message) {
+            if (error != nullptr) *error = message;
+            return false;
+        };
+
+        if (m_NumInputs < 0 || m_NumOutputs < 0) return fail("Genome input/output counts cannot be negative");
+        if (m_Depth < 0) return fail("Genome depth cannot be negative");
+        if (!std::isfinite(m_Fitness) || !std::isfinite(m_AdjustedFitness) || !std::isfinite(m_OffspringAmount))
+            return fail("Genome fitness and offspring state must be finite");
+        if (static_cast<std::size_t>(m_NumInputs) + static_cast<std::size_t>(m_NumOutputs) > m_NeuronGenes.size())
+            return fail("Genome input/output counts exceed its neuron count");
+        if (m_initial_num_neurons < 0 || m_initial_num_links < 0) return fail("Genome initial complexity cannot be negative");
+
+        std::map<int, bool> neuron_ids;
+        int actual_inputs = 0;
+        int actual_outputs = 0;
+        for (std::size_t i = 0; i < m_NeuronGenes.size(); ++i) {
+            const auto &neuron = m_NeuronGenes[i];
+            if (neuron.ID() <= 0 || !neuron_ids.emplace(neuron.ID(), true).second) return fail("Genome neuron IDs must be positive and unique");
+            if (neuron.Type() < INPUT || neuron.Type() > OUTPUT) return fail("Genome contains an invalid neuron type");
+            if (neuron.m_ActFunction < SIGNED_SIGMOID || neuron.m_ActFunction > MCCULLOCH_PITTS) return fail("Genome contains an invalid activation function");
+            if (!std::isfinite(neuron.m_SplitY) || !std::isfinite(neuron.m_A) || !std::isfinite(neuron.m_B) || !std::isfinite(neuron.m_TimeConstant) ||
+                !std::isfinite(neuron.m_Bias) || !std::isfinite(neuron.m_SpikeThreshold) || !std::isfinite(neuron.m_ResetPotential) ||
+                !std::isfinite(neuron.m_RestingPotential) || !std::isfinite(neuron.m_RefractoryPeriod) || !std::isfinite(neuron.m_MembraneResistance) ||
+                !std::isfinite(neuron.m_AdaptationTimeConstant) || !std::isfinite(neuron.m_AdaptationIncrement) || !std::isfinite(neuron.m_RateTimeConstant) ||
+                !std::isfinite(neuron.m_IzhikevichA) || !std::isfinite(neuron.m_IzhikevichB) || !std::isfinite(neuron.m_IzhikevichC) ||
+                !std::isfinite(neuron.m_IzhikevichD))
+                return fail("Genome neuron parameters must be finite");
+            if (IsSpikingActivation(neuron.m_ActFunction) && neuron.m_TimeConstant <= 0.0)
+                return fail("Spiking genome neurons require positive time constants");
+            if (neuron.m_RefractoryPeriod < 0.0 || neuron.m_MembraneResistance <= 0.0 || neuron.m_AdaptationTimeConstant <= 0.0 ||
+                neuron.m_RateTimeConstant <= 0.0)
+                return fail(
+                    "Spiking neuron resistance and adaptation time constants must be positive and refractory periods "
+                    "non-negative");
+            if (neuron.Type() == INPUT || neuron.Type() == BIAS)
+                ++actual_inputs;
+            else if (neuron.Type() == OUTPUT)
+                ++actual_outputs;
+            if (i < static_cast<std::size_t>(m_NumInputs)) {
+                if (neuron.Type() != INPUT && neuron.Type() != BIAS) return fail("Genome input neurons are not stored first");
+            } else if (i < static_cast<std::size_t>(m_NumInputs + m_NumOutputs) && neuron.Type() != OUTPUT) {
+                return fail("Genome output neurons do not follow its inputs");
+            }
+        }
+        if (actual_inputs != m_NumInputs || actual_outputs != m_NumOutputs) return fail("Genome input/output counts do not match its neuron types");
+        std::map<int, bool> innovation_ids;
+        std::set<std::pair<int, int>> link_endpoints;
+        for (const auto &link : m_LinkGenes) {
+            if (link.InnovationID() <= 0 || !innovation_ids.emplace(link.InnovationID(), true).second)
+                return fail("Genome innovation IDs must be positive and unique");
+            if (!link_endpoints.emplace(link.FromNeuronID(), link.ToNeuronID()).second) return fail("Genome link endpoints must be unique");
+            if (neuron_ids.count(link.FromNeuronID()) == 0 || neuron_ids.count(link.ToNeuronID()) == 0) return fail("Genome link endpoint does not exist");
+            if (!std::isfinite(link.GetWeight())) return fail("Genome link weights must be finite");
+            if (!std::isfinite(link.m_SynapticDelay) || !std::isfinite(link.m_SynapticTimeConstant) || !std::isfinite(link.m_STDPPlus) ||
+                !std::isfinite(link.m_STDPMinus) || !std::isfinite(link.m_STDPTauPlus) || !std::isfinite(link.m_STDPTauMinus) ||
+                !std::isfinite(link.m_STDPMinWeight) || !std::isfinite(link.m_STDPMaxWeight))
+                return fail("Genome synapse parameters must be finite");
+            if (link.m_SynapticDelay < 0.0 || link.m_SynapticTimeConstant <= 0.0 || link.m_STDPTauPlus <= 0.0 || link.m_STDPTauMinus <= 0.0)
+                return fail("Genome synapse delays must be non-negative and time constants positive");
+        }
+        return true;
+    }
+
+    bool Genome::IsIdenticalTo(const Genome &other) const {
+        if (m_NumInputs != other.m_NumInputs || m_NumOutputs != other.m_NumOutputs || m_NeuronGenes.size() != other.m_NeuronGenes.size() ||
+            m_LinkGenes.size() != other.m_LinkGenes.size()) {
+            return false;
+        }
+        if (m_GenomeGene.m_Traits != other.m_GenomeGene.m_Traits) return false;
+        for (std::size_t i = 0; i < m_NeuronGenes.size(); ++i) {
+            if (!(m_NeuronGenes[i] == other.m_NeuronGenes[i])) return false;
+            if (m_NeuronGenes[i].m_Traits != other.m_NeuronGenes[i].m_Traits) return false;
+        }
+        for (std::size_t i = 0; i < m_LinkGenes.size(); ++i) {
+            if (!(m_LinkGenes[i] == other.m_LinkGenes[i])) return false;
+            if (m_LinkGenes[i].m_Traits != other.m_LinkGenes[i].m_Traits) return false;
+        }
+        return true;
     }
 
     void Genome::PrintTraits(std::map<std::string, Trait> &traits) {
@@ -3051,945 +3517,443 @@ namespace NEAT {
     // For more info on the algorithm check: http://eplex.cs.ucf.edu/ESHyperNEAT/
     ////////////////////////////////////////////
 
-#if 0
-    
-    //divide and init for n dimensions
-    
-    void Genome::BuildESHyperNEATPhenotypeND(NeuralNetwork &net, Substrate &subst, Parameters &params)
-    {
-        ASSERT(subst.m_input_coords.size() > 0);
-        ASSERT(subst.m_output_coords.size() > 0);
+    // Prunes over-long axons and optionally converts lengths into delays.
+    inline void FinalizeSpatialConnections(NeuralNetwork &network, const Substrate &substrate) {
+        network.UpdateConnectionGeometry(substrate.m_use_spatial_distance_for_delays, substrate.m_conduction_velocity);
+        if (substrate.m_max_connection_length >= 0.0) {
+            network.m_connections.erase(
+                std::remove_if(network.m_connections.begin(), network.m_connections.end(),
+                               [&substrate](const Connection &connection) { return connection.m_length > substrate.m_max_connection_length; }),
+                network.m_connections.end());
+        }
+    }
 
-        unsigned int input_count = subst.m_input_coords.size();
-        unsigned int output_count = subst.m_output_coords.size();
-        unsigned int hidden_index = input_count + output_count;
-        unsigned int source_index = 0;
-        unsigned int target_index = 0;
-        unsigned int hidden_counter = 0;
-        unsigned int maxNodes = std::pow(4, params.MaxDepth);
-        unsigned int coord_len = subst.m_input_coords.at(0).size();
-        std::vector<TempConnection> TempConnections;
-        TempConnections.reserve(maxNodes + 1);
-
-        std::vector<double> point;
-        
-        point.reserve(coord_len);
-        
-        boost::shared_ptr<nTree> root;
-
-        boost::unordered_map<std::vector<double>, int> hidden_nodes;
-        hidden_nodes.reserve(maxNodes);
-
-        boost::unordered_map<std::vector<double>, int> temp;
-        temp.reserve(maxNodes);
-
-        boost::unordered_map<std::vector<double>, int> unexplored_nodes;
-        unexplored_nodes.reserve(maxNodes);
-
-        net.m_neurons.reserve(maxNodes);
-        net.m_connections.reserve((maxNodes * (maxNodes - 1)) / 2);
-        net.SetInputOutputDimentions(static_cast<unsigned short>(input_count),
-                                     static_cast<unsigned short>(output_count));
-
-
-        NeuralNetwork t_temp_phenotype(true);
-        BuildPhenotype(t_temp_phenotype);
-
-        // Find Inputs to Hidden connections.
-        for (unsigned int i = 0; i < input_count; i++)
-        {
-            // Get the nTree
-            std::vector <double> root_coord;
-            root_coord.reserve(coord_len);
-            for(unsigned int c_len = 0; c_len < coord_len; c_len++)
-            {
-                root_coord.push(0.0);
-            }
-            root = boost::shared_ptr<nTree>(
-                    new nTree(params.nTreeCoord, params.Width, params.Height, 1));
-            DivideInitializeND(subst.m_input_coords[i], root, t_temp_phenotype, params, true, 0.0);
-            TempConnections.clear();
-            PruneExpressND(subst.m_input_coords[i], root, t_temp_phenotype, params, TempConnections, true);
-
-            for (unsigned int j = 0; j < TempConnections.size(); j++)
-            {
-                if (std::abs(TempConnections[j].weight * subst.m_max_weight_and_bias) <
-                    0.2/*subst.m_link_threshold*/) // TODO: fix this
-                    continue;
-
-                // Find the hidden node in the hidden nodes. If it is not there add it.
-                if (hidden_nodes.find(TempConnections[j].target) == hidden_nodes.end())
-                {
-                    target_index = hidden_counter++;
-                    hidden_nodes.insert(std::make_pair(TempConnections[j].target, target_index));
-                }
-                    // Add connection
-                else
-                {
-                    target_index = hidden_nodes.find(TempConnections[j].target)->second;
-                }
-
-                Connection tc;
-                tc.m_source_neuron_idx = i;
-                tc.m_target_neuron_idx = target_index + hidden_index;
-                tc.m_weight = TempConnections[j].weight * subst.m_max_weight_and_bias;
-                tc.m_recur_flag = false;
-
-                net.m_connections.push_back(tc);
-
+    void Genome::BuildESHyperNEATPhenotype(NeuralNetwork &net, Substrate &subst, Parameters &params) {
+        if (subst.m_input_coords.empty() || subst.m_output_coords.empty()) {
+            throw std::invalid_argument("An ES-HyperNEAT substrate requires input and output coordinates");
+        }
+        ValidateSpatialSubstrate(subst, "ES-HyperNEAT");
+        if (params.InitialDepth > params.MaxDepth) {
+            throw std::invalid_argument("ES-HyperNEAT InitialDepth cannot exceed MaxDepth");
+        }
+        const int substrate_dimensions = subst.GetMaxDims();
+        if (substrate_dimensions > 3) {
+            throw std::invalid_argument("ES-HyperNEAT supports two- or three-dimensional substrates");
+        }
+        const bool three_dimensional = substrate_dimensions >= 3;
+        // Depth nine permits 349,525 quadtree nodes; an octree reaches a similar
+        // size at depth six. Reject larger trees before an accidental parameter
+        // value can exhaust memory or make construction effectively unbounded.
+        const unsigned int max_safe_depth = three_dimensional ? 6U : 9U;
+        if (params.MaxDepth > max_safe_depth) {
+            throw std::invalid_argument(std::string("ES-HyperNEAT MaxDepth exceeds the supported safe ") +
+                                        (three_dimensional ? "3D limit of 6" : "2D limit of 9"));
+        }
+        const std::pair<const char *, double> finite_values[] = {{"DivisionThreshold", params.DivisionThreshold},
+                                                                 {"VarianceThreshold", params.VarianceThreshold},
+                                                                 {"BandThreshold", params.BandThreshold},
+                                                                 {"CPPN_Bias", params.CPPN_Bias},
+                                                                 {"Width", params.Width},
+                                                                 {"Height", params.Height},
+                                                                 {"Depth", params.Depth},
+                                                                 {"Qtree_X", params.Qtree_X},
+                                                                 {"Qtree_Y", params.Qtree_Y},
+                                                                 {"Qtree_Z", params.Qtree_Z},
+                                                                 {"LeoThreshold", params.LeoThreshold},
+                                                                 {"maximum substrate weight", subst.m_max_weight_and_bias}};
+        for (const auto &value : finite_values) {
+            if (!std::isfinite(value.second)) {
+                throw std::invalid_argument(std::string("ES-HyperNEAT ") + value.first + " must be finite");
             }
         }
-        // Hidden to hidden. Basically the same procedure as above repeated IterationLevel times (see the params)
-        unexplored_nodes = hidden_nodes;
-        for (unsigned int i = 0; i < params.IterationLevel; i++)
-        {
-            boost::unordered_map<std::vector<double>, int>::iterator itr_hid;
-            for (itr_hid = unexplored_nodes.begin(); itr_hid != unexplored_nodes.end(); itr_hid++)
-            {
-                root = boost::shared_ptr<nTree>(
-                        new nTree(params.nTreeCoord, params.Width, params.Height, 1));
-                DivideInitializeND(itr_hid->first, root, t_temp_phenotype, params, true, 0.0);
-                TempConnections.clear();
-                PruneExpress(itr_hid->first, root, t_temp_phenotype, params, TempConnections, true);
-                //root.reset();
+        if (params.DivisionThreshold < 0.0 || params.VarianceThreshold < 0.0 || params.BandThreshold < 0.0 || params.Width <= 0.0 || params.Height <= 0.0 ||
+            (three_dimensional && params.Depth <= 0.0) || subst.m_max_weight_and_bias < 0.0) {
+            throw std::invalid_argument(
+                "ES-HyperNEAT thresholds and weight range must be non-negative, "
+                "and spatial tree dimensions must be positive");
+        }
 
-                for (unsigned int k = 0; k < TempConnections.size(); k++)
-                {
-                    if (std::abs(TempConnections[k].weight * subst.m_max_weight_and_bias) <
-                        0.2/*subst.m_link_threshold*/) // TODO: fix this
+        const int dimensions = three_dimensional ? 3 : 2;
+        const int required_inputs = dimensions * 2 + (subst.m_with_distance ? 1 : 0) + 1;
+        const int required_outputs = params.Leo ? 2 : 1;
+        if (m_NumInputs < required_inputs || m_NumOutputs < required_outputs) {
+            throw std::invalid_argument(
+                "The CPPN does not provide enough inputs or outputs for "
+                "ES-HyperNEAT");
+        }
+        const auto validate_coordinates = [dimensions](const std::vector<std::vector<double>> &coordinates) {
+            for (const auto &coordinate : coordinates) {
+                if (coordinate.empty() || coordinate.size() > static_cast<std::size_t>(dimensions) ||
+                    !std::all_of(coordinate.begin(), coordinate.end(), [](double value) { return std::isfinite(value); })) {
+                    return false;
+                }
+            }
+            return true;
+        };
+        if (!validate_coordinates(subst.m_input_coords) || !validate_coordinates(subst.m_output_coords)) {
+            throw std::invalid_argument(
+                "ES-HyperNEAT substrate coordinates must be finite and "
+                "dimensionally consistent");
+        }
+        if (subst.m_input_coords.size() > static_cast<std::size_t>(std::numeric_limits<int>::max()) ||
+            subst.m_output_coords.size() > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+            throw std::length_error("ES-HyperNEAT substrate exceeds the supported index range");
+        }
+
+        struct TreeNode {
+            double x;
+            double y;
+            double z;
+            double width;
+            double height;
+            double depth;
+            double weight = 0.0;
+            double leo = 0.0;
+            unsigned int level;
+            std::vector<std::unique_ptr<TreeNode>> children;
+
+            bool Divided() const { return !children.empty(); }
+        };
+        struct CandidateConnection {
+            std::vector<double> source;
+            std::vector<double> target;
+            double weight;
+        };
+
+        const std::size_t children_per_node = three_dimensional ? 8U : 4U;
+        std::size_t tree_node_limit = 1;
+        std::size_t nodes_at_level = 1;
+        const unsigned int subdivision_levels = std::max(1U, params.MaxDepth);
+        for (unsigned int level = 0; level < subdivision_levels; ++level) {
+            nodes_at_level *= children_per_node;
+            tree_node_limit += nodes_at_level;
+        }
+
+        NeuralNetwork cppn(true);
+        BuildPhenotype(cppn);
+        int cppn_activation_steps = 8;
+        if (!HasLoops()) {
+            CalculateDepth();
+            cppn_activation_steps = std::max(1, static_cast<int>(GetDepth()));
+        }
+
+        const auto normalized_coordinate = [dimensions](const std::vector<double> &coordinate) {
+            std::vector<double> result(static_cast<std::size_t>(dimensions), 0.0);
+            std::copy(coordinate.begin(), coordinate.end(), result.begin());
+            return result;
+        };
+        const auto query_cppn = [&](const std::vector<double> &source, const std::vector<double> &target) {
+            std::vector<double> inputs(static_cast<std::size_t>(m_NumInputs), 0.0);
+            for (int dimension = 0; dimension < dimensions; ++dimension) {
+                if (static_cast<std::size_t>(dimension) < source.size())
+                    inputs[static_cast<std::size_t>(dimension)] = source[static_cast<std::size_t>(dimension)];
+                if (static_cast<std::size_t>(dimension) < target.size())
+                    inputs[static_cast<std::size_t>(dimensions + dimension)] = target[static_cast<std::size_t>(dimension)];
+            }
+            if (subst.m_with_distance) {
+                double squared_distance = 0.0;
+                for (int dimension = 0; dimension < dimensions; ++dimension) {
+                    const double difference = inputs[static_cast<std::size_t>(dimension)] - inputs[static_cast<std::size_t>(dimensions + dimension)];
+                    squared_distance += difference * difference;
+                }
+                inputs[inputs.size() - 2] = std::sqrt(squared_distance);
+            }
+            inputs.back() = params.CPPN_Bias;
+
+            cppn.Flush();
+            cppn.Input(inputs);
+            for (int step = 0; step < cppn_activation_steps; ++step) cppn.Activate();
+            const std::vector<double> outputs = cppn.Output();
+            if (outputs.size() < static_cast<std::size_t>(required_outputs) || !std::isfinite(outputs.front()) ||
+                (params.Leo && !std::isfinite(outputs.back()))) {
+                throw std::runtime_error("ES-HyperNEAT CPPN produced an invalid output");
+            }
+            return std::pair<double, double>(outputs.front(), params.Leo ? outputs.back() : 0.0);
+        };
+        const auto variance = [](const TreeNode &node) {
+            if (!node.Divided()) return 0.0;
+            double mean = 0.0;
+            for (const auto &child : node.children) mean += child->weight;
+            mean /= static_cast<double>(node.children.size());
+            double result = 0.0;
+            for (const auto &child : node.children) {
+                const double difference = child->weight - mean;
+                result += difference * difference;
+            }
+            return result / static_cast<double>(node.children.size());
+        };
+        const auto generated_coordinate = [dimensions](double x, double y, double z) {
+            std::vector<double> coordinate(static_cast<std::size_t>(dimensions), 0.0);
+            coordinate[0] = x;
+            coordinate[1] = y;
+            if (dimensions == 3) coordinate[2] = z;
+            return coordinate;
+        };
+
+        const auto sample_connections = [&](const std::vector<double> &fixed, bool outgoing) {
+            auto root = std::make_unique<TreeNode>(TreeNode{params.Qtree_X,
+                                                            params.Qtree_Y,
+                                                            three_dimensional ? params.Qtree_Z : 0.0,
+                                                            params.Width,
+                                                            params.Height,
+                                                            three_dimensional ? params.Depth : 0.0,
+                                                            0.0,
+                                                            0.0,
+                                                            1,
+                                                            {}});
+            std::queue<TreeNode *> pending;
+            pending.push(root.get());
+            std::size_t tree_nodes = 1;
+            while (!pending.empty()) {
+                TreeNode *parent = pending.front();
+                pending.pop();
+                const double child_width = parent->width / 2.0;
+                const double child_height = parent->height / 2.0;
+                const double child_depth = three_dimensional ? parent->depth / 2.0 : 0.0;
+                const double xs[] = {parent->x - child_width, parent->x - child_width, parent->x + child_width, parent->x + child_width};
+                const double ys[] = {parent->y - child_height, parent->y + child_height, parent->y + child_height, parent->y - child_height};
+                const std::size_t depth_layers = three_dimensional ? 2U : 1U;
+                parent->children.reserve(children_per_node);
+                for (std::size_t depth_layer = 0; depth_layer < depth_layers; ++depth_layer) {
+                    const double z = three_dimensional ? parent->z + (depth_layer == 0 ? -child_depth : child_depth) : 0.0;
+                    for (std::size_t index = 0; index < 4; ++index) {
+                        auto child = std::make_unique<TreeNode>(
+                            TreeNode{xs[index], ys[index], z, child_width, child_height, child_depth, 0.0, 0.0, parent->level + 1, {}});
+                        const std::vector<double> coordinate = generated_coordinate(child->x, child->y, child->z);
+                        const auto outputs = outgoing ? query_cppn(fixed, coordinate) : query_cppn(coordinate, fixed);
+                        child->weight = outputs.first;
+                        child->leo = outputs.second;
+                        parent->children.push_back(std::move(child));
+                    }
+                }
+                tree_nodes += children_per_node;
+                if (tree_nodes > tree_node_limit) {
+                    throw std::runtime_error("ES-HyperNEAT quadtree exceeded its calculated limit");
+                }
+                if (parent->level < params.InitialDepth || (parent->level < params.MaxDepth && variance(*parent) > params.DivisionThreshold)) {
+                    for (auto &child : parent->children) pending.push(child.get());
+                }
+            }
+
+            std::vector<CandidateConnection> connections;
+            std::function<void(const TreeNode &)> prune_and_express;
+            prune_and_express = [&](const TreeNode &parent) {
+                for (const auto &child_pointer : parent.children) {
+                    const TreeNode &child = *child_pointer;
+                    if (child.Divided() && variance(child) > params.VarianceThreshold) {
+                        prune_and_express(child);
                         continue;
-
-                    if (hidden_nodes.find(TempConnections[k].target) == hidden_nodes.end())
-                    {
-                        target_index = hidden_counter++;
-                        hidden_nodes.insert(std::make_pair(TempConnections[k].target, target_index));
                     }
-                    else if(!params.feed_forward) // TODO: This can be skipped if building a feed forwad network.
-                    {
-                        target_index = hidden_nodes.find(TempConnections[k].target)->second;
+                    if (params.Leo && child.leo <= params.LeoThreshold) continue;
+
+                    const std::vector<double> center = generated_coordinate(child.x, child.y, child.z);
+                    std::vector<double> left = center;
+                    std::vector<double> right = center;
+                    std::vector<double> top = center;
+                    std::vector<double> bottom = center;
+                    std::vector<double> front = center;
+                    std::vector<double> back = center;
+                    left[0] -= parent.width;
+                    right[0] += parent.width;
+                    top[1] -= parent.height;
+                    bottom[1] += parent.height;
+                    if (three_dimensional) {
+                        front[2] -= parent.depth;
+                        back[2] += parent.depth;
                     }
+                    const auto boundary_difference = [&](const std::vector<double> &coordinate) {
+                        const double boundary_weight = outgoing ? query_cppn(fixed, coordinate).first : query_cppn(coordinate, fixed).first;
+                        return std::abs(child.weight - boundary_weight);
+                    };
+                    const double horizontal = std::min(boundary_difference(left), boundary_difference(right));
+                    const double vertical = std::min(boundary_difference(top), boundary_difference(bottom));
+                    const double spatial = three_dimensional ? std::min(boundary_difference(front), boundary_difference(back)) : 0.0;
+                    if (std::max({horizontal, vertical, spatial}) <= params.BandThreshold) continue;
 
-                    Connection tc;
-                    tc.m_source_neuron_idx = itr_hid->second + hidden_index;  // NO!!!
-                    tc.m_target_neuron_idx = target_index + hidden_index;
-                    tc.m_weight = TempConnections[k].weight * subst.m_max_weight_and_bias;
-                    tc.m_recur_flag = false;
+                    connections.push_back(outgoing ? CandidateConnection{fixed, center, child.weight} : CandidateConnection{center, fixed, child.weight});
+                }
+            };
+            prune_and_express(*root);
+            return connections;
+        };
 
-                    net.m_connections.push_back(tc);
+        const std::size_t input_count = subst.m_input_coords.size();
+        const std::size_t output_count = subst.m_output_coords.size();
+        const std::size_t hidden_offset = input_count + output_count;
+        std::map<std::vector<double>, std::size_t> hidden_indices;
+        std::vector<std::vector<double>> hidden_coordinates;
+        const auto add_hidden = [&](const std::vector<double> &coordinate) -> std::pair<std::size_t, bool> {
+            const auto existing = hidden_indices.find(coordinate);
+            if (existing != hidden_indices.end()) return {existing->second, false};
+            if (hidden_coordinates.size() >= tree_node_limit) {
+                throw std::length_error("ES-HyperNEAT generated too many hidden nodes");
+            }
+            const std::size_t index = hidden_coordinates.size();
+            hidden_coordinates.push_back(coordinate);
+            hidden_indices.emplace(coordinate, index);
+            return {index, true};
+        };
 
+        std::vector<Connection> generated_connections;
+        std::set<std::pair<std::size_t, std::size_t>> connection_endpoints;
+        const auto add_connection = [&](std::size_t source, std::size_t target, double raw_weight) {
+            if (source == target || !std::isfinite(raw_weight) || !connection_endpoints.emplace(source, target).second) {
+                return;
+            }
+            if (source > static_cast<std::size_t>(std::numeric_limits<int>::max()) || target > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
+                throw std::length_error("ES-HyperNEAT connection index exceeds the supported range");
+            }
+            Connection connection;
+            connection.m_source_neuron_idx = static_cast<int>(source);
+            connection.m_target_neuron_idx = static_cast<int>(target);
+            connection.m_weight = raw_weight * subst.m_max_weight_and_bias;
+            generated_connections.push_back(connection);
+        };
+
+        for (std::size_t input = 0; input < input_count; ++input) {
+            const std::vector<double> coordinate = normalized_coordinate(subst.m_input_coords[input]);
+            for (const auto &candidate : sample_connections(coordinate, true)) {
+                const auto hidden = add_hidden(candidate.target);
+                add_connection(input, hidden_offset + hidden.first, candidate.weight);
+            }
+        }
+
+        std::vector<std::vector<double>> frontier = hidden_coordinates;
+        for (unsigned int iteration = 0; iteration < params.IterationLevel && !frontier.empty(); ++iteration) {
+            std::vector<std::vector<double>> next_frontier;
+            for (const auto &source_coordinate : frontier) {
+                const auto source = hidden_indices.find(source_coordinate);
+                if (source == hidden_indices.end()) throw std::logic_error("ES-HyperNEAT lost a generated hidden node");
+                for (const auto &candidate : sample_connections(source_coordinate, true)) {
+                    const auto target = add_hidden(candidate.target);
+                    add_connection(hidden_offset + source->second, hidden_offset + target.first, candidate.weight);
+                    if (target.second) next_frontier.push_back(candidate.target);
                 }
             }
-            // Now get the newly discovered hidden nodes
-            boost::unordered_map<std::vector<double>, int>::iterator itr1;
-            for (itr1 = hidden_nodes.begin(); itr1 != hidden_nodes.end(); itr1++)
-            {
-                if (unexplored_nodes.find(itr1->first) == unexplored_nodes.end())
-                {
-                    temp.insert(std::make_pair(itr1->first, itr1->second));
-                }
-            }
-            unexplored_nodes = temp;
+            frontier = std::move(next_frontier);
         }
 
-        // Finally Output to Hidden. Note that unlike before, here we connect the outputs to existing hidden nodes and no new nodes are added.
-        for (unsigned int i = 0; i < output_count; i++)
-        {
-            root = boost::shared_ptr<nTree>(
-                    new nTree(params.nTreeCoord, params.Width, params.Height, 1));
-            DivideInitialize(subst.m_output_coords[i], root, t_temp_phenotype, params, false, 0.0);
-            TempConnections.clear();
-            PruneExpress(subst.m_output_coords[i], root, t_temp_phenotype, params, TempConnections, false);
-
-            for (unsigned int j = 0; j < TempConnections.size(); j++)
-            {
-                // Make sure the link weight is above the expected threshold.
-                if (std::abs(TempConnections[j].weight * subst.m_max_weight_and_bias) <
-                    0.2 /*subst.m_link_threshold*/) // TODO: fix this
-                    continue;
-
-                if (hidden_nodes.find(TempConnections[j].source) != hidden_nodes.end())
-                {
-                    source_index = hidden_nodes.find(TempConnections[j].source)->second;
-
-                    Connection tc;
-                    tc.m_source_neuron_idx = source_index + hidden_index;
-                    tc.m_target_neuron_idx = i + input_count;
-
-                    tc.m_weight = TempConnections[j].weight * subst.m_max_weight_and_bias;
-                    tc.m_recur_flag = false;
-
-                    net.m_connections.push_back(tc);
+        for (std::size_t output = 0; output < output_count; ++output) {
+            const std::vector<double> coordinate = normalized_coordinate(subst.m_output_coords[output]);
+            for (const auto &candidate : sample_connections(coordinate, false)) {
+                const auto source = hidden_indices.find(candidate.source);
+                if (source != hidden_indices.end()) {
+                    add_connection(hidden_offset + source->second, input_count + output, candidate.weight);
                 }
             }
         }
-        // Add the neurons.Input first, followed by bias, output and hidden. In this order.
 
-        for (unsigned int i = 0; i < input_count - 1; i++)
-        {
-            Neuron t_n;
-            t_n.m_a = 1;
-            t_n.m_b = 0;
-            t_n.m_substrate_coords = subst.m_input_coords[i];
-            t_n.m_activation_function_type = NEAT::LINEAR;
-            t_n.m_type = NEAT::INPUT;
-            net.m_neurons.push_back(t_n);
+        std::vector<Neuron> generated_neurons;
+        generated_neurons.reserve(hidden_offset + hidden_coordinates.size());
+        for (std::size_t index = 0; index < input_count; ++index) {
+            Neuron neuron;
+            neuron.m_a = 1.0;
+            neuron.m_b = 0.0;
+            SetSpatialCoordinates(neuron, subst.m_input_coords[index]);
+            neuron.m_activation_function_type = LINEAR;
+            neuron.m_type = index + 1 == input_count ? BIAS : INPUT;
+            generated_neurons.push_back(neuron);
         }
-        // Bias n.
-        Neuron t_n;
-        t_n.m_a = 1;
-        t_n.m_b = 0;
-        t_n.m_substrate_coords = subst.m_input_coords[input_count - 1];
-        t_n.m_activation_function_type = NEAT::LINEAR;
-        t_n.m_type = NEAT::BIAS;
-        net.m_neurons.push_back(t_n);
-
-        for (unsigned int i = 0; i < output_count; i++)
-        {
-            Neuron t_n;
-            t_n.m_a = 1;
-            t_n.m_b = 0;
-            t_n.m_substrate_coords = subst.m_output_coords[i];
-            t_n.m_activation_function_type = subst.m_output_nodes_activation;
-            t_n.m_type = NEAT::OUTPUT;
-            net.m_neurons.push_back(t_n);
+        for (const auto &coordinate : subst.m_output_coords) {
+            Neuron neuron;
+            neuron.m_a = 1.0;
+            neuron.m_b = 0.0;
+            SetSpatialCoordinates(neuron, coordinate);
+            neuron.m_activation_function_type = subst.m_output_nodes_activation;
+            neuron.m_type = OUTPUT;
+            generated_neurons.push_back(neuron);
         }
-
-        boost::unordered_map<std::vector<double>, int>::iterator itr;
-        for (itr = hidden_nodes.begin(); itr != hidden_nodes.end(); itr++)
-        {
-            Neuron t_n;
-            t_n.m_a = 1;
-            t_n.m_b = 0;
-            t_n.m_substrate_coords = itr->first;
-
-            ASSERT(t_n.m_substrate_coords.size() > 0); // prevent 0D points
-            t_n.m_activation_function_type = subst.m_hidden_nodes_activation;
-            t_n.m_type = NEAT::HIDDEN;
-            net.m_neurons.push_back(t_n);
+        for (const auto &coordinate : hidden_coordinates) {
+            Neuron neuron;
+            neuron.m_a = 1.0;
+            neuron.m_b = 0.0;
+            SetSpatialCoordinates(neuron, coordinate);
+            neuron.m_activation_function_type = subst.m_hidden_nodes_activation;
+            neuron.m_type = HIDDEN;
+            generated_neurons.push_back(neuron);
         }
 
-        // Clean the generated network from dangling connections and we're good to go.
-        Clean_Net(net.m_connections, input_count, output_count, hidden_nodes.size());
+        // Apply physical constraints before reachability pruning so an axon
+        // removed for being too long cannot leave a retained hidden island.
+        for (auto &connection : generated_connections) {
+            const Neuron &source = generated_neurons[static_cast<std::size_t>(connection.m_source_neuron_idx)];
+            const Neuron &target = generated_neurons[static_cast<std::size_t>(connection.m_target_neuron_idx)];
+            const double dx = target.m_x - source.m_x;
+            const double dy = target.m_y - source.m_y;
+            const double dz = target.m_z - source.m_z;
+            connection.m_length = std::sqrt(dx * dx + dy * dy + dz * dz);
+            if (subst.m_use_spatial_distance_for_delays) {
+                connection.m_synaptic_delay = connection.m_length / subst.m_conduction_velocity;
+            }
+        }
+        if (subst.m_max_connection_length >= 0.0) {
+            generated_connections.erase(std::remove_if(generated_connections.begin(), generated_connections.end(),
+                                                       [&subst](const Connection &connection) { return connection.m_length > subst.m_max_connection_length; }),
+                                        generated_connections.end());
+        }
+
+        // Retain only hidden nodes that are both reachable from an input and can
+        // reach an output. This removes disconnected islands and entire cycles,
+        // not merely nodes with an immediate missing predecessor/successor.
+        const std::size_t neuron_count = generated_neurons.size();
+        std::vector<bool> forward_reachable(neuron_count, false);
+        std::vector<bool> backward_reachable(neuron_count, false);
+        std::fill(forward_reachable.begin(), forward_reachable.begin() + static_cast<std::ptrdiff_t>(input_count), true);
+        std::fill(backward_reachable.begin() + static_cast<std::ptrdiff_t>(input_count),
+                  backward_reachable.begin() + static_cast<std::ptrdiff_t>(hidden_offset), true);
+        bool changed = true;
+        while (changed) {
+            changed = false;
+            for (const auto &connection : generated_connections) {
+                const std::size_t source = static_cast<std::size_t>(connection.m_source_neuron_idx);
+                const std::size_t target = static_cast<std::size_t>(connection.m_target_neuron_idx);
+                if (forward_reachable[source] && !forward_reachable[target]) {
+                    forward_reachable[target] = true;
+                    changed = true;
+                }
+            }
+        }
+        changed = true;
+        while (changed) {
+            changed = false;
+            for (const auto &connection : generated_connections) {
+                const std::size_t source = static_cast<std::size_t>(connection.m_source_neuron_idx);
+                const std::size_t target = static_cast<std::size_t>(connection.m_target_neuron_idx);
+                if (backward_reachable[target] && !backward_reachable[source]) {
+                    backward_reachable[source] = true;
+                    changed = true;
+                }
+            }
+        }
+
+        std::vector<int> remap(neuron_count, -1);
+        std::vector<Neuron> pruned_neurons;
+        pruned_neurons.reserve(neuron_count);
+        for (std::size_t index = 0; index < neuron_count; ++index) {
+            const bool fixed_node = index < hidden_offset;
+            if (fixed_node || (forward_reachable[index] && backward_reachable[index])) {
+                remap[index] = static_cast<int>(pruned_neurons.size());
+                pruned_neurons.push_back(generated_neurons[index]);
+            }
+        }
+        std::vector<Connection> pruned_connections;
+        pruned_connections.reserve(generated_connections.size());
+        for (auto connection : generated_connections) {
+            const int source = remap[static_cast<std::size_t>(connection.m_source_neuron_idx)];
+            const int target = remap[static_cast<std::size_t>(connection.m_target_neuron_idx)];
+            if (source >= 0 && target >= 0) {
+                connection.m_source_neuron_idx = source;
+                connection.m_target_neuron_idx = target;
+                pruned_connections.push_back(connection);
+            }
+        }
+
+        net.Clear();
+        net.SetInputOutputDimensions(static_cast<unsigned int>(input_count), static_cast<unsigned int>(output_count));
+        net.m_neurons = std::move(pruned_neurons);
+        net.m_connections = std::move(pruned_connections);
+        FinalizeSpatialConnections(net, subst);
+        net.Flush();
     }
-    
-    void Genome::BuildESHyperNEATPhenotype(NeuralNetwork &net, Substrate &subst, Parameters &params)
-    {
-        ASSERT(subst.m_input_coords.size() > 0);
-        ASSERT(subst.m_output_coords.size() > 0);
-
-        unsigned int input_count = subst.m_input_coords.size();
-        unsigned int output_count = subst.m_output_coords.size();
-        unsigned int hidden_index = input_count + output_count;
-        unsigned int source_index = 0;
-        unsigned int target_index = 0;
-        unsigned int hidden_counter = 0;
-        unsigned int maxNodes = std::pow(4, params.MaxDepth);
-
-        std::vector<TempConnection> TempConnections;
-        TempConnections.reserve(maxNodes + 1);
-
-        std::vector<double> point;
-        point.reserve(3);
-
-        boost::shared_ptr<QuadPoint> root;
-
-        boost::unordered_map<std::vector<double>, int> hidden_nodes;
-        hidden_nodes.reserve(maxNodes);
-
-        boost::unordered_map<std::vector<double>, int> temp;
-        temp.reserve(maxNodes);
-
-        boost::unordered_map<std::vector<double>, int> unexplored_nodes;
-        unexplored_nodes.reserve(maxNodes);
-
-        net.m_neurons.reserve(maxNodes);
-        net.m_connections.reserve((maxNodes * (maxNodes - 1)) / 2);
-        net.SetInputOutputDimentions(static_cast<unsigned short>(input_count),
-                                     static_cast<unsigned short>(output_count));
-
-
-        NeuralNetwork t_temp_phenotype(true);
-        BuildPhenotype(t_temp_phenotype);
-
-        // Find Inputs to Hidden connections.
-        for (unsigned int i = 0; i < input_count; i++)
-        {
-            // Get the Quadtree and express the connections in it for this input
-            root = boost::shared_ptr<QuadPoint>(
-                    new QuadPoint(params.Qtree_X, params.Qtree_Y, params.Width, params.Height, 1));
-            DivideInitialize(subst.m_input_coords[i], root, t_temp_phenotype, params, true, 0.0);
-            TempConnections.clear();
-            PruneExpress(subst.m_input_coords[i], root, t_temp_phenotype, params, TempConnections, true);
-
-            for (unsigned int j = 0; j < TempConnections.size(); j++)
-            {
-                if (std::abs(TempConnections[j].weight * subst.m_max_weight_and_bias) <
-                    0.2/*subst.m_link_threshold*/) // TODO: fix this
-                    continue;
-
-                // Find the hidden node in the hidden nodes. If it is not there add it.
-                if (hidden_nodes.find(TempConnections[j].target) == hidden_nodes.end())
-                {
-                    target_index = hidden_counter++;
-                    hidden_nodes.insert(std::make_pair(TempConnections[j].target, target_index));
-                }
-                    // Add connection
-                else
-                {
-                    target_index = hidden_nodes.find(TempConnections[j].target)->second;
-                }
-
-                Connection tc;
-                tc.m_source_neuron_idx = i;
-                tc.m_target_neuron_idx = target_index + hidden_index;
-                tc.m_weight = TempConnections[j].weight * subst.m_max_weight_and_bias;
-                tc.m_recur_flag = false;
-
-                net.m_connections.emplace_back(tc);
-
-            }
-        }
-        // Hidden to hidden. Basically the same procedure as above repeated IterationLevel times (see the params)
-        unexplored_nodes = hidden_nodes;
-        for (unsigned int i = 0; i < params.IterationLevel; i++)
-        {
-            boost::unordered_map<std::vector<double>, int>::iterator itr_hid;
-            for (itr_hid = unexplored_nodes.begin(); itr_hid != unexplored_nodes.end(); itr_hid++)
-            {
-                root = boost::shared_ptr<QuadPoint>(
-                        new QuadPoint(params.Qtree_X, params.Qtree_Y, params.Width, params.Height, 1));
-                DivideInitialize(itr_hid->first, root, t_temp_phenotype, params, true, 0.0);
-                TempConnections.clear();
-                PruneExpress(itr_hid->first, root, t_temp_phenotype, params, TempConnections, true);
-                //root.reset();
-
-                for (unsigned int k = 0; k < TempConnections.size(); k++)
-                {
-                    if (std::abs(TempConnections[k].weight * subst.m_max_weight_and_bias) <
-                        0.2/*subst.m_link_threshold*/) // TODO: fix this
-                        continue;
-
-                    if (hidden_nodes.find(TempConnections[k].target) == hidden_nodes.end())
-                    {
-                        target_index = hidden_counter++;
-                        hidden_nodes.insert(std::make_pair(TempConnections[k].target, target_index));
-                    }
-                    else // TODO: This can be skipped if building a feed forwad network.
-                    {
-                        target_index = hidden_nodes.find(TempConnections[k].target)->second;
-                    }
-
-                    Connection tc;
-                    tc.m_source_neuron_idx = itr_hid->second + hidden_index;  // NO!!!
-                    tc.m_target_neuron_idx = target_index + hidden_index;
-                    tc.m_weight = TempConnections[k].weight * subst.m_max_weight_and_bias;
-                    tc.m_recur_flag = false;
-
-                    net.m_connections.emplace_back(tc);
-
-                }
-            }
-            // Now get the newly discovered hidden nodes
-            boost::unordered_map<std::vector<double>, int>::iterator itr1;
-            for (itr1 = hidden_nodes.begin(); itr1 != hidden_nodes.end(); itr1++)
-            {
-                if (unexplored_nodes.find(itr1->first) == unexplored_nodes.end())
-                {
-                    temp.insert(std::make_pair(itr1->first, itr1->second));
-                }
-            }
-            unexplored_nodes = temp;
-        }
-
-        // Finally Output to Hidden. Note that unlike before, here we connect the outputs to existing hidden nodes and no new nodes are added.
-        for (unsigned int i = 0; i < output_count; i++)
-        {
-            root = boost::shared_ptr<QuadPoint>(
-                    new QuadPoint(params.Qtree_X, params.Qtree_Y, params.Width, params.Height, 1));
-            DivideInitialize(subst.m_output_coords[i], root, t_temp_phenotype, params, false, 0.0);
-            TempConnections.clear();
-            PruneExpress(subst.m_output_coords[i], root, t_temp_phenotype, params, TempConnections, false);
-
-            for (unsigned int j = 0; j < TempConnections.size(); j++)
-            {
-                // Make sure the link weight is above the expected threshold.
-                if (std::abs(TempConnections[j].weight * subst.m_max_weight_and_bias) <
-                    0.2 /*subst.m_link_threshold*/) // TODO: fix this
-                    continue;
-
-                if (hidden_nodes.find(TempConnections[j].source) != hidden_nodes.end())
-                {
-                    source_index = hidden_nodes.find(TempConnections[j].source)->second;
-
-                    Connection tc;
-                    tc.m_source_neuron_idx = source_index + hidden_index;
-                    tc.m_target_neuron_idx = i + input_count;
-
-                    tc.m_weight = TempConnections[j].weight * subst.m_max_weight_and_bias;
-                    tc.m_recur_flag = false;
-
-                    net.m_connections.emplace_back(tc);
-                }
-            }
-        }
-        // Add the neurons.Input first, followed by bias, output and hidden. In this order.
-
-        for (unsigned int i = 0; i < input_count - 1; i++)
-        {
-            Neuron t_n;
-            t_n.m_a = 1;
-            t_n.m_b = 0;
-            t_n.m_substrate_coords = subst.m_input_coords[i];
-            t_n.m_activation_function_type = NEAT::LINEAR;
-            t_n.m_type = NEAT::INPUT;
-            net.m_neurons.emplace_back(t_n);
-        }
-        // Bias n.
-        Neuron t_n;
-        t_n.m_a = 1;
-        t_n.m_b = 0;
-        t_n.m_substrate_coords = subst.m_input_coords[input_count - 1];
-        t_n.m_activation_function_type = NEAT::LINEAR;
-        t_n.m_type = NEAT::BIAS;
-        net.m_neurons.emplace_back(t_n);
-
-        for (unsigned int i = 0; i < output_count; i++)
-        {
-            Neuron t_n;
-            t_n.m_a = 1;
-            t_n.m_b = 0;
-            t_n.m_substrate_coords = subst.m_output_coords[i];
-            t_n.m_activation_function_type = subst.m_output_nodes_activation;
-            t_n.m_type = NEAT::OUTPUT;
-            net.m_neurons.emplace_back(t_n);
-        }
-
-        boost::unordered_map<std::vector<double>, int>::iterator itr;
-        for (itr = hidden_nodes.begin(); itr != hidden_nodes.end(); itr++)
-        {
-            Neuron t_n;
-            t_n.m_a = 1;
-            t_n.m_b = 0;
-            t_n.m_substrate_coords = itr->first;
-
-            ASSERT(t_n.m_substrate_coords.size() > 0); // prevent 0D points
-            t_n.m_activation_function_type = subst.m_hidden_nodes_activation;
-            t_n.m_type = NEAT::HIDDEN;
-            net.m_neurons.emplace_back(t_n);
-        }
-
-        // Clean the generated network from dangling connections and we're good to go.
-        Clean_Net(net.m_connections, input_count, output_count, hidden_nodes.size());
-    }
-    // uses n dimensional sub division tree to determine placement of hidden nodes in the substrate
-    void Genome::DivideInitializeND(const std::vector<double> &node,
-                                  boost::shared_ptr<nTree> &root,
-                                  NeuralNetwork &cppn,
-                                  Parameters &params,
-                                  const bool &outgoing)
-    {
-        int cpp_depth = 8;
-        
-        // some of the division, the permutation of center points in particular has been included with the tree struct and will simply be called here
-        std::vector<double> t_inputs;
-        
-        boost::shared_ptr<nTree> p;
-        std::queue<boost::shared_ptr<nTree> > q;
-        q.push(p);
-        while(!q.empty())
-        {
-            p = q.front();
-            p.set_children();
-            for (unsigned int i = 0; i < p->children.size(); i++)
-            {
-                t_inputs.clear();
-                t_inputs.reserve(cppn.NumInputs());
-                if(outgoing)
-                {
-                    t_inputs = node;
-                    for(unsigned int ci = 0; ci < node.size(); i++)
-                    {
-                        t_inputs.push_back(p->children[i]->coord[ci]);
-                    }
-                }
-                else
-                {
-                    t_inputs = p->children[i]->coord;
-                    for(unsigned int ci = 0; ci < node.size(); i++)
-                    {
-                        t_inputs.push_back(node[ci]);
-                    }
-                }
-                t_inputs[t_inputs.size() - 1] = (params.CPPN_Bias);
-                                cppn.Flush();
-                cppn.Input(t_inputs);
-
-                for (int d = 0; d < cppn_depth; d++)
-                {
-                    cppn.Activate();
-                }
-                p->children[i]->weight = cppn.Output()[0];
-                if (params.Leo)
-                {
-                    p->children[i]->leo = cppn.Output()[cppn.Output().size() - 1];
-                }
-                cppn.Flush();
-
-            }
-
-            if ((p->level < params.InitialDepth) ||
-                ((p->level < params.MaxDepth) && Variance(p) > params.DivisionThreshold))
-            {
-                for(unsigned int add_idx = 0; add_idx < p->children.size(); add_idx)
-                {
-                    q.push(p->children[add_idx]);   
-                }
-            }
-            q.pop();
-        }
-        return;
-        
-    }
-    // Used to determine the placement of hidden neurons in the Evolvable Substrate.
-    void Genome::DivideInitialize(const std::vector<double> &node,
-                                  boost::shared_ptr<QuadPoint> &root,
-                                  NeuralNetwork &cppn,
-                                  Parameters &params,
-                                  const bool &outgoing,
-                                  const double &z_coord)
-    {   // Have to check if this actually does something useful here
-        //CalculateDepth();
-        int cppn_depth = 8;//GetDepth();
-
-        std::vector<double> t_inputs;
-
-        // Standard Tree stuff. Create children, check their output with the CPPN and if they have higher variance add them to their parent. Repeat with the
-        // children until maxDepth has been reached or if the variance isn't high enough.
-        boost::shared_ptr<QuadPoint> p;
-
-        std::queue<boost::shared_ptr<QuadPoint> > q;
-        q.push(root);
-        while (!q.empty())
-        {
-            p = q.front();
-            // Add children
-            p->children.emplace_back(boost::shared_ptr<QuadPoint>(
-                    new QuadPoint(p->x - p->width / 2, p->y - p->height / 2, p->width / 2, p->height / 2,
-                                  p->level + 1)));
-            p->children.emplace_back(boost::shared_ptr<QuadPoint>(
-                    new QuadPoint(p->x - p->width / 2, p->y + p->height / 2, p->width / 2, p->height / 2,
-                                  p->level + 1)));
-            p->children.emplace_back(boost::shared_ptr<QuadPoint>(
-                    new QuadPoint(p->x + p->width / 2, p->y + p->height / 2, p->width / 2, p->height / 2,
-                                  p->level + 1)));
-            p->children.emplace_back(boost::shared_ptr<QuadPoint>(
-                    new QuadPoint(p->x + p->width / 2, p->y - p->height / 2, p->width / 2, p->height / 2,
-                                  p->level + 1)));
-
-            for (unsigned int i = 0; i < p->children.size(); i++)
-            {
-                t_inputs.clear();
-                t_inputs.reserve(cppn.NumInputs());
-
-                if (outgoing)
-                {
-                    // node goes here
-                    t_inputs = node;
-
-                    t_inputs.emplace_back(p->children[i]->x);
-                    t_inputs.emplace_back(p->children[i]->y);
-                    t_inputs.emplace_back(p->children[i]->z);
-                }
-
-                else
-                {
-                    // QuadPoint goes first
-                    t_inputs.emplace_back(p->children[i]->x);
-                    t_inputs.emplace_back(p->children[i]->y);
-                    t_inputs.emplace_back(p->children[i]->z);
-
-                    t_inputs.emplace_back(node[0]);
-                    t_inputs.emplace_back(node[1]);
-                    t_inputs.emplace_back(node[2]);
-                }
-
-                // Bias
-                t_inputs[t_inputs.size() - 1] = (params.CPPN_Bias);
-
-                cppn.Flush();
-                cppn.Input(t_inputs);
-
-                for (int d = 0; d < cppn_depth; d++)
-                {
-                    cppn.Activate();
-                }
-                p->children[i]->weight = cppn.Output()[0];
-                if (params.Leo)
-                {
-                    p->children[i]->leo = cppn.Output()[cppn.Output().size() - 1];
-                }
-                cppn.Flush();
-
-            }
-
-            if ((p->level < params.InitialDepth) ||
-                ((p->level < params.MaxDepth) && Variance(p) > params.DivisionThreshold))
-            {
-                for (unsigned int i = 0; i < 4; i++)
-                {
-                    q.push(p->children[i]);
-                }
-            }
-            q.pop();
-
-        }
-
-        return;
-    }
-
-    void Genome::PruneExpressND(const std::vector<double> &node,
-                              boost::shared_ptr<nTree> &root,
-                              NeuralNetwork &cppn,
-                              Parameters &params,
-                              std::vector<Genome::TempConnection> &connections,
-                              const bool &outgoing)
-    {
-        if (root->children[0] == NULL)
-        {
-            return;
-        }
-
-        else
-        {
-            for (unsigned int i = 0; i < root->children.size(); i++)
-            {
-                if(Variance(root->children[i]) > params.VarianceThreshold)
-                {
-                    PruneExpressND(node, root->children[i], cppn, params, connections, outgoing);
-                }
-                
-                else if(!params.Leo || (params.Leo && root->children[i]->leo > params.LeoThreshold))
-                {
-                    int cpp_depth = 8; //seems to be hard coded across the codebase, seems like plenty of depth to me!
-                    std::vector<double> child_array;
-                    for(unsigned int c_ix = 0; c_ix < root->children[i]->coord.size(); c_ix++)
-                    {
-                        std::vector<double> full_in;
-                        std::vector<double> full_in2;
-                        std::vector<double> inputs2;
-                        std::vector<double> inputs;
-                        int root_index = 0;
-                        int sign = -1;
-                        double dimen_split1 = root->children[i]->coord[c_ix] - root->width;
-                        double dimen_split2 = root->children[i]->coord[c_ix] + root->width;
-                        for(unsigned int c2_ix = 0; c2_ix < node.size(); c2_ix++)
-                        {
-                            if(c2_ix == c_ix)
-                            {
-                                inputs.append(root->children[i].coord.at(c2_ix));
-                                inputs2.append(root->children[i]->coord.at(c2_ix));
-                            } else {
-                                inputs.append(dimen_split2);
-                                inputs2.append(dimen_split1);
-                            }
-                        }
-                        if(outgoing)
-                        {
-                            full_in = node;
-                            full_in2 = full_in;
-                            fulll_in.insert(full_in.end(), inputs.begin(), inputs.end());
-                            full_in2.insert(full_in2.end(), inputs2.begin(), inputs2.end());
-                        }
-                        else
-                        {
-                            full_in2 = inputs2;
-                            full_in = inputs;
-                            full_in2.insert(full_in2.end(), node.begin(), node.end());
-                            full_in.insert(full_in.end(), node.begin(), node.end());
-                        }
-                        full_in.push_back(params.CPPN_Bias);
-                        full_in2.push_back(params.CPPN_Bias);
-                        cppn.Inputs(full_in);
-                        child_array.append(cppn.Activate()[0]);
-                        for (int d = 0; d < cppn_depth; d++)
-                        {
-                            cppn.Activate();
-                        }
-                        child_array.append(Abs(root->child[i]->weight - Output()[0]));
-                        cppn.Flush();
-                        cppn.Inputs(full_in2);
-                        child_array.append(cppn.Activate()[0]);
-                        for (int d = 0; d < cppn_depth; d++)
-                        {
-                            cppn.Activate();
-                        }
-                        child_array.append(Abs(root->child[i]->weight - Output()[0]));
-                    }
-                    double biggest_smallest = std::min(child_array[0], child_array[1]);
-                    unsigned int pair_idx = 2;
-                    while(pair_idx < child_array.size()/2)
-                    {
-                        unsigned int new_min = std::min(child_array[pair_idx], child_array[pair_idx + 1]);
-                        if(new_min > biggest_smallest)
-                        {
-                            biggest_smallest = new_min;
-                        }
-                        pair_idx += 2;
-                    }
-                    if(biggest_smallest > params.BandThreshold)
-                    {
-                        if(outgoing)
-                        {
-                            TempConnection tc(node, root->children[i]->coord, root->children[i]->weight, node.size());
-                        }
-                        else
-                        {
-                            TempConnection tc(root->children[i]->coord, node, root->children[i]->weight, node.size());
-                        }
-                        connections.push_back(tc);
-                    }
-                }
-            }
-        }
-    // We take the tree generated above and see which connections can be expressed on the basis of Variance threshold,
-    // Band threshold and LEO.
-    void Genome::PruneExpress(const std::vector<double> &node,
-                              boost::shared_ptr<QuadPoint> &root,
-                              NeuralNetwork &cppn,
-                              Parameters &params,
-                              std::vector<Genome::TempConnection> &connections,
-                              const bool &outgoing)
-    {
-        if (root->children[0] == NULL)
-        {
-            return;
-        }
-
-        else
-        {
-            for (unsigned int i = 0; i < 4; i++)
-            {
-                if (Variance(root->children[i]) > params.VarianceThreshold)
-                {
-                    PruneExpress(node, root->children[i], cppn, params, connections, outgoing);
-                }
-
-                    // Band Pruning phase. If LEO is turned off this should always happen. If it is not it should only happen if the LEO output is greater than
-                    // a specified threshold
-                else if (!params.Leo || (params.Leo && root->children[i]->leo > params.LeoThreshold))
-                {
-                    //CalculateDepth();
-                    int cppn_depth = 8;//GetDepth();
-
-                    double d_left, d_right, d_top, d_bottom;
-                    std::vector<double> inputs;
-
-                    int root_index = 0;
-
-                    if (outgoing)
-                    {
-                        inputs = node;
-                        inputs.emplace_back(root->children[i]->x);
-                        inputs.emplace_back(root->children[i]->y);
-                        inputs.emplace_back(root->children[i]->z);
-
-                        root_index = node.size();
-                    }
-
-                    else
-                    {
-                        inputs.emplace_back(root->children[i]->x);
-                        inputs.emplace_back(root->children[i]->y);
-                        inputs.emplace_back(root->children[i]->z);
-                        inputs.emplace_back(node[0]);
-                        inputs.emplace_back(node[1]);
-                        inputs.emplace_back(node[2]);
-                    }
-
-                    // Left
-                    inputs.emplace_back(params.CPPN_Bias);
-                    inputs[root_index] -= root->width;
-
-                    cppn.Input(inputs);
-
-                    for (int d = 0; d < cppn_depth; d++)
-                    {
-                        cppn.Activate();
-                    }
-
-                    d_left = Abs(root->children[i]->weight - cppn.Output()[0]);
-                    cppn.Flush();
-
-                    // Right
-                    inputs[root_index] += 2 * (root->width);
-                    cppn.Input(inputs);
-
-                    for (int d = 0; d < cppn_depth; d++)
-                    {
-                        cppn.Activate();
-                    }
-
-                    d_right = Abs(root->children[i]->weight - cppn.Output()[0]);
-                    cppn.Flush();
-
-                    // Top
-                    inputs[root_index] -= root->width;
-                    inputs[root_index + 1] -= root->width;
-                    cppn.Input(inputs);
-
-                    for (int d = 0; d < cppn_depth; d++)
-                    {
-                        cppn.Activate();
-                    }
-
-                    d_top = Abs(root->children[i]->weight - cppn.Output()[0]);
-                    cppn.Flush();
-                    // Bottom
-                    inputs[root_index + 1] += 2 * root->width;
-                    cppn.Input(inputs);
-
-                    for (int d = 0; d < cppn_depth; d++)
-                    {
-                        cppn.Activate();
-                    }
-
-                    d_bottom = Abs(root->children[i]->weight - cppn.Output()[0]);
-                    cppn.Flush();
-
-                    if (std::max(std::min(d_top, d_bottom), std::min(d_left, d_right)) > params.BandThreshold)
-                    {
-                        Genome::TempConnection tc;
-                        //Yeah its ugly
-                        if (outgoing)
-                        {
-                            tc.source = node;
-
-                            tc.target.emplace_back(root->children[i]->x);
-                            tc.target.emplace_back(root->children[i]->y);
-                            tc.target.emplace_back(root->children[i]->z);
-                        }
-                        else
-                        {
-                            tc.source.emplace_back(root->children[i]->x);
-                            tc.source.emplace_back(root->children[i]->y);
-                            tc.source.emplace_back(root->children[i]->z);
-
-                            tc.target = node;
-                        }
-                        // Normalize
-                        // TODO: Put in Parameters
-                        tc.weight = root->children[i]->weight;
-                        connections.emplace_back(tc);
-                    }
-                }
-            }
-        }
-        return;
-    }
-
-    double Genome::VarianceND(boost::shared_ptr<nTree> &point){
-        if(point->children.size() == 0){
-            return 0.0;
-        }
-        
-        boost::accumulators::accumulator_set<double, boost::accumulators::stats<boost::accumulators::tag::variance> > acc;
-        for (unsigned int i = 0; i < point->children.size(); i++){
-            acc(point->children[i]->weight);)
-        }
-        return boost::accumulators::variance(acc);
-    }
-    // Calculates the variance of a given Quadpoint. Maybe an alternative solution would be to add this in the Quadpoint const.
-    double Genome::Variance(boost::shared_ptr<QuadPoint> &point)
-    {
-        if (point->children.size() == 0)
-        {
-            return 0.0;
-        }
-
-        boost::accumulators::accumulator_set<double, boost::accumulators::stats<boost::accumulators::tag::variance> > acc;
-        for (unsigned int i = 0; i < 4; i++)
-        {
-            acc(point->children[i]->weight);
-        }
-
-        return boost::accumulators::variance(acc);
-    }
-
-    // Helper method for Variance
-    void Genome::CollectValues(std::vector<double> &vals, boost::shared_ptr<QuadPoint> &point)
-    {
-        //In theory we shouldn't get here at all.
-        if (point == NULL)
-        {
-            return;
-        }
-
-        if (point->children.size() > 0)
-        {
-            for (unsigned int i = 0; i < 4; i++)
-            {
-                CollectValues(vals, point->children[i]);
-            }
-        }
-
-        else
-        {   // Here, Apparently it treats the point a if it is not initialized
-            vals.emplace_back(point->weight);
-        }
-    }
-
-
-    // Removes all the dangling connections. This still leaves the nodes though,
-    void Genome::Clean_Net(std::vector<Connection> &connections, unsigned int input_count,
-                           unsigned int output_count, unsigned int hidden_count)
-    {
-        bool loose_connections = true;
-        int node_count = input_count + output_count + hidden_count;
-        std::vector<Connection> temp;
-        temp.reserve(connections.size());
-        while (loose_connections)
-        {
-            std::vector<bool> hasOutgoing(node_count, false);
-            std::vector<bool> hasIncoming(node_count, false);
-            // Make sure inputs and outputs are covered.
-            for (unsigned int i = 0; i < output_count + input_count; i++)
-            {
-                hasOutgoing[i] = true;
-                hasIncoming[i] = true;
-            }
-
-            // Move on to the nodes.
-            for (unsigned int i = 0; i < connections.size(); i++)
-            {
-                if (connections[i].m_source_neuron_idx != connections[i].m_target_neuron_idx)
-                {
-                    hasOutgoing[connections[i].m_source_neuron_idx] = true;
-                    hasIncoming[connections[i].m_target_neuron_idx] = true;
-                }
-
-            }
-
-            loose_connections = false;
-
-            std::vector<Connection>::iterator itr;
-            for (itr = connections.begin(); itr < connections.end();)
-            {
-                if (!hasOutgoing[itr->m_target_neuron_idx] || !hasIncoming[itr->m_source_neuron_idx])
-                {
-                    itr = connections.erase(itr);
-                    if (!loose_connections)
-                    {
-                        loose_connections = true;
-                    }
-
-                }
-                else
-                {
-                    itr++;
-                }
-            }
-        }
-    }
-#endif
 
 }  // namespace NEAT

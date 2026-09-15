@@ -47,6 +47,27 @@ int TestUtils(int argc, char *argv[]) {
         CHECK(Near(mx, -0.25));
     }
 
+    // Empty input yields 0,0 instead of garbage extremes.
+    {
+        std::vector<double> v;
+        double mn = 123.0, mx = 456.0;
+        GetMaxMin(v, mn, mx);
+        CHECK(Near(mn, 0.0));
+        CHECK(Near(mx, 0.0));
+        // Empty vector scale is a no-op.
+        Scale(v, 0.0, 1.0);
+        CHECK(v.empty());
+    }
+
+    // Vector scale honors the requested target range.
+    {
+        std::vector<double> v{0.0, 5.0, 10.0};
+        Scale(v, -1.0, 1.0);
+        CHECK(Near(v[0], -1.0));
+        CHECK(Near(v[1], 0.0));
+        CHECK(Near(v[2], 1.0));
+    }
+
     // itos / ftos round-trip basics
     {
         CHECK(itos(0) == std::string("0"));
@@ -87,11 +108,14 @@ int TestUtils(int argc, char *argv[]) {
         CHECK(i == 4);
     }
 
-    // Rounded / RoundUnderOffset
+    // Rounded / RoundUnderOffset (lround: halves away from zero, incl. negatives)
     {
         CHECK(Rounded(1.2) == 1);
         CHECK(Rounded(1.5) == 2);
         CHECK(Rounded(2.49) == 2);
+        CHECK(Rounded(-1.6) == -2);
+        CHECK(Rounded(-1.5) == -2);
+        CHECK(Rounded(-1.2) == -1);
         CHECK(RoundUnderOffset(1.2, 0.5) == 1);
         CHECK(RoundUnderOffset(1.7, 0.5) == 2);
         CHECK(RoundUnderOffset(1.2, 0.1) == 2);
@@ -114,12 +138,15 @@ int TestUtils(int argc, char *argv[]) {
         CHECK(std::fabs(b - 0.0f) < 1e-5f);
     }
 
-    // Scale with a degenerate source range must not throw; result is
-    // inf/nan by construction (division by zero). Just document it.
+    // Scale with a degenerate source range snaps to the target midpoint
+    // (no division by zero); degenerate target range snaps to the target.
     {
         double a = 1.0;
         Scale(a, 1.0, 1.0, 0.0, 1.0);
-        CHECK(std::isinf(a) || std::isnan(a));
+        CHECK(Near(a, 0.5));
+        a = 7.0;
+        Scale(a, 0.0, 4.0, 3.0, 3.0);
+        CHECK(Near(a, 3.0));
     }
 
     // Abs
