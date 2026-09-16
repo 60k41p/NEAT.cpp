@@ -176,7 +176,7 @@ namespace {
         Genome g = LargeGenome(10, 3, 200, 12);
         NeuralNetwork net;
         g.BuildPhenotype(net);
-        std::vector<double> in(net.m_num_inputs, 0.5);
+        std::vector<Real> in(net.m_num_inputs, 0.5f);
         const unsigned ops = 20000;
         auto t0 = Clock::now();
         for (unsigned i = 0; i < ops; ++i) {
@@ -193,7 +193,7 @@ namespace {
         Genome b = LargeGenome(10, 3, 200, 14);
         Parameters p = DefaultParams();
         const unsigned ops = 20000;
-        volatile double sink = 0.0;
+        volatile Real sink = 0.0f;
         auto t0 = Clock::now();
         for (unsigned i = 0; i < ops; ++i) {
             sink += a.CompatibilityDistance(b, p);
@@ -235,7 +235,7 @@ namespace {
         for (unsigned i = 0; i < ops; ++i) {
             for (unsigned j = 0; j < pop.NumGenomes(); ++j) {
                 Genome &gg = pop.AccessGenomeByIndex(static_cast<int>(j));
-                gg.SetFitness(1.0 + static_cast<double>(gg.NumLinks()));
+                gg.SetFitness(1.0f + static_cast<Real>(gg.NumLinks()));
                 gg.SetEvaluated();
             }
             pop.Epoch();
@@ -294,8 +294,8 @@ namespace {
         init.SeedType = PERCEPTRON;
         Population pop(Genome(q, init), p, true, 1.0, 1);
 
-        const double xi[4][2] = {{0, 0}, {0, 1}, {1, 0}, {1, 1}};
-        const double xt[4] = {0, 1, 1, 0};
+        const Real xi[4][2] = {{0, 0}, {0, 1}, {1, 0}, {1, 1}};
+        const Real xt[4] = {0, 1, 1, 0};
 
         auto t0 = Clock::now();
         unsigned gen = 0;
@@ -304,16 +304,16 @@ namespace {
                 Genome &gg = pop.AccessGenomeByIndex(static_cast<int>(i));
                 NeuralNetwork net;
                 gg.BuildPhenotype(net);
-                double err = 0.0;
+                Real err = 0.0f;
                 for (int pat = 0; pat < 4; ++pat) {
                     net.Flush();
-                    std::vector<double> in = {xi[pat][0], xi[pat][1], 1.0};
+                    std::vector<Real> in = {xi[pat][0], xi[pat][1], 1.0f};
                     net.Input(in);
                     net.Activate();
                     net.Activate();
                     err += std::fabs(net.Output()[0] - xt[pat]);
                 }
-                const double rem = 4.0 - err;
+                const Real rem = 4.0f - err;
                 gg.SetFitness(rem * rem);
                 gg.SetEvaluated();
             }

@@ -7,6 +7,8 @@
 
 #include "Random.h"
 
+using NEAT::Real;
+
 namespace {
 
     int g_failures = 0;
@@ -64,11 +66,11 @@ int TestRandom(int argc, char *argv[]) {
         RNG rng;
         rng.Seed(7);
         for (int i = 0; i < 1000; ++i) {
-            const double u = rng.RandFloat();
+            const Real u = rng.RandFloat();
             CHECK(u >= 0.0 && u <= 1.0);
-            const double s = rng.RandFloatSigned();
+            const Real s = rng.RandFloatSigned();
             CHECK(s >= -1.0 && s <= 1.0);
-            const double g = rng.RandGaussSigned();
+            const Real g = rng.RandGaussSigned();
             CHECK(g >= -1.0 && g <= 1.0);
             const int pn = rng.RandPosNeg();
             CHECK(pn == 1 || pn == -1);
@@ -86,7 +88,7 @@ int TestRandom(int argc, char *argv[]) {
         RNG a, b;
         a.Seed(99);
         b.Seed(99);
-        std::vector<double> probs{0.2, 0.5, 0.3};
+        std::vector<Real> probs{0.2, 0.5, 0.3};
         for (int i = 0; i < 32; ++i) {
             const int ia = a.Roulette(probs);
             const int ib = b.Roulette(probs);
@@ -97,7 +99,7 @@ int TestRandom(int argc, char *argv[]) {
     {
         RNG rng;
         rng.Seed(11);
-        std::vector<double> forced{0.0, 0.0, 1.0};
+        std::vector<Real> forced{0.0, 0.0, 1.0};
         for (int i = 0; i < 20; ++i) {
             CHECK(rng.Roulette(forced) == 2);
         }
@@ -123,7 +125,7 @@ int TestRandom(int argc, char *argv[]) {
         CHECK(threw);
         threw = false;
         try {
-            std::vector<double> empty;
+            std::vector<Real> empty;
             (void)rng.Roulette(empty);
         } catch (const std::invalid_argument &) {
             threw = true;
@@ -131,14 +133,14 @@ int TestRandom(int argc, char *argv[]) {
         CHECK(threw);
         threw = false;
         try {
-            std::vector<double> negative{0.5, -0.1};
+            std::vector<Real> negative{0.5, -0.1};
             (void)rng.Roulette(negative);
         } catch (const std::invalid_argument &) {
             threw = true;
         }
         CHECK(threw);
         // All-zero weights fall back to a uniform valid index.
-        std::vector<double> zeros{0.0, 0.0, 0.0};
+        std::vector<Real> zeros{0.0, 0.0, 0.0};
         for (int i = 0; i < 16; ++i) {
             const int idx = rng.Roulette(zeros);
             CHECK(idx >= 0 && idx < 3);

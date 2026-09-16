@@ -44,6 +44,7 @@
 #include "PhenotypeBehavior.h"
 #include "Random.h"
 #include "Substrate.h"
+#include "Types.h"
 
 namespace NEAT {
 
@@ -100,16 +101,16 @@ namespace NEAT {
         int m_NumOutputs;
 
         // The genome's fitness score
-        double m_Fitness;
+        Real m_Fitness;
 
         // The genome's adjusted fitness score
-        double m_AdjustedFitness;
+        Real m_AdjustedFitness;
 
         // The depth of the network
         int m_Depth;
 
         // how many individuals this genome should spawn
-        double m_OffspringAmount;
+        Real m_OffspringAmount;
 
         ////////////////////
         // Private methods
@@ -239,13 +240,13 @@ namespace NEAT {
 
         void SetNeuronY(unsigned int a_idx, int a_y);
 
-        double GetFitness() const;
+        Real GetFitness() const;
 
-        double GetAdjFitness() const;
+        Real GetAdjFitness() const;
 
-        void SetFitness(double a_f);
+        void SetFitness(Real a_f);
 
-        void SetAdjFitness(double a_af);
+        void SetAdjFitness(Real a_af);
 
         int GetID() const;
 
@@ -281,9 +282,9 @@ namespace NEAT {
             return false;
         }
 
-        double GetOffspringAmount() const;
+        Real GetOffspringAmount() const;
 
-        void SetOffspringAmount(double a_oa);
+        void SetOffspringAmount(Real a_oa);
 
         // This builds a fastnetwork structure out from the genome
         void BuildPhenotype(NeuralNetwork &net);
@@ -334,7 +335,7 @@ namespace NEAT {
         bool IsCompatibleWith(Genome &a_G, Parameters &a_Parameters);
 
         // returns the absolute compatibility distance between this genome and a_G
-        double CompatibilityDistance(Genome &a_G, Parameters &a_Parameters);
+        Real CompatibilityDistance(Genome &a_G, Parameters &a_Parameters);
 
         // Calculates the network depth
         void CalculateDepth();

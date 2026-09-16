@@ -34,17 +34,17 @@ namespace {
     } while (0)
 
     // Two inputs + trailing bias slot (GenomeInitStruct::NumInputs counts the bias).
-    const double kXorIn[4][2] = {{0.0, 0.0}, {0.0, 1.0}, {1.0, 0.0}, {1.0, 1.0}};
-    const double kXorTarget[4] = {0.0, 1.0, 1.0, 0.0};
+    const Real kXorIn[4][2] = {{0.0, 0.0}, {0.0, 1.0}, {1.0, 0.0}, {1.0, 1.0}};
+    const Real kXorTarget[4] = {0.0, 1.0, 1.0, 0.0};
 
     // Absolute error of a genome on XOR summed over the four patterns.
-    double XorError(Genome &g) {
+    Real XorError(Genome &g) {
         NeuralNetwork net;
         g.BuildPhenotype(net);
-        double err = 0.0;
+        Real err = 0.0;
         for (int p = 0; p < 4; ++p) {
             net.Flush();
-            std::vector<double> in = {kXorIn[p][0], kXorIn[p][1], 1.0};
+            std::vector<Real> in = {kXorIn[p][0], kXorIn[p][1], 1.0};
             net.Input(in);
             net.Activate();
             net.Activate();  // let any recurrent activity settle, as the reference does
@@ -53,8 +53,8 @@ namespace {
         return err;
     }
 
-    double XorFitness(Genome &g) {
-        const double rem = 4.0 - XorError(g);
+    Real XorFitness(Genome &g) {
+        const Real rem = 4.0 - XorError(g);
         return rem * rem;  // squared margin, as in the reference example
     }
 
@@ -120,12 +120,12 @@ namespace {
 
     // Runs XOR evolution with one seed. Returns the generation at which the
     // best fitness exceeded 15.0 (summed error < ~0.13), or -1 if the budget ran out.
-    int EvolveXor(unsigned long rng_seed, unsigned max_generations, double *best_fitness_out = nullptr) {
+    int EvolveXor(unsigned long rng_seed, unsigned max_generations, Real *best_fitness_out = nullptr) {
         Population pop(MakeXorSeed(), XorParams(), true, 1.0, static_cast<int>(rng_seed));
-        double best_seen = -1.0;
+        Real best_seen = -1.0;
         for (unsigned gen = 0; gen < max_generations; ++gen) {
             EvaluateXOR(pop);
-            double best = 0.0;
+            Real best = 0.0;
             for (unsigned i = 0; i < pop.NumGenomes(); ++i) {
                 best = std::max(best, pop.AccessGenomeByIndex(static_cast<int>(i)).GetFitness());
             }
@@ -172,7 +172,7 @@ int TestEvolution(int argc, char *argv[]) {
         int gens = 0;
         while (gens < 300) {
             EvaluateXOR(pop);
-            double best = 0.0;
+            Real best = 0.0;
             for (unsigned i = 0; i < pop.NumGenomes(); ++i) {
                 best = std::max(best, pop.AccessGenomeByIndex(static_cast<int>(i)).GetFitness());
             }
@@ -195,7 +195,7 @@ int TestEvolution(int argc, char *argv[]) {
     {
         auto first_gens_best = [](unsigned long seed, unsigned gens) {
             Population pop(MakeXorSeed(), XorParams(), true, 1.0, static_cast<int>(seed));
-            double best = 0.0;
+            Real best = 0.0;
             for (unsigned g = 0; g < gens; ++g) {
                 EvaluateXOR(pop);
                 for (unsigned i = 0; i < pop.NumGenomes(); ++i) {

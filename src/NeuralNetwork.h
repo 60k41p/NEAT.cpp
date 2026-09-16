@@ -41,6 +41,7 @@
 #include <vector>
 
 #include "Genes.h"
+#include "Types.h"
 
 namespace NEAT {
 
@@ -51,55 +52,55 @@ namespace NEAT {
 
     // A recorded spike (or external input event) on the spiking time axis.
     struct SpikeEvent {
-        double time = 0.0;
+        Real time = 0.0;
         int neuron_index = 0;
-        double amplitude = 1.0;
+        Real amplitude = 1.0;
         bool input = false;
     };
 
     // A synaptically delayed event waiting for delivery.
     struct PendingSynapticEvent {
-        double delivery_time = 0.0;
-        double amplitude = 0.0;
-        double source_amplitude = 0.0;
+        Real delivery_time = 0.0;
+        Real amplitude = 0.0;
+        Real source_amplitude = 0.0;
     };
 
     class Connection {
        public:
         int m_source_neuron_idx;  // index of source neuron
         int m_target_neuron_idx;  // index of target neuron
-        double m_weight;          // weight of the connection
-        double m_signal;          // weight * input signal
+        Real m_weight;            // weight of the connection
+        Real m_signal;            // weight * input signal
 
         bool m_recur_flag;  // recurrence flag for displaying purposes
         // can be ignored
 
         // Hebbian learning parameters Ignored in case there is no lifetime learning
-        double m_hebb_rate;
-        double m_hebb_pre_rate;
+        Real m_hebb_rate;
+        Real m_hebb_pre_rate;
 
         // Source activation snapshot required for exact online RTRL gradients
         // after recurrent neuron state advances.
-        double m_source_activation;
+        Real m_source_activation;
         // Current-based exponential synapse state.
-        double m_synaptic_delay;
-        double m_synaptic_time_constant;
-        double m_synaptic_current;
-        double m_presynaptic_signal;
+        Real m_synaptic_delay;
+        Real m_synaptic_time_constant;
+        Real m_synaptic_current;
+        Real m_presynaptic_signal;
         // Pair-based STDP state.
         bool m_stdp_enabled;
-        double m_stdp_plus;
-        double m_stdp_minus;
-        double m_stdp_tau_plus;
-        double m_stdp_tau_minus;
-        double m_stdp_pre_trace;
-        double m_stdp_post_trace;
-        double m_stdp_min_weight;
-        double m_stdp_max_weight;
+        Real m_stdp_plus;
+        Real m_stdp_minus;
+        Real m_stdp_tau_plus;
+        Real m_stdp_tau_minus;
+        Real m_stdp_pre_trace;
+        Real m_stdp_post_trace;
+        Real m_stdp_min_weight;
+        Real m_stdp_max_weight;
         // Physical axon length in substrate coordinate units, populated by
         // HyperNEAT builders (or UpdateConnectionGeometry); separate from the
         // mutable synaptic delay.
-        double m_length;
+        Real m_length;
         std::vector<PendingSynapticEvent> m_pending_events;
 
         Connection()
@@ -139,46 +140,46 @@ namespace NEAT {
 
     class Neuron {
        public:
-        double m_activesum;   // the synaptic input
-        double m_activation;  // the synaptic input passed through the activation function
+        Real m_activesum;   // the synaptic input
+        Real m_activation;  // the synaptic input passed through the activation function
 
-        double m_a, m_b, m_timeconst, m_bias;  // misc parameters
-        double m_membrane_potential;           // used in leaky integrator mode
+        Real m_a, m_b, m_timeconst, m_bias;  // misc parameters
+        Real m_membrane_potential;           // used in leaky integrator mode
         ActivationFunction m_activation_function_type;
 
         // displaying and stuff
-        double m_x, m_y, m_z;
-        double m_sx, m_sy, m_sz;
-        std::vector<double> m_substrate_coords;
-        double m_split_y;
+        Real m_x, m_y, m_z;
+        Real m_sx, m_sy, m_sz;
+        std::vector<Real> m_substrate_coords;
+        Real m_split_y;
         NeuronType m_type;
 
         // the sensitivity matrix of this neuron (for RTRL learning)
-        std::vector<std::vector<double> > m_sensitivity_matrix;
+        std::vector<std::vector<Real> > m_sensitivity_matrix;
 
         // Pre-activation retained for exact derivatives of non-monotonic
         // activation functions during online learning.
-        double m_last_input;
+        Real m_last_input;
         // Spiking state (LIF / adaptive LIF / Izhikevich / McCulloch-Pitts).
-        double m_spike_threshold;
-        double m_reset_potential;
-        double m_resting_potential;
-        double m_refractory_period;
-        double m_refractory_remaining;
-        double m_membrane_resistance;
-        double m_adaptation_time_constant;
-        double m_adaptation_increment;
-        double m_adaptation;
-        double m_izhikevich_a;
-        double m_izhikevich_b;
-        double m_izhikevich_c;
-        double m_izhikevich_d;
-        double m_izhikevich_recovery;
+        Real m_spike_threshold;
+        Real m_reset_potential;
+        Real m_resting_potential;
+        Real m_refractory_period;
+        Real m_refractory_remaining;
+        Real m_membrane_resistance;
+        Real m_adaptation_time_constant;
+        Real m_adaptation_increment;
+        Real m_adaptation;
+        Real m_izhikevich_a;
+        Real m_izhikevich_b;
+        Real m_izhikevich_c;
+        Real m_izhikevich_d;
+        Real m_izhikevich_recovery;
         bool m_spike;
         std::uint64_t m_spike_count;
-        double m_last_spike_time;
-        double m_rate_trace;
-        double m_rate_time_constant;
+        Real m_last_spike_time;
+        Real m_rate_trace;
+        Real m_rate_time_constant;
         bool m_mcp_inhibitory_veto;
         // Transient per-tick state for the canonical absolute inhibitory rule.
         bool m_inhibitory_input;
@@ -235,15 +236,15 @@ namespace NEAT {
     class NeuralNetwork {
         /////////////////////
         // RTRL variables
-        double m_total_error = 0.0;
+        Real m_total_error = 0.0;
 
         // Always the size of m_connections
-        std::vector<double> m_total_weight_change;
+        std::vector<Real> m_total_weight_change;
         // Sparse RTRL sensitivity rows, indexed like m_total_weight_change.
-        std::vector<std::vector<double> > m_sparse_rtrl_sensitivities;
+        std::vector<std::vector<Real> > m_sparse_rtrl_sensitivities;
         // Spiking simulation clock and configuration.
-        double m_spiking_time = 0.0;
-        double m_spiking_time_step = 0.001;
+        Real m_spiking_time = 0.0;
+        Real m_spiking_time_step = 0.001;
         SpikingInputMode m_spiking_input_mode = CURRENT_INPUT;
         SpikingOutputMode m_spiking_output_mode = SPIKE_OUTPUT;
         bool m_record_spikes = true;
@@ -264,17 +265,17 @@ namespace NEAT {
         // assumes that neuron and connection data are already initialized
         void InitSparseRTRLMatrix();  // indexed sensitivities for sparse topologies.
 
-        void ActivateFast();              // assumes unsigned sigmoids everywhere.
-        void Activate();                  // any activation functions are supported
-        void ActivateUseInternalBias();   // like Activate() but uses m_bias as well
-        void ActivateLeaky(double step);  // activates in leaky integrator mode
+        void ActivateFast();             // assumes unsigned sigmoids everywhere.
+        void Activate();                 // any activation functions are supported
+        void ActivateUseInternalBias();  // like Activate() but uses m_bias as well
+        void ActivateLeaky(Real step);   // activates in leaky integrator mode
 
         void RTRL_update_gradients();
         void RTRL_update_gradients_sparse();
-        void RTRL_update_error(double a_target);
-        void RTRL_update_error(const std::vector<double> &targets, double learning_rate = 0.0001);
-        void RTRL_update_error_sparse(double a_target, double learning_rate = 0.0001);
-        void RTRL_update_error_sparse(const std::vector<double> &targets, double learning_rate = 0.0001);
+        void RTRL_update_error(Real a_target);
+        void RTRL_update_error(const std::vector<Real> &targets, Real learning_rate = 0.0001);
+        void RTRL_update_error_sparse(Real a_target, Real learning_rate = 0.0001);
+        void RTRL_update_error_sparse(const std::vector<Real> &targets, Real learning_rate = 0.0001);
         void RTRL_update_weights();  // performs the backprop step
 
         // Hebbian learning
@@ -286,30 +287,28 @@ namespace NEAT {
         void Flush();      // clears all activations
         void FlushCube();  // clears the sensitivity cube
 
-        void Input(std::vector<double> &a_Inputs);
+        void Input(std::vector<Real> &a_Inputs);
         // Like Input() but requires exactly NumInputs() values.
-        void InputExact(const std::vector<double> &a_Inputs);
+        void InputExact(const std::vector<Real> &a_Inputs);
 
-        std::vector<double> Output();
+        std::vector<Real> Output();
 
         // Repeated activation and batched evaluation helpers.
         void ActivateSteps(unsigned int steps, bool fast = true);
-        std::vector<std::vector<double> > ActivateBatch(const std::vector<std::vector<double> > &inputs,
-                                                        unsigned int steps = 1,
-                                                        bool use_internal_bias = false);
+        std::vector<std::vector<Real> > ActivateBatch(const std::vector<std::vector<Real> > &inputs, unsigned int steps = 1, bool use_internal_bias = false);
 
         // Spiking simulation entry points.
-        std::vector<double> StepSpiking(const std::vector<double> &inputs, double time_step = -1.0);
-        std::vector<std::vector<double> > SimulateSpiking(const std::vector<std::vector<double> > &inputs, double time_step = -1.0, bool reset = false);
-        std::vector<double> OutputSpikes() const;
-        std::vector<double> OutputRates() const;
-        std::vector<double> OutputFilteredSpikes() const;
-        std::vector<double> OutputMembranePotentials() const;
-        std::vector<double> OutputDecoded() const;
+        std::vector<Real> StepSpiking(const std::vector<Real> &inputs, Real time_step = -1.0);
+        std::vector<std::vector<Real> > SimulateSpiking(const std::vector<std::vector<Real> > &inputs, Real time_step = -1.0, bool reset = false);
+        std::vector<Real> OutputSpikes() const;
+        std::vector<Real> OutputRates() const;
+        std::vector<Real> OutputFilteredSpikes() const;
+        std::vector<Real> OutputMembranePotentials() const;
+        std::vector<Real> OutputDecoded() const;
         bool IsSpiking() const;
-        double SpikingTime() const { return m_spiking_time; }
-        double SpikingTimeStep() const { return m_spiking_time_step; }
-        void SetSpikingTimeStep(double time_step);
+        Real SpikingTime() const { return m_spiking_time; }
+        Real SpikingTimeStep() const { return m_spiking_time_step; }
+        void SetSpikingTimeStep(Real time_step);
         void SetSpikingInputMode(SpikingInputMode mode);
         SpikingInputMode GetSpikingInputMode() const { return m_spiking_input_mode; }
         void SetSpikingOutputMode(SpikingOutputMode mode);
@@ -347,14 +346,14 @@ namespace NEAT {
         }
 
         // Euclidean distance between two neurons in x/y/z space.
-        double GetConnectionLenght(Neuron source, Neuron target);
-        double GetConnectionLength(const Neuron &source, const Neuron &target) { return GetConnectionLenght(source, target); }
+        Real GetConnectionLenght(Neuron source, Neuron target);
+        Real GetConnectionLength(const Neuron &source, const Neuron &target) { return GetConnectionLenght(source, target); }
 
-        double GetTotalConnectionLength();
+        Real GetTotalConnectionLength();
 
         // Recomputes stored physical axon lengths from neuron x/y/z. When
         // requested, length / conduction_velocity becomes each axon's delay.
-        void UpdateConnectionGeometry(bool update_delays = false, double conduction_velocity = 1.0);
+        void UpdateConnectionGeometry(bool update_delays = false, Real conduction_velocity = 1.0);
 
         // one-shot save/load
         void Save(const char *a_filename);

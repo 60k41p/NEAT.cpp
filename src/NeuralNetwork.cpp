@@ -76,19 +76,19 @@ namespace NEAT {
         // The set of activation functions //
         /////////////////////////////////////
 
-        inline double af_sigmoid_unsigned(double aX, double aSlope, double aShift) { return 1.0 / (1.0 + exp(-aSlope * aX - aShift)); }
+        inline Real af_sigmoid_unsigned(Real aX, Real aSlope, Real aShift) { return 1.0 / (1.0 + exp(-aSlope * aX - aShift)); }
 
-        inline double af_sigmoid_signed(double aX, double aSlope, double aShift) {
-            double tY = af_sigmoid_unsigned(aX, aSlope, aShift);
+        inline Real af_sigmoid_signed(Real aX, Real aSlope, Real aShift) {
+            Real tY = af_sigmoid_unsigned(aX, aSlope, aShift);
             return (tY - 0.5) * 2.0;
         }
 
-        inline double af_tanh(double aX, double aSlope, double aShift) { return tanh(aX * aSlope + aShift); }
+        inline Real af_tanh(Real aX, Real aSlope, Real aShift) { return tanh(aX * aSlope + aShift); }
 
-        inline double af_tanh_cubic(double aX, double aSlope, double aShift) { return tanh(aX * aX * aX * aSlope + aShift); }
+        inline Real af_tanh_cubic(Real aX, Real aSlope, Real aShift) { return tanh(aX * aX * aX * aSlope + aShift); }
 
-        inline double af_step_signed(double aX, double aShift) {
-            double tY;
+        inline Real af_step_signed(Real aX, Real aShift) {
+            Real tY;
             if (aX > aShift) {
                 tY = 1.0;
             } else {
@@ -98,7 +98,7 @@ namespace NEAT {
             return tY;
         }
 
-        inline double af_step_unsigned(double aX, double aShift) {
+        inline Real af_step_unsigned(Real aX, Real aShift) {
             if (aX > (0.5 + aShift)) {
                 return 1.0;
             } else {
@@ -106,37 +106,37 @@ namespace NEAT {
             }
         }
 
-        inline double af_gauss_signed(double aX, double aSlope, double aShift) {
-            double tY = exp(-aSlope * aX * aX + aShift);  // TODO: Need separate a, b per activation function
+        inline Real af_gauss_signed(Real aX, Real aSlope, Real aShift) {
+            Real tY = exp(-aSlope * aX * aX + aShift);  // TODO: Need separate a, b per activation function
             return (tY - 0.5) * 2.0;
         }
 
-        inline double af_gauss_unsigned(double aX, double aSlope, double aShift) { return exp(-aSlope * aX * aX + aShift); }
+        inline Real af_gauss_unsigned(Real aX, Real aSlope, Real aShift) { return exp(-aSlope * aX * aX + aShift); }
 
-        inline double af_abs(double aX, double aShift) { return ((aX + aShift) < 0.0) ? -(aX + aShift) : (aX + aShift); }
+        inline Real af_abs(Real aX, Real aShift) { return ((aX + aShift) < 0.0) ? -(aX + aShift) : (aX + aShift); }
 
-        inline double af_sine_signed(double aX, double aFreq, double aShift) { return sin(aX * aFreq + aShift); }
+        inline Real af_sine_signed(Real aX, Real aFreq, Real aShift) { return sin(aX * aFreq + aShift); }
 
-        inline double af_sine_unsigned(double aX, double aFreq, double aShift) {
-            double tY = sin((aX * aFreq + aShift));
+        inline Real af_sine_unsigned(Real aX, Real aFreq, Real aShift) {
+            Real tY = sin((aX * aFreq + aShift));
             return (tY + 1.0) / 2.0;
         }
 
-        inline double af_linear(double aX, double aShift) { return (aX + aShift); }
+        inline Real af_linear(Real aX, Real aShift) { return (aX + aShift); }
 
-        inline double af_relu(double aX) { return (aX > 0) ? aX : 0; }
+        inline Real af_relu(Real aX) { return (aX > 0) ? aX : 0; }
 
-        inline double af_softplus(double aX) { return std::max(aX, 0.0) + log1p(exp(-std::abs(aX))); }
+        inline Real af_softplus(Real aX) { return std::max(aX, static_cast<Real>(0.0)) + log1p(exp(-std::abs(aX))); }
 
-        double unsigned_sigmoid_derivative(double x) { return x * (1 - x); }
+        Real unsigned_sigmoid_derivative(Real x) { return x * (1 - x); }
 
-        double tanh_derivative(double x) { return 1 - x * x; }
+        Real tanh_derivative(Real x) { return 1 - x * x; }
 
         // Exact derivative of every differentiable activation function with
         // respect to its pre-activation input (retained as m_last_input).
-        double activation_derivative(const Neuron &neuron) {
-            const double output = neuron.m_activation;
-            const double input = neuron.m_last_input;
+        Real activation_derivative(const Neuron &neuron) {
+            const Real output = neuron.m_activation;
+            const Real input = neuron.m_last_input;
             switch (neuron.m_activation_function_type) {
                 case SIGNED_SIGMOID:
                     return neuron.m_a * (1.0 - output * output) * 0.5;
@@ -151,7 +151,7 @@ namespace NEAT {
                 case UNSIGNED_GAUSS:
                     return -2.0 * neuron.m_a * input * output;
                 case ABS: {
-                    const double shifted = input + neuron.m_b;
+                    const Real shifted = input + neuron.m_b;
                     return shifted > 0.0 ? 1.0 : (shifted < 0.0 ? -1.0 : 0.0);
                 }
                 case SIGNED_SINE:
@@ -165,7 +165,7 @@ namespace NEAT {
                 case SOFTPLUS:
                     if (input >= 0.0) return 1.0 / (1.0 + std::exp(-input));
                     {
-                        const double exponential = std::exp(input);
+                        const Real exponential = std::exp(input);
                         return exponential / (1.0 + exponential);
                     }
                 default:
@@ -176,7 +176,7 @@ namespace NEAT {
 
         // Evaluates one neuron's activation function, retaining the
         // pre-activation input for exact online-learning derivatives.
-        inline double EvaluateActivation(Neuron &neuron, double input) {
+        inline Real EvaluateActivation(Neuron &neuron, Real input) {
             neuron.m_last_input = input;
             switch (neuron.m_activation_function_type) {
                 case SIGNED_SIGMOID:
@@ -231,7 +231,7 @@ namespace NEAT {
                 Connection connection;
                 connection.m_source_neuron_idx = endpoint[0];
                 connection.m_target_neuron_idx = endpoint[1];
-                connection.m_weight = static_cast<double>(std::rand()) / static_cast<double>(RAND_MAX) - 0.5;
+                connection.m_weight = static_cast<Real>(std::rand()) / static_cast<Real>(RAND_MAX) - 0.5;
                 m_connections.push_back(connection);
             }
             InitRTRLMatrix();
@@ -258,7 +258,7 @@ namespace NEAT {
         // assumes that neuron and connection data are already initialized
         m_sparse_rtrl_sensitivities.clear();
         for (auto &neuron : m_neurons) {
-            neuron.m_sensitivity_matrix.assign(m_neurons.size(), std::vector<double>(m_neurons.size(), 0.0));
+            neuron.m_sensitivity_matrix.assign(m_neurons.size(), std::vector<Real>(m_neurons.size(), 0.0));
         }
         // now clear it
         FlushCube();
@@ -281,7 +281,7 @@ namespace NEAT {
         // do not get an activation
         for (size_t i = m_num_inputs; i < m_neurons.size(); i++) {
             Neuron &neuron = m_neurons[i];
-            const double input = neuron.m_activesum;
+            const Real input = neuron.m_activesum;
             neuron.m_activesum = 0;
             neuron.m_activation = EvaluateActivation(neuron, input);
         }
@@ -312,13 +312,13 @@ namespace NEAT {
         // do not get an activation
         for (size_t i = m_num_inputs; i < m_neurons.size(); i++) {
             Neuron &neuron = m_neurons[i];
-            const double input = neuron.m_activesum + neuron.m_bias;
+            const Real input = neuron.m_activesum + neuron.m_bias;
             neuron.m_activesum = 0;
             neuron.m_activation = EvaluateActivation(neuron, input);
         }
     }
 
-    void NeuralNetwork::ActivateLeaky(double a_dtime) {
+    void NeuralNetwork::ActivateLeaky(Real a_dtime) {
         ValidateNetworkTopology(*this);
         if (IsSpiking()) {
             throw std::invalid_argument("Use StepSpiking to advance stateful spiking activations");
@@ -341,7 +341,7 @@ namespace NEAT {
         for (auto &conn : m_connections) m_neurons[conn.m_target_neuron_idx].m_activesum += conn.m_signal;
         // Now we have the leaky integrator step for the neurons
         for (size_t i = m_num_inputs; i < m_neurons.size(); i++) {
-            double t_const = a_dtime / m_neurons[i].m_timeconst;
+            Real t_const = a_dtime / m_neurons[i].m_timeconst;
             m_neurons[i].m_membrane_potential = (1.0 - t_const) * m_neurons[i].m_membrane_potential + t_const * m_neurons[i].m_activesum;
         }
         // Now loop nodes_activesums, pass the signals through the activation function
@@ -349,7 +349,7 @@ namespace NEAT {
         // do not get an activation
         for (size_t i = m_num_inputs; i < m_neurons.size(); i++) {
             Neuron &neuron = m_neurons[i];
-            const double input = neuron.m_membrane_potential + neuron.m_bias;
+            const Real input = neuron.m_membrane_potential + neuron.m_bias;
             neuron.m_activesum = 0;
             neuron.m_activation = EvaluateActivation(neuron, input);
         }
@@ -374,7 +374,7 @@ namespace NEAT {
             InitRTRLMatrix();
         }
 
-        std::vector<std::vector<std::vector<double>>> previous_sensitivities;
+        std::vector<std::vector<std::vector<Real>>> previous_sensitivities;
         previous_sensitivities.reserve(neuron_count);
         for (const auto &neuron : m_neurons) previous_sensitivities.push_back(neuron.m_sensitivity_matrix);
 
@@ -383,7 +383,7 @@ namespace NEAT {
         // nested loops, making a single RTRL step prohibitively expensive
         // even for modest recurrent networks.
         std::vector<std::vector<int>> connection_indices(neuron_count, std::vector<int>(neuron_count, -1));
-        std::vector<std::vector<std::pair<std::size_t, double>>> incoming(neuron_count);
+        std::vector<std::vector<std::pair<std::size_t, Real>>> incoming(neuron_count);
         for (std::size_t index = 0; index < m_connections.size(); ++index) {
             const Connection &connection = m_connections[index];
             const std::size_t source = static_cast<std::size_t>(connection.m_source_neuron_idx);
@@ -396,7 +396,7 @@ namespace NEAT {
         }
 
         for (std::size_t k = m_num_inputs; k < neuron_count; ++k) {
-            const double derivative = activation_derivative(m_neurons[k]);
+            const Real derivative = activation_derivative(m_neurons[k]);
             for (auto &row : m_neurons[k].m_sensitivity_matrix) std::fill(row.begin(), row.end(), 0.0);
 
             // Sensitivities exist only for weights that actually occur in the
@@ -406,7 +406,7 @@ namespace NEAT {
                 const std::size_t j = static_cast<std::size_t>(parameter.m_source_neuron_idx);
                 if (i < m_num_inputs) continue;
 
-                double sum = 0.0;
+                Real sum = 0.0;
                 for (const auto &recurrent : incoming[k]) {
                     sum += recurrent.second * previous_sensitivities[recurrent.first][i][j];
                 }
@@ -416,7 +416,7 @@ namespace NEAT {
         }
     }
 
-    void NeuralNetwork::Input(std::vector<double> &a_Inputs) {
+    void NeuralNetwork::Input(std::vector<Real> &a_Inputs) {
         if (m_num_inputs > m_neurons.size()) throw std::runtime_error("Neural network input count exceeds its neuron count");
         const size_t mx = std::min(a_Inputs.size(), static_cast<size_t>(m_num_inputs));
         for (size_t i = 0; i < mx; i++) m_neurons[i].m_activation = a_Inputs[i];
@@ -452,7 +452,7 @@ namespace NEAT {
         for (auto &neuron : m_neurons)
             for (auto &row : neuron.m_sensitivity_matrix) std::fill(row.begin(), row.end(), 0.0);
     }
-    void NeuralNetwork::InputExact(const std::vector<double> &a_Inputs) {
+    void NeuralNetwork::InputExact(const std::vector<Real> &a_Inputs) {
         if (a_Inputs.size() != m_num_inputs) {
             throw std::invalid_argument("Neural network input count must match exactly");
         }
@@ -467,24 +467,24 @@ namespace NEAT {
         return size;
     }
 
-    std::vector<double> NeuralNetwork::Output() {
+    std::vector<Real> NeuralNetwork::Output() {
         ValidateNetworkTopology(*this);
-        std::vector<double> t_output;
+        std::vector<Real> t_output;
         t_output.reserve(m_num_outputs);
         for (unsigned int i = 0; i < m_num_outputs; i++) t_output.push_back(m_neurons[i + m_num_inputs].m_activation);
         return t_output;
     }
 
-    double NeuralNetwork::GetConnectionLenght(Neuron source, Neuron target) {
-        const double dx = target.m_x - source.m_x;
-        const double dy = target.m_y - source.m_y;
-        const double dz = target.m_z - source.m_z;
+    Real NeuralNetwork::GetConnectionLenght(Neuron source, Neuron target) {
+        const Real dx = target.m_x - source.m_x;
+        const Real dy = target.m_y - source.m_y;
+        const Real dz = target.m_z - source.m_z;
         return std::sqrt(dx * dx + dy * dy + dz * dz);
     }
 
-    double NeuralNetwork::GetTotalConnectionLength() {
+    Real NeuralNetwork::GetTotalConnectionLength() {
         ValidateNetworkTopology(*this);
-        double total = 0.0;
+        Real total = 0.0;
         for (const auto &connection : m_connections) {
             total += GetConnectionLenght(m_neurons[static_cast<std::size_t>(connection.m_source_neuron_idx)],
                                          m_neurons[static_cast<std::size_t>(connection.m_target_neuron_idx)]);
@@ -495,7 +495,7 @@ namespace NEAT {
         if (!fast) ValidateNetworkTopology(*this);
         if (IsSpiking()) {
             ValidateNetworkTopology(*this);
-            std::vector<double> inputs;
+            std::vector<Real> inputs;
             inputs.reserve(m_num_inputs);
             for (unsigned int i = 0; i < m_num_inputs; ++i) inputs.push_back(m_neurons[i].m_activation);
             for (unsigned int step = 0; step < steps; ++step) StepSpiking(inputs);
@@ -503,14 +503,14 @@ namespace NEAT {
             for (unsigned int step = 0; step < steps; ++step) ActivateFast();
         }
     }
-    std::vector<std::vector<double>> NeuralNetwork::ActivateBatch(const std::vector<std::vector<double>> &inputs, unsigned int steps, bool use_internal_bias) {
+    std::vector<std::vector<Real>> NeuralNetwork::ActivateBatch(const std::vector<std::vector<Real>> &inputs, unsigned int steps, bool use_internal_bias) {
         ValidateNetworkTopology(*this);
         if (IsSpiking()) {
             throw std::invalid_argument(
                 "ActivateBatch is for independent rate-network samples; "
                 "use SimulateSpiking for temporal spiking inputs");
         }
-        std::vector<std::vector<double>> outputs;
+        std::vector<std::vector<Real>> outputs;
         outputs.reserve(inputs.size());
         for (const auto &sample : inputs) {
             Flush();
@@ -521,7 +521,7 @@ namespace NEAT {
                 else
                     ActivateFast();
             }
-            std::vector<double> output;
+            std::vector<Real> output;
             output.reserve(m_num_outputs);
             for (unsigned int i = 0; i < m_num_outputs; ++i) {
                 output.push_back(m_neurons[m_num_inputs + i].m_activation);
@@ -534,7 +534,7 @@ namespace NEAT {
         return std::any_of(m_neurons.begin(), m_neurons.end(), [](const Neuron &neuron) { return IsSpikingActivation(neuron.m_activation_function_type); });
     }
 
-    void NeuralNetwork::SetSpikingTimeStep(double time_step) {
+    void NeuralNetwork::SetSpikingTimeStep(Real time_step) {
         if (!std::isfinite(time_step) || time_step <= 0.0) {
             throw std::invalid_argument("Spiking time step must be finite and positive");
         }
@@ -571,9 +571,9 @@ namespace NEAT {
     void NeuralNetwork::EnableSTDP(bool enabled) {
         for (auto &connection : m_connections) connection.m_stdp_enabled = enabled;
     }
-    std::vector<double> NeuralNetwork::OutputSpikes() const {
+    std::vector<Real> NeuralNetwork::OutputSpikes() const {
         if (m_num_inputs + m_num_outputs > m_neurons.size()) throw std::runtime_error("Invalid network output dimensions");
-        std::vector<double> result;
+        std::vector<Real> result;
         result.reserve(m_num_outputs);
         for (unsigned int i = 0; i < m_num_outputs; ++i) {
             result.push_back(m_neurons[m_num_inputs + i].m_spike ? 1.0 : 0.0);
@@ -581,28 +581,28 @@ namespace NEAT {
         return result;
     }
 
-    std::vector<double> NeuralNetwork::OutputRates() const {
+    std::vector<Real> NeuralNetwork::OutputRates() const {
         if (m_num_inputs + m_num_outputs > m_neurons.size()) throw std::runtime_error("Invalid network output dimensions");
-        std::vector<double> result;
+        std::vector<Real> result;
         result.reserve(m_num_outputs);
         for (unsigned int i = 0; i < m_num_outputs; ++i) {
             const Neuron &neuron = m_neurons[m_num_inputs + i];
-            result.push_back(m_spiking_time > 0.0 ? static_cast<double>(neuron.m_spike_count) / m_spiking_time : 0.0);
+            result.push_back(m_spiking_time > 0.0 ? static_cast<Real>(neuron.m_spike_count) / m_spiking_time : 0.0);
         }
         return result;
     }
 
-    std::vector<double> NeuralNetwork::OutputFilteredSpikes() const {
+    std::vector<Real> NeuralNetwork::OutputFilteredSpikes() const {
         if (m_num_inputs + m_num_outputs > m_neurons.size()) throw std::runtime_error("Invalid network output dimensions");
-        std::vector<double> result;
+        std::vector<Real> result;
         result.reserve(m_num_outputs);
         for (unsigned int i = 0; i < m_num_outputs; ++i) result.push_back(m_neurons[m_num_inputs + i].m_rate_trace);
         return result;
     }
 
-    std::vector<double> NeuralNetwork::OutputMembranePotentials() const {
+    std::vector<Real> NeuralNetwork::OutputMembranePotentials() const {
         if (m_num_inputs + m_num_outputs > m_neurons.size()) throw std::runtime_error("Invalid network output dimensions");
-        std::vector<double> result;
+        std::vector<Real> result;
         result.reserve(m_num_outputs);
         for (unsigned int i = 0; i < m_num_outputs; ++i) {
             result.push_back(m_neurons[m_num_inputs + i].m_membrane_potential);
@@ -610,7 +610,7 @@ namespace NEAT {
         return result;
     }
 
-    std::vector<double> NeuralNetwork::OutputDecoded() const {
+    std::vector<Real> NeuralNetwork::OutputDecoded() const {
         switch (m_spiking_output_mode) {
             case SPIKE_OUTPUT:
                 return OutputSpikes();
@@ -624,20 +624,20 @@ namespace NEAT {
                 throw std::logic_error("Invalid spiking output mode");
         }
     }
-    std::vector<double> NeuralNetwork::StepSpiking(const std::vector<double> &inputs, double time_step) {
+    std::vector<Real> NeuralNetwork::StepSpiking(const std::vector<Real> &inputs, Real time_step) {
         ValidateNetworkTopology(*this);
         if (inputs.size() != m_num_inputs) {
             throw std::invalid_argument("Spiking input count must match exactly");
         }
-        const double dt = time_step < 0.0 ? m_spiking_time_step : time_step;
+        const Real dt = time_step < 0.0 ? m_spiking_time_step : time_step;
         if (!std::isfinite(dt) || dt <= 0.0) {
             throw std::invalid_argument("Spiking time step must be finite and positive");
         }
 
-        const double step_start = m_spiking_time;
-        const double step_end = step_start + dt;
+        const Real step_start = m_spiking_time;
+        const Real step_end = step_start + dt;
         std::vector<bool> source_spikes(m_neurons.size(), false);
-        std::vector<double> source_amplitudes(m_neurons.size(), 1.0);
+        std::vector<Real> source_amplitudes(m_neurons.size(), 1.0);
 
         const auto random_unit = [this]() {
             std::uint64_t x = m_spiking_rng_state;
@@ -646,7 +646,7 @@ namespace NEAT {
             x ^= x >> 27U;
             m_spiking_rng_state = x;
             const std::uint64_t value = x * UINT64_C(2685821657736338717);
-            return static_cast<double>(value >> 11U) * (1.0 / 9007199254740992.0);
+            return static_cast<Real>(value >> 11U) * (1.0 / 9007199254740992.0);
         };
         const auto record = [this](const SpikeEvent &event) {
             if (!m_record_spikes) return;
@@ -662,12 +662,12 @@ namespace NEAT {
             neuron.m_activesum = 0.0;
             neuron.m_inhibitory_input = false;
             if (i < m_num_inputs) {
-                const double value = inputs[i];
+                const Real value = inputs[i];
                 if (!std::isfinite(value)) {
                     throw std::invalid_argument("Spiking inputs must be finite");
                 }
                 bool spike = false;
-                double amplitude = 1.0;
+                Real amplitude = 1.0;
                 switch (m_spiking_input_mode) {
                     case CURRENT_INPUT:
                         neuron.m_activation = value;
@@ -681,7 +681,7 @@ namespace NEAT {
                         if (value < 0.0) {
                             throw std::invalid_argument("Poisson input rates cannot be negative");
                         }
-                        const double probability = -std::expm1(-value * dt);
+                        const Real probability = -std::expm1(-value * dt);
                         spike = random_unit() < probability;
                         neuron.m_activation = spike ? 1.0 : 0.0;
                         break;
@@ -705,7 +705,7 @@ namespace NEAT {
             }
         }
 
-        const double delivery_epsilon = std::numeric_limits<double>::epsilon() * std::max(1.0, std::abs(step_end)) * 8.0;
+        const Real delivery_epsilon = std::numeric_limits<Real>::epsilon() * std::max(static_cast<Real>(1.0), std::abs(step_end)) * 8.0;
         for (auto &connection : m_connections) {
             if (!std::isfinite(connection.m_synaptic_delay) || connection.m_synaptic_delay < 0.0 || !std::isfinite(connection.m_synaptic_time_constant) ||
                 connection.m_synaptic_time_constant <= 0.0 || !std::isfinite(connection.m_weight)) {
@@ -748,7 +748,7 @@ namespace NEAT {
             target.m_activesum += connection.m_synaptic_current;
             if (connection.m_synaptic_current < 0.0) target.m_inhibitory_input = true;
             if (!event_source) {
-                const double analog = source_neuron.m_activation * connection.m_weight;
+                const Real analog = source_neuron.m_activation * connection.m_weight;
                 connection.m_signal += analog;
                 connection.m_presynaptic_signal = source_neuron.m_activation;
                 target.m_activesum += analog;
@@ -758,7 +758,7 @@ namespace NEAT {
 
         for (std::size_t i = m_num_inputs; i < m_neurons.size(); ++i) {
             Neuron &neuron = m_neurons[i];
-            const double current = neuron.m_activesum + neuron.m_bias;
+            const Real current = neuron.m_activesum + neuron.m_bias;
             if (!std::isfinite(current)) {
                 throw std::domain_error("Spiking neuron input current must remain finite");
             }
@@ -786,20 +786,20 @@ namespace NEAT {
                 }
                 neuron.m_membrane_potential = current;
                 if (neuron.m_refractory_remaining > 0.0) {
-                    neuron.m_refractory_remaining = std::max(0.0, neuron.m_refractory_remaining - dt);
+                    neuron.m_refractory_remaining = std::max(static_cast<Real>(0.0), neuron.m_refractory_remaining - dt);
                 } else if ((!neuron.m_mcp_inhibitory_veto || !neuron.m_inhibitory_input) && current >= neuron.m_spike_threshold) {
                     neuron.m_spike = true;
                     neuron.m_refractory_remaining = neuron.m_refractory_period;
                 }
             } else if (neuron.m_activation_function_type == SPIKING_IZHIKEVICH) {
-                const double dt_ms = dt * 1000.0;
-                double &voltage = neuron.m_membrane_potential;
-                double &recovery = neuron.m_izhikevich_recovery;
+                const Real dt_ms = dt * 1000.0;
+                Real &voltage = neuron.m_membrane_potential;
+                Real &recovery = neuron.m_izhikevich_recovery;
                 if (!std::isfinite(voltage) || !std::isfinite(recovery) || !std::isfinite(neuron.m_spike_threshold) || !std::isfinite(neuron.m_izhikevich_a) ||
                     !std::isfinite(neuron.m_izhikevich_b) || !std::isfinite(neuron.m_izhikevich_c) || !std::isfinite(neuron.m_izhikevich_d)) {
                     throw std::domain_error("Izhikevich state must be finite");
                 }
-                const auto derivative = [&](double v) { return 0.04 * v * v + 5.0 * v + 140.0 - recovery + current; };
+                const auto derivative = [&](Real v) { return 0.04 * v * v + 5.0 * v + 140.0 - recovery + current; };
                 voltage += 0.5 * dt_ms * derivative(voltage);
                 voltage += 0.5 * dt_ms * derivative(voltage);
                 recovery += dt_ms * neuron.m_izhikevich_a * (neuron.m_izhikevich_b * voltage - recovery);
@@ -829,7 +829,7 @@ namespace NEAT {
                 }
 
                 if (neuron.m_refractory_remaining > 0.0) {
-                    neuron.m_refractory_remaining = std::max(0.0, neuron.m_refractory_remaining - dt);
+                    neuron.m_refractory_remaining = std::max(static_cast<Real>(0.0), neuron.m_refractory_remaining - dt);
                     neuron.m_membrane_potential = neuron.m_reset_potential;
                 } else {
                     neuron.m_membrane_potential += (dt / neuron.m_timeconst) * (neuron.m_resting_potential - neuron.m_membrane_potential +
@@ -883,14 +883,14 @@ namespace NEAT {
         m_spiking_time = step_end;
         return OutputDecoded();
     }
-    std::vector<std::vector<double>> NeuralNetwork::SimulateSpiking(const std::vector<std::vector<double>> &inputs, double time_step, bool reset) {
+    std::vector<std::vector<Real>> NeuralNetwork::SimulateSpiking(const std::vector<std::vector<Real>> &inputs, Real time_step, bool reset) {
         if (reset) Flush();
-        std::vector<std::vector<double>> outputs;
+        std::vector<std::vector<Real>> outputs;
         outputs.reserve(inputs.size());
         for (const auto &sample : inputs) outputs.push_back(StepSpiking(sample, time_step));
         return outputs;
     }
-    void NeuralNetwork::UpdateConnectionGeometry(bool update_delays, double conduction_velocity) {
+    void NeuralNetwork::UpdateConnectionGeometry(bool update_delays, Real conduction_velocity) {
         ValidateNetworkTopology(*this);
         for (const auto &neuron : m_neurons) {
             if (!std::isfinite(neuron.m_x) || !std::isfinite(neuron.m_y) || !std::isfinite(neuron.m_z)) {
@@ -915,23 +915,23 @@ namespace NEAT {
         if (!std::isfinite(a_Parameters.MinWeight) || !std::isfinite(a_Parameters.MaxWeight) || a_Parameters.MinWeight > a_Parameters.MaxWeight) {
             throw std::invalid_argument("Adapt requires a valid, finite weight range");
         }
-        double maximum_weight = 0.0;
+        Real maximum_weight = 0.0;
         for (const auto &connection : m_connections) {
             maximum_weight = std::max(maximum_weight, std::abs(connection.m_weight));
         }
 
         for (auto &connection : m_connections) {
-            const double input = m_neurons[static_cast<std::size_t>(connection.m_source_neuron_idx)].m_activation;
-            const double output = m_neurons[static_cast<std::size_t>(connection.m_target_neuron_idx)].m_activation;
+            const Real input = m_neurons[static_cast<std::size_t>(connection.m_source_neuron_idx)].m_activation;
+            const Real output = m_neurons[static_cast<std::size_t>(connection.m_target_neuron_idx)].m_activation;
             if (connection.m_weight > 0.0) {
-                const double delta = connection.m_hebb_rate * (maximum_weight - connection.m_weight) * input * output +
-                                     connection.m_hebb_pre_rate * maximum_weight * input * (output - 1.0);
+                const Real delta = connection.m_hebb_rate * (maximum_weight - connection.m_weight) * input * output +
+                                   connection.m_hebb_pre_rate * maximum_weight * input * (output - 1.0);
                 connection.m_weight += delta;
             } else if (connection.m_weight < 0.0) {
-                double magnitude = -connection.m_weight;
-                const double delta = connection.m_hebb_pre_rate * (maximum_weight - magnitude) * input * (1.0 - output) -
-                                     connection.m_hebb_rate * maximum_weight * input * output;
-                magnitude = std::max(0.0, magnitude + delta);
+                Real magnitude = -connection.m_weight;
+                const Real delta = connection.m_hebb_pre_rate * (maximum_weight - magnitude) * input * (1.0 - output) -
+                                   connection.m_hebb_rate * maximum_weight * input * output;
+                magnitude = std::max(static_cast<Real>(0.0), magnitude + delta);
                 connection.m_weight = -magnitude;
             }
             Clamp(connection.m_weight, a_Parameters.MinWeight, a_Parameters.MaxWeight);
@@ -954,7 +954,7 @@ namespace NEAT {
                 "activations; use evolution or STDP");
         }
         for (auto &neuron : m_neurons) neuron.m_sensitivity_matrix.clear();
-        m_sparse_rtrl_sensitivities.assign(m_neurons.size(), std::vector<double>(m_connections.size(), 0.0));
+        m_sparse_rtrl_sensitivities.assign(m_neurons.size(), std::vector<Real>(m_connections.size(), 0.0));
         m_total_error = 0.0;
         m_total_weight_change.assign(m_connections.size(), 0.0);
     }
@@ -965,12 +965,12 @@ namespace NEAT {
         bool initialized = m_sparse_rtrl_sensitivities.size() == neuron_count;
         if (initialized) {
             initialized = std::all_of(m_sparse_rtrl_sensitivities.begin(), m_sparse_rtrl_sensitivities.end(),
-                                      [connection_count](const std::vector<double> &row) { return row.size() == connection_count; });
+                                      [connection_count](const std::vector<Real> &row) { return row.size() == connection_count; });
         }
         if (!initialized) InitSparseRTRLMatrix();
 
         const auto previous = m_sparse_rtrl_sensitivities;
-        std::vector<std::vector<std::pair<std::size_t, double>>> incoming(neuron_count);
+        std::vector<std::vector<std::pair<std::size_t, Real>>> incoming(neuron_count);
         for (const Connection &connection : m_connections) {
             incoming[static_cast<std::size_t>(connection.m_target_neuron_idx)].emplace_back(static_cast<std::size_t>(connection.m_source_neuron_idx),
                                                                                             connection.m_weight);
@@ -981,9 +981,9 @@ namespace NEAT {
             std::fill(sensitivities.begin(), sensitivities.end(), 0.0);
             if (neuron < m_num_inputs) continue;
 
-            const double derivative = activation_derivative(m_neurons[neuron]);
+            const Real derivative = activation_derivative(m_neurons[neuron]);
             for (std::size_t parameter = 0; parameter < connection_count; ++parameter) {
-                double sensitivity =
+                Real sensitivity =
                     static_cast<std::size_t>(m_connections[parameter].m_target_neuron_idx) == neuron ? m_connections[parameter].m_source_activation : 0.0;
                 for (const auto &recurrent : incoming[neuron]) {
                     sensitivity += recurrent.second * previous[recurrent.first][parameter];
@@ -992,7 +992,7 @@ namespace NEAT {
             }
         }
     }
-    void NeuralNetwork::RTRL_update_error(const std::vector<double> &targets, double learning_rate) {
+    void NeuralNetwork::RTRL_update_error(const std::vector<Real> &targets, Real learning_rate) {
         ValidateNetworkTopology(*this);
         if (m_num_outputs == 0) {
             throw std::runtime_error("RTRL error update requires at least one output neuron");
@@ -1018,8 +1018,8 @@ namespace NEAT {
             }
         }
 
-        const std::vector<double> outputs = Output();
-        std::vector<double> errors(m_num_outputs, 0.0);
+        const std::vector<Real> outputs = Output();
+        std::vector<Real> errors(m_num_outputs, 0.0);
         m_total_error = 0.0;
         for (unsigned int output = 0; output < m_num_outputs; ++output) {
             errors[output] = targets[output] - outputs[output];
@@ -1030,21 +1030,21 @@ namespace NEAT {
             const Connection &connection = m_connections[connection_index];
             const std::size_t target = static_cast<std::size_t>(connection.m_target_neuron_idx);
             const std::size_t source = static_cast<std::size_t>(connection.m_source_neuron_idx);
-            double gradient = 0.0;
+            Real gradient = 0.0;
             for (unsigned int output = 0; output < m_num_outputs; ++output) {
                 gradient += errors[output] * m_neurons[m_num_inputs + output].m_sensitivity_matrix[target][source];
             }
             m_total_weight_change[connection_index] += gradient * learning_rate;
         }
     }
-    void NeuralNetwork::RTRL_update_error_sparse(double target, double learning_rate) {
+    void NeuralNetwork::RTRL_update_error_sparse(Real target, Real learning_rate) {
         if (m_num_outputs != 1) {
             throw std::invalid_argument("Scalar sparse RTRL targets require exactly one output");
         }
-        RTRL_update_error_sparse(std::vector<double>{target}, learning_rate);
+        RTRL_update_error_sparse(std::vector<Real>{target}, learning_rate);
     }
 
-    void NeuralNetwork::RTRL_update_error_sparse(const std::vector<double> &targets, double learning_rate) {
+    void NeuralNetwork::RTRL_update_error_sparse(const std::vector<Real> &targets, Real learning_rate) {
         ValidateNetworkTopology(*this);
         if (targets.size() != m_num_outputs) {
             throw std::invalid_argument("RTRL target count must match the network output count");
@@ -1054,19 +1054,19 @@ namespace NEAT {
         }
         if (m_sparse_rtrl_sensitivities.size() != m_neurons.size() ||
             std::any_of(m_sparse_rtrl_sensitivities.begin(), m_sparse_rtrl_sensitivities.end(),
-                        [this](const std::vector<double> &row) { return row.size() != m_connections.size(); })) {
+                        [this](const std::vector<Real> &row) { return row.size() != m_connections.size(); })) {
             throw std::runtime_error(
                 "Sparse RTRL gradients must be initialized before "
                 "updating error");
         }
         if (m_total_weight_change.size() != m_connections.size()) m_total_weight_change.assign(m_connections.size(), 0.0);
 
-        const std::vector<double> outputs = Output();
+        const std::vector<Real> outputs = Output();
         m_total_error = 0.0;
         for (std::size_t parameter = 0; parameter < m_connections.size(); ++parameter) {
-            double gradient = 0.0;
+            Real gradient = 0.0;
             for (unsigned int output = 0; output < m_num_outputs; ++output) {
-                const double error = targets[output] - outputs[output];
+                const Real error = targets[output] - outputs[output];
                 gradient += error * m_sparse_rtrl_sensitivities[m_num_inputs + output][parameter];
                 if (parameter == 0) m_total_error += error;
             }
@@ -1124,7 +1124,7 @@ namespace NEAT {
                     "spatial_neuron %3.18f %3.18f %3.18f %3.18f %3.18f "
                     "%3.18f %zu",
                     neuron.m_x, neuron.m_y, neuron.m_z, neuron.m_sx, neuron.m_sy, neuron.m_sz, neuron.m_substrate_coords.size());
-            for (double coordinate : neuron.m_substrate_coords) fprintf(a_file, " %3.18f", coordinate);
+            for (Real coordinate : neuron.m_substrate_coords) fprintf(a_file, " %3.18f", coordinate);
             fprintf(a_file, "\n");
         }
         for (const auto &conn : m_connections) {
@@ -1207,7 +1207,7 @@ namespace NEAT {
                 std::size_t coordinate_count = 0;
                 a_DataFile >> neuron.m_x >> neuron.m_y >> neuron.m_z >> neuron.m_sx >> neuron.m_sy >> neuron.m_sz >> coordinate_count;
                 neuron.m_substrate_coords.resize(coordinate_count);
-                for (double &coordinate : neuron.m_substrate_coords) a_DataFile >> coordinate;
+                for (Real &coordinate : neuron.m_substrate_coords) a_DataFile >> coordinate;
             } else if (t_str == "connection") {
                 Connection t_c;
                 int t_isrecur;
@@ -1256,13 +1256,13 @@ namespace NEAT {
     std::string NeuralNetwork::Serialize() const {
         ValidateNetworkTopology(*this);
         std::ostringstream output;
-        output << std::setprecision(std::numeric_limits<double>::max_digits10);
+        output << std::setprecision(std::numeric_limits<Real>::max_digits10);
         output << "NeuralNetworkFormat 7\n";
         output << "State " << m_num_inputs << ' ' << m_num_outputs << ' ' << m_total_error << ' ' << m_spiking_time << ' ' << m_spiking_time_step << ' '
                << static_cast<int>(m_spiking_input_mode) << ' ' << static_cast<int>(m_spiking_output_mode) << ' ' << static_cast<int>(m_record_spikes) << ' '
                << m_max_recorded_spikes << ' ' << m_spiking_rng_state << '\n';
         output << "TotalWeightChange " << m_total_weight_change.size();
-        for (double value : m_total_weight_change) output << ' ' << value;
+        for (Real value : m_total_weight_change) output << ' ' << value;
         output << '\n';
         output << "Neurons " << m_neurons.size() << '\n';
         for (const auto &neuron : m_neurons) {
@@ -1277,12 +1277,12 @@ namespace NEAT {
                    << ' ' << neuron.m_spike_count << ' ' << neuron.m_last_spike_time << ' ' << neuron.m_rate_trace << ' ' << neuron.m_rate_time_constant << ' '
                    << static_cast<int>(neuron.m_mcp_inhibitory_veto) << ' ' << static_cast<int>(neuron.m_inhibitory_input) << '\n';
             output << "SubstrateCoordinates " << neuron.m_substrate_coords.size();
-            for (double coordinate : neuron.m_substrate_coords) output << ' ' << coordinate;
+            for (Real coordinate : neuron.m_substrate_coords) output << ' ' << coordinate;
             output << '\n';
             output << "Sensitivity " << neuron.m_sensitivity_matrix.size() << '\n';
             for (const auto &row : neuron.m_sensitivity_matrix) {
                 output << "SensitivityRow " << row.size();
-                for (double value : row) output << ' ' << value;
+                for (Real value : row) output << ' ' << value;
                 output << '\n';
             }
         }
@@ -1305,7 +1305,7 @@ namespace NEAT {
         output << "SparseRTRL " << m_sparse_rtrl_sensitivities.size() << '\n';
         for (const auto &row : m_sparse_rtrl_sensitivities) {
             output << "SparseRTRLRow " << row.size();
-            for (double value : row) output << ' ' << value;
+            for (Real value : row) output << ' ' << value;
             output << '\n';
         }
         output << "SpikeHistory " << m_spike_history.size() << '\n';
@@ -1315,8 +1315,8 @@ namespace NEAT {
         output << "NeuralNetworkEnd\n";
         return output.str();
     }
-    void NeuralNetwork::RTRL_update_error(double a_target) {
-        std::vector<double> targets = Output();
+    void NeuralNetwork::RTRL_update_error(Real a_target) {
+        std::vector<Real> targets = Output();
         if (targets.empty()) {
             throw std::runtime_error("RTRL error update requires at least one output neuron");
         }
@@ -1387,7 +1387,7 @@ namespace NEAT {
         input >> token >> count;
         if (token != "TotalWeightChange") throw std::runtime_error("NeuralNetwork::Deserialize: missing weight-change state.");
         network.m_total_weight_change.resize(count);
-        for (double &value : network.m_total_weight_change) input >> value;
+        for (Real &value : network.m_total_weight_change) input >> value;
 
         input >> token >> count;
         if (token != "Neurons") throw std::runtime_error("NeuralNetwork::Deserialize: missing Neurons marker.");
@@ -1425,7 +1425,7 @@ namespace NEAT {
             input >> token >> coordinates;
             if (token != "SubstrateCoordinates") throw std::runtime_error("NeuralNetwork::Deserialize: missing coordinates.");
             neuron.m_substrate_coords.resize(coordinates);
-            for (double &coordinate : neuron.m_substrate_coords) input >> coordinate;
+            for (Real &coordinate : neuron.m_substrate_coords) input >> coordinate;
 
             std::size_t rows = 0;
             input >> token >> rows;
@@ -1436,7 +1436,7 @@ namespace NEAT {
                 input >> token >> columns;
                 if (token != "SensitivityRow") throw std::runtime_error("NeuralNetwork::Deserialize: missing sensitivity row.");
                 row.resize(columns);
-                for (double &value : row) input >> value;
+                for (Real &value : row) input >> value;
             }
             network.m_neurons.push_back(std::move(neuron));
         }
@@ -1473,7 +1473,7 @@ namespace NEAT {
                     input >> event.delivery_time >> event.amplitude;
                     if (version >= 6) {
                         input >> event.source_amplitude;
-                    } else if (std::abs(connection.m_weight) > std::numeric_limits<double>::epsilon()) {
+                    } else if (std::abs(connection.m_weight) > std::numeric_limits<Real>::epsilon()) {
                         event.source_amplitude = event.amplitude / connection.m_weight;
                     }
                 }
@@ -1490,12 +1490,12 @@ namespace NEAT {
                 input >> token >> columns;
                 if (token != "SparseRTRLRow") throw std::runtime_error("NeuralNetwork::Deserialize: missing sparse RTRL row.");
                 row.resize(columns);
-                for (double &value : row) input >> value;
+                for (Real &value : row) input >> value;
             }
             if (!network.m_sparse_rtrl_sensitivities.empty() &&
                 (network.m_sparse_rtrl_sensitivities.size() != network.m_neurons.size() ||
                  std::any_of(network.m_sparse_rtrl_sensitivities.begin(), network.m_sparse_rtrl_sensitivities.end(),
-                             [&network](const std::vector<double> &row) { return row.size() != network.m_connections.size(); }))) {
+                             [&network](const std::vector<Real> &row) { return row.size() != network.m_connections.size(); }))) {
                 throw std::runtime_error("NeuralNetwork::Deserialize: invalid sparse RTRL state.");
             }
         }

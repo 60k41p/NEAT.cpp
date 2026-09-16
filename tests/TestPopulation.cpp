@@ -55,7 +55,7 @@ namespace {
     void EvaluateByLinkCount(NEAT::Population &pop) {
         for (unsigned i = 0; i < pop.NumGenomes(); ++i) {
             NEAT::Genome &g = pop.AccessGenomeByIndex(static_cast<int>(i));
-            g.SetFitness(1.0 + static_cast<double>(g.NumLinks()));
+            g.SetFitness(1.0 + static_cast<Real>(g.NumLinks()));
             g.SetEvaluated();
         }
     }
@@ -124,8 +124,8 @@ int TestPopulation(int argc, char *argv[]) {
             pop.Sort();
             return pop.GetBestGenome().GetFitness();
         };
-        const double a = run();
-        const double b = run();
+        const Real a = run();
+        const Real b = run();
         CHECK(a == b);
     }
 
@@ -245,7 +245,7 @@ int TestPopulation(int argc, char *argv[]) {
         Parameters params = SmallParams();
         Population pop(MakeSeed(), params, true, 1.0, 9);
         EvaluateByLinkCount(pop);
-        double minfit = std::numeric_limits<double>::max();
+        Real minfit = std::numeric_limits<Real>::max();
         for (unsigned i = 0; i < pop.NumGenomes(); ++i) {
             minfit = std::min(minfit, pop.AccessGenomeByIndex(static_cast<int>(i)).GetFitness());
         }
@@ -332,7 +332,7 @@ int TestPopulation(int argc, char *argv[]) {
         params.CompatibilityThresholdControl = PROPORTIONAL_COMPATIBILITY_THRESHOLD;
         params.TargetSpecies = 4;
         Population pop(MakeSeed(), params, true, 1.0, 23);
-        const double before = params.CompatTreshold;
+        const Real before = params.CompatTreshold;
         (void)before;
         EvaluateByLinkCount(pop);
         pop.Epoch();

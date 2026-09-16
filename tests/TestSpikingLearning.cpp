@@ -26,7 +26,7 @@ namespace {
         }                                                                                   \
     } while (0)
 
-    bool Near(double a, double b, double eps = 1e-9) { return std::fabs(a - b) <= eps; }
+    bool Near(Real a, Real b, Real eps = 1e-9) { return std::fabs(a - b) <= eps; }
 
     // A minimal spiking network: 1 input + bias + 1 LIF output, fully connected.
     NEAT::NeuralNetwork MakeSpikingNet() {
@@ -80,7 +80,7 @@ int TestSpikingLearning(int argc, char *argv[]) {
         net.SetSpikingInputMode(CURRENT_INPUT);
         net.SetSpikingOutputMode(SPIKE_OUTPUT);
         CHECK(Near(net.SpikingTime(), 0.0));
-        const std::vector<double> out = net.StepSpiking({0.5, 0.5});
+        const std::vector<Real> out = net.StepSpiking({0.5, 0.5});
         CHECK(out.size() == 1);
         CHECK(net.SpikingTime() > 0.0);
         bool threw = false;
@@ -163,7 +163,7 @@ int TestSpikingLearning(int argc, char *argv[]) {
         conn.m_weight = 1.0;
         net.AddConnection(conn);
         net.SetInputOutputDimentions(1, 1);
-        std::vector<double> in{1.0};
+        std::vector<Real> in{1.0};
         net.Input(in);
         net.Activate();
         CHECK(Near(net.Output()[0], 1.0));

@@ -23,7 +23,7 @@ namespace {
         }                                                                                   \
     } while (0)
 
-    bool Near(double a, double b, double eps = 1e-9) { return std::fabs(a - b) <= eps; }
+    bool Near(Real a, Real b, Real eps = 1e-9) { return std::fabs(a - b) <= eps; }
 
     // Builds a 2-input, 1-output LINEAR network:
     //   out = 2.0*in0 - 1.0*in1 + 0.5
@@ -70,11 +70,11 @@ int TestNeuralNetwork(int argc, char *argv[]) {
     // LINEAR golden: Flush + Input + Activate + Output.
     {
         NeuralNetwork net = MakeLinearNet();
-        std::vector<double> in{3.0, 1.0};
+        std::vector<Real> in{3.0, 1.0};
         net.Flush();
         net.Input(in);
         net.Activate();
-        const std::vector<double> out = net.Output();
+        const std::vector<Real> out = net.Output();
         CHECK(out.size() == 1);
         CHECK(Near(out[0], 2.0 * 3.0 - 1.0 * 1.0 + 0.5));  // 5.5
     }
@@ -82,7 +82,7 @@ int TestNeuralNetwork(int argc, char *argv[]) {
     // Flush zeroes activations; Output() windows the right neurons.
     {
         NeuralNetwork net = MakeLinearNet();
-        std::vector<double> in{1.0, 1.0};
+        std::vector<Real> in{1.0, 1.0};
         net.Input(in);
         net.Activate();
         CHECK(!Near(net.Output()[0], 0.0));
@@ -110,7 +110,7 @@ int TestNeuralNetwork(int argc, char *argv[]) {
         c.m_weight = 0.0;
         c.m_recur_flag = false;
         net.AddConnection(c);
-        std::vector<double> in{0.0};
+        std::vector<Real> in{0.0};
         net.Flush();
         net.Input(in);
         net.Activate();
@@ -135,13 +135,13 @@ int TestNeuralNetwork(int argc, char *argv[]) {
         c.m_recur_flag = false;
         net.AddConnection(c);
 
-        std::vector<double> neg{-2.0};
+        std::vector<Real> neg{-2.0};
         net.Flush();
         net.Input(neg);
         net.Activate();
         CHECK(Near(net.Output()[0], 0.0));
 
-        std::vector<double> pos{2.5};
+        std::vector<Real> pos{2.5};
         net.Flush();
         net.Input(pos);
         net.Activate();
@@ -157,11 +157,11 @@ int TestNeuralNetwork(int argc, char *argv[]) {
             n.m_a = 1.0;
             n.m_b = 0.0;
         }
-        std::vector<double> in{0.5, -0.25};
+        std::vector<Real> in{0.5, -0.25};
         net.Flush();
         net.Input(in);
         net.ActivateFast();
-        const double y = net.Output()[0];
+        const Real y = net.Output()[0];
         CHECK(y > 0.0 && y < 1.0);
 
         NeuralNetwork net2 = MakeLinearNet();
@@ -176,7 +176,7 @@ int TestNeuralNetwork(int argc, char *argv[]) {
             c.m_weight = 0.0;
         }
         net2.m_neurons[2].m_bias = 1.0;
-        std::vector<double> zero{0.0, 0.0};
+        std::vector<Real> zero{0.0, 0.0};
         net2.Flush();
         net2.Input(zero);
         net2.ActivateUseInternalBias();
@@ -186,7 +186,7 @@ int TestNeuralNetwork(int argc, char *argv[]) {
     // ActivateLeaky with timeconst == dtime reduces to the plain sum.
     {
         NeuralNetwork net = MakeLinearNet();
-        std::vector<double> in{3.0, 1.0};
+        std::vector<Real> in{3.0, 1.0};
         net.Flush();
         net.Input(in);
         net.ActivateLeaky(1.0);
@@ -211,7 +211,7 @@ int TestNeuralNetwork(int argc, char *argv[]) {
         CHECK(Near(loaded.m_connections[0].m_weight, 2.0));
         CHECK(Near(loaded.m_connections[1].m_weight, -1.0));
 
-        std::vector<double> in{3.0, 1.0};
+        std::vector<Real> in{3.0, 1.0};
         loaded.Flush();
         loaded.Input(in);
         loaded.Activate();
@@ -242,7 +242,7 @@ int TestNeuralNetwork(int argc, char *argv[]) {
             NEAT::ActivationFunction fn;
             double x, a, b, expected;
         };
-        const double x = 0.7;
+        const Real x = 0.7;
         const std::vector<Case> cases = {
             {UNSIGNED_SIGMOID, x, 1, 0, 1.0 / (1.0 + exp(-x))},
             {SIGNED_SIGMOID, x, 1, 0, 2.0 * (1.0 / (1.0 + exp(-x)) - 0.5)},
@@ -294,11 +294,11 @@ int TestNeuralNetwork(int argc, char *argv[]) {
             net.AddNeuron(out_n);
             net.AddConnection(conn);
             net.SetInputOutputDimentions(1, 1);
-            std::vector<double> in{c.x};
+            std::vector<Real> in{static_cast<Real>(c.x)};
             net.Input(in);
             net.Activate();
             CHECK(net.Output().size() == 1);
-            CHECK(Near(net.Output()[0], c.expected, 1e-9));
+            CHECK(Near(net.Output()[0], c.expected, 1e-5));
         }
     }
 
@@ -326,7 +326,7 @@ int TestNeuralNetwork(int argc, char *argv[]) {
         net.AddNeuron(out_n);
         net.AddConnection(conn);
         net.SetInputOutputDimentions(1, 1);
-        std::vector<double> in{5.0};
+        std::vector<Real> in{5.0};
         net.Input(in);
         net.ActivateFast();
         CHECK(Near(net.Output()[0], 0.0));  // linear passes 5.0 * 0.0 through
@@ -366,7 +366,7 @@ int TestNeuralNetwork(int argc, char *argv[]) {
         net.AddNeuron(out_n);
         net.AddConnection(conn);
         net.SetInputOutputDimentions(1, 1);
-        std::vector<double> in{3.0};
+        std::vector<Real> in{3.0};
         net.Input(in);
         net.Activate();
         CHECK(Near(net.Output()[0], 6.0));  // bias ignored by Activate
@@ -400,7 +400,7 @@ int TestNeuralNetwork(int argc, char *argv[]) {
         net.AddNeuron(out_n);
         net.AddConnection(conn);
         net.SetInputOutputDimentions(1, 1);
-        std::vector<double> in{4.0};
+        std::vector<Real> in{4.0};
         net.Input(in);
         net.ActivateLeaky(0.5);  // mp = 0.5 * 4 = 2
         CHECK(Near(net.Output()[0], 2.0));
@@ -412,7 +412,7 @@ int TestNeuralNetwork(int argc, char *argv[]) {
     {
         NeuralNetwork net(false);  // XOR topology, random weights
         net.Flush();
-        std::vector<double> in{1.0, 1.0, 1.0};
+        std::vector<Real> in{1.0, 1.0, 1.0};
         net.Input(in);
         net.Activate();
         CHECK(!Near(net.Output()[0], 0.0));
@@ -433,10 +433,10 @@ int TestNeuralNetwork(int argc, char *argv[]) {
         net.InitRTRLMatrix();
         net.Flush();
         CHECK(net.m_neurons[0].m_sensitivity_matrix.size() == net.m_neurons.size());
-        std::vector<double> in{1.0, 1.0, 1.0};
+        std::vector<Real> in{1.0, 1.0, 1.0};
         net.Input(in);
         net.Activate();
-        const double w_before = net.m_connections[0].m_weight;
+        const Real w_before = net.m_connections[0].m_weight;
         net.RTRL_update_gradients();
         net.RTRL_update_error(1.0);
         net.RTRL_update_weights();
@@ -471,7 +471,7 @@ int TestNeuralNetwork(int argc, char *argv[]) {
         net.AddNeuron(out_n);
         net.AddConnection(conn);
         net.SetInputOutputDimentions(1, 1);
-        std::vector<double> in{1.0};
+        std::vector<Real> in{1.0};
         net.Input(in);
         net.Activate();  // out = 0.5
         net.Adapt(p);
@@ -558,7 +558,7 @@ int TestNeuralNetwork(int argc, char *argv[]) {
         net.AddConnection(conn);
         net.SetInputOutputDimentions(1, 1);
         net.Flush();
-        std::vector<double> in{1.5};
+        std::vector<Real> in{1.5};
         net.Input(in);
         net.ActivateSteps(3);
         CHECK(Near(net.Output()[0], 3.0));

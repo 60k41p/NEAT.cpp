@@ -35,6 +35,7 @@
 #include <vector>
 
 #include "AssertMacros.h"
+#include "Types.h"
 
 namespace NEAT {
 
@@ -46,8 +47,8 @@ namespace NEAT {
        public:
         virtual ~PhenotypeBehavior() {};
 
-        // A 2D matrix of doubles with arbitrary size is enough to represent any behavior in most domains
-        std::vector<std::vector<double> > m_Data;
+        // A 2D matrix of Reals with arbitrary size is enough to represent any behavior in most domains
+        std::vector<std::vector<Real> > m_Data;
 
         // This method acquires behavior data based on the genome given May return true if a successful behavior was encountered during evaluation
         // (parameter unnamed: the base implementation ignores it, silencing unused-parameter warnings)
@@ -57,7 +58,7 @@ namespace NEAT {
         }
 
         // Overload this method to calcluate distance between behaviors
-        virtual double Distance_To(PhenotypeBehavior *) {
+        virtual Real Distance_To(PhenotypeBehavior *) {
             // ASSERT(false);
             return 0;
         }

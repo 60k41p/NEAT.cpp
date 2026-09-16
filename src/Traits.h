@@ -32,6 +32,8 @@
 #include <variant>
 #include <vector>
 
+#include "Types.h"
+
 namespace NEAT {
     class intsetelement {
        public:
@@ -51,7 +53,7 @@ namespace NEAT {
     };
     class floatsetelement {
        public:
-        double value = 0.0;
+        Real value = 0.0;
 
         // Comparison operator
         bool operator==(const floatsetelement &rhs) const { return rhs.value == value; }
@@ -65,13 +67,13 @@ namespace NEAT {
         }
     };
 
-    typedef std::variant<int, double, std::string, intsetelement, floatsetelement> TraitType;
+    typedef std::variant<int, Real, std::string, intsetelement, floatsetelement> TraitType;
 
     class IntTraitParameters {
        public:
         int min, max;
-        int mut_power;            // magnitude of max change up/down
-        double mut_replace_prob;  // probability to replace when mutating
+        int mut_power;          // magnitude of max change up/down
+        Real mut_replace_prob;  // probability to replace when mutating
 
         IntTraitParameters() {
             min = 0;
@@ -93,9 +95,9 @@ namespace NEAT {
     };
     class FloatTraitParameters {
        public:
-        double min, max;
-        double mut_power;         // magnitude of max change up/down
-        double mut_replace_prob;  // probability to replace when mutating
+        Real min, max;
+        Real mut_power;         // magnitude of max change up/down
+        Real mut_replace_prob;  // probability to replace when mutating
 
         FloatTraitParameters() {
             min = 0;
@@ -118,7 +120,7 @@ namespace NEAT {
     class StringTraitParameters {
        public:
         std::vector<std::string> set;  // the set of possible strings
-        std::vector<double> probs;     // their respective probabilities for appearance
+        std::vector<Real> probs;       // their respective probabilities for appearance
         StringTraitParameters &operator=(const StringTraitParameters &a_g) {
             if (this != &a_g) {
                 set = a_g.set;
@@ -131,7 +133,7 @@ namespace NEAT {
     class IntSetTraitParameters {
        public:
         std::vector<intsetelement> set;  // the set of possible ints
-        std::vector<double> probs;       // their respective probabilities for appearance
+        std::vector<Real> probs;         // their respective probabilities for appearance
 
         IntSetTraitParameters &operator=(const IntSetTraitParameters &a_g) {
             if (this != &a_g) {
@@ -145,7 +147,7 @@ namespace NEAT {
     class FloatSetTraitParameters {
        public:
         std::vector<floatsetelement> set;  // the set of possible floats
-        std::vector<double> probs;         // their respective probabilities for appearance
+        std::vector<Real> probs;           // their respective probabilities for appearance
 
         FloatSetTraitParameters &operator=(const FloatSetTraitParameters &a_g) {
             if (this != &a_g) {
@@ -159,8 +161,8 @@ namespace NEAT {
 
     class TraitParameters {
        public:
-        double m_ImportanceCoeff;
-        double m_MutationProb;
+        Real m_ImportanceCoeff;
+        Real m_MutationProb;
 
         std::string type;  // can be "int", "float", "string", "intset", "floatset", "pyobject"
         std::variant<IntTraitParameters, FloatTraitParameters, StringTraitParameters, IntSetTraitParameters, FloatSetTraitParameters> m_Details;

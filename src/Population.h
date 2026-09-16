@@ -44,6 +44,7 @@
 #include "PhenotypeBehavior.h"
 #include "Random.h"
 #include "Species.h"
+#include "Types.h"
 
 namespace NEAT {
 
@@ -77,13 +78,13 @@ namespace NEAT {
         SearchMode m_SearchMode;
 
         // The current Mean Population Complexity
-        double m_CurrentMPC;
+        Real m_CurrentMPC;
 
         // The MPC from the previous generation (for comparison)
-        double m_OldMPC;
+        Real m_OldMPC;
 
         // The base MPC (for switching between complexifying/simplifying phase)
-        double m_BaseMPC;
+        Real m_BaseMPC;
 
         // Separates the population into species based on compatibility distance
         void Speciate();
@@ -104,7 +105,7 @@ namespace NEAT {
         void CalculateMPC();
 
         // best fitness ever achieved
-        double m_BestFitnessEver;
+        Real m_BestFitnessEver;
 
         // Keep a local copy of the best ever genome found in the run
         Genome m_BestGenome;
@@ -147,7 +148,7 @@ namespace NEAT {
         // Initializes a population from a seed genome G. Then it initializes all weights
         // To small numbers between -R and R.
         // The population size is determined by GlobalParameters.PopulationSize
-        Population(const Genome &a_G, const Parameters &a_Parameters, bool a_RandomizeWeights, double a_RandomRange, int a_RNG_seed);
+        Population(const Genome &a_G, const Parameters &a_Parameters, bool a_RandomizeWeights, Real a_RandomRange, int a_RNG_seed);
 
         // Loads a population from a file.
         Population(const std::string a_FileName);
@@ -167,8 +168,8 @@ namespace NEAT {
 
         // Access
         SearchMode GetSearchMode() const { return m_SearchMode; }
-        double GetCurrentMPC() const { return m_CurrentMPC; }
-        double GetBaseMPC() const { return m_BaseMPC; }
+        Real GetCurrentMPC() const { return m_CurrentMPC; }
+        Real GetBaseMPC() const { return m_BaseMPC; }
 
         unsigned int NumGenomes() const {
             unsigned int num = 0;
@@ -179,16 +180,16 @@ namespace NEAT {
         }
 
         unsigned int GetGeneration() const { return m_Generation; }
-        double GetBestFitnessEver() const { return m_BestFitnessEver; }
+        Real GetBestFitnessEver() const { return m_BestFitnessEver; }
         Genome GetBestGenome() const {
             if (m_Species.empty()) throw std::runtime_error("Cannot get the best genome of an empty population");
-            double best = std::numeric_limits<double>::lowest();
+            Real best = std::numeric_limits<Real>::lowest();
             int idx_species = -1;
             int idx_genome = -1;
             for (unsigned int i = 0; i < m_Species.size(); i++) {
                 for (unsigned int j = 0; j < m_Species[i].m_Individuals.size(); j++) {
                     if (!m_Species[i].m_Individuals[j].IsEvaluated()) continue;
-                    const double fitness = m_Species[i].m_Individuals[j].GetFitness();
+                    const Real fitness = m_Species[i].m_Individuals[j].GetFitness();
                     if (!std::isfinite(fitness)) continue;
                     if (idx_species < 0 || fitness > best) {
                         best = fitness;
@@ -201,7 +202,7 @@ namespace NEAT {
             if (idx_species < 0) {
                 for (unsigned int i = 0; i < m_Species.size(); i++) {
                     for (unsigned int j = 0; j < m_Species[i].m_Individuals.size(); j++) {
-                        const double fitness = m_Species[i].m_Individuals[j].GetFitness();
+                        const Real fitness = m_Species[i].m_Individuals[j].GetFitness();
                         if (!std::isfinite(fitness)) continue;
                         if (idx_species < 0 || fitness > best) {
                             best = fitness;
@@ -324,7 +325,7 @@ namespace NEAT {
         // successful behavior
         bool NoveltySearchTick(Genome &a_SuccessfulGenome);
 
-        double ComputeSparseness(Genome &genome);
+        Real ComputeSparseness(Genome &genome);
 
         // counters for archive stagnation
         unsigned int m_GensSinceLastArchiving;

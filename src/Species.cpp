@@ -51,28 +51,28 @@
 namespace NEAT {
 
     // Maps non-finite fitness to the lowest value so ordering never sees NaN.
-    inline double FitnessForOrdering(double fitness) { return std::isfinite(fitness) ? fitness : std::numeric_limits<double>::lowest(); }
+    inline Real FitnessForOrdering(Real fitness) { return std::isfinite(fitness) ? fitness : std::numeric_limits<Real>::lowest(); }
 
     // Normalizes selection weights in place: shifts negatives into [0, 1] by
     // max-scaled offset, otherwise max-scles. Throws on empty/non-finite input.
-    inline void NormalizeSelectionWeights(std::vector<double> &weights) {
+    inline void NormalizeSelectionWeights(std::vector<Real> &weights) {
         if (weights.empty()) throw std::invalid_argument("Selection requires at least one candidate");
 
-        double minimum = weights.front();
-        for (double weight : weights) {
+        Real minimum = weights.front();
+        for (Real weight : weights) {
             if (!std::isfinite(weight)) throw std::invalid_argument("Selection weights must contain only finite values");
             minimum = std::min(minimum, weight);
         }
         if (minimum < 0.0) {
             const long double shifted_maximum = static_cast<long double>(*std::max_element(weights.begin(), weights.end())) - static_cast<long double>(minimum);
-            for (double &weight : weights) {
-                weight = shifted_maximum > 0.0L ? static_cast<double>((static_cast<long double>(weight) - static_cast<long double>(minimum)) / shifted_maximum)
-                                                : 1.0;
+            for (Real &weight : weights) {
+                weight =
+                    shifted_maximum > 0.0L ? static_cast<Real>((static_cast<long double>(weight) - static_cast<long double>(minimum)) / shifted_maximum) : 1.0;
             }
         } else {
-            const double maximum = *std::max_element(weights.begin(), weights.end());
+            const Real maximum = *std::max_element(weights.begin(), weights.end());
             if (maximum > 0.0) {
-                for (double &weight : weights) weight /= maximum;
+                for (Real &weight : weights) weight /= maximum;
             }
         }
     }
@@ -80,8 +80,8 @@ namespace NEAT {
     // Picks the crossover mode for one mating from the configured rates; any
     // leftover probability selects average crossover.
     inline CrossoverMode SelectCrossoverMode(const Parameters &parameters, RNG &rng) {
-        const double draw = rng.RandFloat();
-        double cumulative = parameters.MultipointCrossoverRate;
+        const Real draw = rng.RandFloat();
+        Real cumulative = parameters.MultipointCrossoverRate;
         if (draw < cumulative) return MULTIPOINT;
         cumulative += parameters.SinglePointCrossoverRate;
         if (draw < cumulative) return SINGLE_POINT;
@@ -100,7 +100,7 @@ namespace NEAT {
 
     bool genome_greater(const Genome &ls, const Genome &rs) { return FitnessForOrdering(ls.GetFitness()) > FitnessForOrdering(rs.GetFitness()); }
 
-    bool idxfitnesspair_greater(const std::pair<int, double> &ls, const std::pair<int, double> &rs) { return (ls.second > rs.second); }
+    bool idxfitnesspair_greater(const std::pair<int, Real> &ls, const std::pair<int, Real> &rs) { return (ls.second > rs.second); }
 
     // Structural identity (exact or within the clone tolerance) for clone detection.
     inline bool GenomesAreClones(Genome &lhs, Genome &rhs, Parameters &parameters) {
@@ -116,7 +116,7 @@ namespace NEAT {
           m_AgeGenerations(0),
           m_AgeEvaluations(0),
           m_OffspringRqd(0.0),
-          m_BestFitness(a_Genome.IsEvaluated() ? a_Genome.GetFitness() : std::numeric_limits<double>::lowest()),
+          m_BestFitness(a_Genome.IsEvaluated() ? a_Genome.GetFitness() : std::numeric_limits<Real>::lowest()),
           m_BestGenome(a_Genome),
           m_GensNoImprovement(0),
           m_EvalsNoImprovement(0),
@@ -170,7 +170,7 @@ namespace NEAT {
 
         // Make a pool of only evaluated individuals, keyed by adjusted fitness
         // (explicit fitness sharing must drive parent selection, not raw fitness)!
-        std::vector<std::pair<int, double> > t_Evaluated;
+        std::vector<std::pair<int, Real> > t_Evaluated;
         t_Evaluated.reserve(m_Individuals.size());
         for (unsigned int i = 0; i < m_Individuals.size(); i++) {
             if (m_Individuals[i].IsEvaluated()) {
@@ -203,7 +203,7 @@ namespace NEAT {
 
         // Truncation selection goes first if enabled
         if ((selection_mode == LEGACY_SELECTION && a_Parameters.TruncationSelection) || selection_mode == TRUNCATION) {
-            int t_num_parents = static_cast<int>(a_Parameters.SurvivalRate * static_cast<double>(t_Evaluated.size()));
+            int t_num_parents = static_cast<int>(a_Parameters.SurvivalRate * static_cast<Real>(t_Evaluated.size()));
 
             if (t_num_parents >= static_cast<int>(t_Evaluated.size())) {
                 t_num_parents = static_cast<int>(t_Evaluated.size());
@@ -223,7 +223,7 @@ namespace NEAT {
                     break;
 
                 case ROULETTE: {
-                    std::vector<double> weights;
+                    std::vector<Real> weights;
                     weights.reserve(candidate_count);
                     for (const auto &candidate : t_Evaluated) weights.push_back(candidate.second);
                     NormalizeSelectionWeights(weights);
@@ -232,13 +232,13 @@ namespace NEAT {
                 }
 
                 case RANK_LINEAR: {
-                    std::vector<double> weights(candidate_count, 1.0);
+                    std::vector<Real> weights(candidate_count, 1.0);
                     if (candidate_count > 1) {
-                        const double count = static_cast<double>(candidate_count);
-                        const double pressure = a_Parameters.RankSelectionPressure;
+                        const Real count = static_cast<Real>(candidate_count);
+                        const Real pressure = a_Parameters.RankSelectionPressure;
                         for (std::size_t rank = 0; rank < candidate_count; ++rank) {
                             weights[rank] =
-                                (2.0 - pressure) / count + 2.0 * static_cast<double>(candidate_count - rank - 1) * (pressure - 1.0) / (count * (count - 1.0));
+                                (2.0 - pressure) / count + 2.0 * static_cast<Real>(candidate_count - rank - 1) * (pressure - 1.0) / (count * (count - 1.0));
                         }
                     }
                     t_chosen_one = t_Evaluated[static_cast<std::size_t>(a_RNG.Roulette(weights))].first;
@@ -246,11 +246,11 @@ namespace NEAT {
                 }
 
                 case RANK_EXP: {
-                    std::vector<double> weights(candidate_count, 1.0);
+                    std::vector<Real> weights(candidate_count, 1.0);
                     if (candidate_count > 1) {
-                        const double denominator = static_cast<double>(candidate_count - 1);
+                        const Real denominator = static_cast<Real>(candidate_count - 1);
                         for (std::size_t rank = 0; rank < candidate_count; ++rank) {
-                            weights[rank] = std::exp(-a_Parameters.RankSelectionExponent * static_cast<double>(rank) / denominator);
+                            weights[rank] = std::exp(-a_Parameters.RankSelectionExponent * static_cast<Real>(rank) / denominator);
                         }
                     }
                     t_chosen_one = t_Evaluated[static_cast<std::size_t>(a_RNG.Roulette(weights))].first;
@@ -273,11 +273,11 @@ namespace NEAT {
                     // Fitness-proportionate stochastic acceptance avoids a
                     // cumulative scan in the common case while retaining roulette
                     // probabilities exactly.
-                    std::vector<double> weights;
+                    std::vector<Real> weights;
                     weights.reserve(candidate_count);
                     for (const auto &candidate : t_Evaluated) weights.push_back(candidate.second);
                     NormalizeSelectionWeights(weights);
-                    const double maximum = *std::max_element(weights.begin(), weights.end());
+                    const Real maximum = *std::max_element(weights.begin(), weights.end());
                     if (maximum <= 0.0) {
                         t_chosen_one = t_Evaluated[static_cast<std::size_t>(a_RNG.RandInt(0, static_cast<int>(candidate_count) - 1))].first;
                         break;
@@ -299,11 +299,11 @@ namespace NEAT {
                 }
 
                 case BOLTZMANN: {
-                    double maximum_fitness = t_Evaluated.front().second;
+                    Real maximum_fitness = t_Evaluated.front().second;
                     for (const auto &candidate : t_Evaluated) {
                         maximum_fitness = std::max(maximum_fitness, candidate.second);
                     }
-                    std::vector<double> weights;
+                    std::vector<Real> weights;
                     weights.reserve(candidate_count);
                     for (const auto &candidate : t_Evaluated)
                         weights.push_back(std::exp((candidate.second - maximum_fitness) / a_Parameters.BoltzmannTemperature));
@@ -324,7 +324,7 @@ namespace NEAT {
             if (a_Parameters.TournamentSize == 0) {
                 throw std::invalid_argument("TournamentSize must be greater than zero");
             }
-            std::vector<std::pair<int, double> > t_picked;
+            std::vector<std::pair<int, Real> > t_picked;
             t_picked.reserve(a_Parameters.TournamentSize);
             // choose N individuals at random
             for (unsigned int i = 0; i < a_Parameters.TournamentSize; ++i) {
@@ -340,7 +340,7 @@ namespace NEAT {
             if (a_Parameters.TournamentSize == 0) {
                 throw std::invalid_argument("TournamentSize must be greater than zero");
             }
-            std::vector<std::pair<int, double> > t_picked;
+            std::vector<std::pair<int, Real> > t_picked;
             t_picked.reserve(a_Parameters.TournamentSize);
             // choose N individuals at random
             for (unsigned int i = 0; i < a_Parameters.TournamentSize; ++i) {
@@ -349,7 +349,7 @@ namespace NEAT {
             }
 
             // do a roulette on the picked
-            std::vector<double> probs;
+            std::vector<Real> probs;
             probs.reserve(t_picked.size());
             for (auto p : t_picked) {
                 probs.push_back(p.second);
@@ -362,7 +362,7 @@ namespace NEAT {
 
             // Here might be introduced better selection scheme, but this works OK for now
             if (!a_Parameters.RouletteWheelSelection) {
-                int t_num_parents = (int)(a_Parameters.SurvivalRate * (double)(t_Evaluated.size()));
+                int t_num_parents = (int)(a_Parameters.SurvivalRate * (Real)(t_Evaluated.size()));
 
                 if (t_num_parents >= t_Evaluated.size()) {
                     t_num_parents = t_Evaluated.size() - 1;
@@ -379,7 +379,7 @@ namespace NEAT {
             } else {
                 // roulette wheel selection
                 int t_num_parents = t_Evaluated.size();
-                std::vector<double> t_probs;
+                std::vector<Real> t_probs;
                 for (unsigned int i = 0; i < t_num_parents; i++) {
                     t_probs.push_back(t_Evaluated[i].second);
                 }
@@ -415,12 +415,12 @@ namespace NEAT {
             throw std::runtime_error("Attempted GetLeader() but no individuals in species ID " + std::to_string(m_ID));
         }
 
-        double t_max_fitness = std::numeric_limits<double>::lowest();
+        Real t_max_fitness = std::numeric_limits<Real>::lowest();
         std::size_t t_leader_idx = 0;
         bool found_evaluated = false;
         for (std::size_t i = 0; i < m_Individuals.size(); i++) {
             if (!m_Individuals[i].IsEvaluated()) continue;
-            const double t_f = FitnessForOrdering(m_Individuals[i].GetFitness());
+            const Real t_f = FitnessForOrdering(m_Individuals[i].GetFitness());
             if (!found_evaluated || t_f > t_max_fitness) {
                 t_max_fitness = t_f;
                 t_leader_idx = i;
@@ -429,7 +429,7 @@ namespace NEAT {
         }
         if (!found_evaluated) {
             for (std::size_t i = 0; i < m_Individuals.size(); ++i) {
-                const double fitness = FitnessForOrdering(m_Individuals[i].GetFitness());
+                const Real fitness = FitnessForOrdering(m_Individuals[i].GetFitness());
                 if (i == 0 || fitness > t_max_fitness) {
                     t_max_fitness = fitness;
                     t_leader_idx = i;
@@ -462,7 +462,7 @@ namespace NEAT {
     // this method performs fitness sharing it also boosts the fitness of the young and penalizes old species.
     // The no-offset overload preserves the historical shift (minimum maps to 1e-7) in an overflow-safe domain.
     void Species::AdjustFitness(Parameters &a_Parameters) {
-        double minimum_fitness = 0.0;
+        Real minimum_fitness = 0.0;
         bool found_finite = false;
         for (const auto &genome : m_Individuals) {
             if (std::isfinite(genome.GetFitness())) {
@@ -470,24 +470,24 @@ namespace NEAT {
                 found_finite = true;
             }
         }
-        const double offset = !found_finite || minimum_fitness <= 0.0 ? -minimum_fitness + 1.0e-7 : 0.0;
+        const Real offset = !found_finite || minimum_fitness <= 0.0 ? -minimum_fitness + 1.0e-7 : 0.0;
         AdjustFitness(a_Parameters, offset);
     }
 
     // this method performs fitness sharing with an explicit shift applied before age adjustment.
-    void Species::AdjustFitness(Parameters &a_Parameters, double a_FitnessOffset) {
-        std::vector<double> transformed;
+    void Species::AdjustFitness(Parameters &a_Parameters, Real a_FitnessOffset) {
+        std::vector<Real> transformed;
         transformed.reserve(m_Individuals.size());
         for (const auto &genome : m_Individuals) {
-            const double fitness = genome.GetFitness();
+            const Real fitness = genome.GetFitness();
             const long double shifted = std::isfinite(fitness) ? static_cast<long double>(fitness) + static_cast<long double>(a_FitnessOffset) : 1.0e-7L;
-            transformed.push_back(static_cast<double>(std::clamp(shifted, 1.0e-7L, static_cast<long double>(std::numeric_limits<double>::max()))));
+            transformed.push_back(static_cast<Real>(std::clamp(shifted, 1.0e-7L, static_cast<long double>(std::numeric_limits<Real>::max()))));
         }
         AdjustFitness(a_Parameters, transformed);
     }
 
     // this method performs fitness sharing with population-wide transformed values (see TransformFitnessValues).
-    void Species::AdjustFitness(Parameters &a_Parameters, const std::vector<double> &a_TransformedFitness) {
+    void Species::AdjustFitness(Parameters &a_Parameters, const std::vector<Real> &a_TransformedFitness) {
         if (m_Individuals.empty()) {
             throw std::runtime_error("Cannot adjust fitness for an empty species");
         }
@@ -496,14 +496,14 @@ namespace NEAT {
         }
         // iterate through the members
         for (unsigned int i = 0; i < m_Individuals.size(); i++) {
-            const double raw_fitness = m_Individuals[i].GetFitness();
+            const Real raw_fitness = m_Individuals[i].GetFitness();
             // Invalid fitness never becomes a champion and receives only the
             // smallest usable allocation weight.
             const bool valid_fitness = std::isfinite(raw_fitness);
             // update the best fitness and stagnation counter (an improvement
             // must clear the stagnation delta to reset the counter)
             if (valid_fitness && raw_fitness > m_BestFitness) {
-                if (m_BestFitness == std::numeric_limits<double>::lowest() ||
+                if (m_BestFitness == std::numeric_limits<Real>::lowest() ||
                     static_cast<long double>(raw_fitness) - static_cast<long double>(m_BestFitness) >= a_Parameters.StagnationDelta) {
                     m_GensNoImprovement = 0;
                 }
@@ -535,7 +535,7 @@ namespace NEAT {
 
             // Compute the adjusted fitness for this member
             const long double adjusted = t_fitness / static_cast<long double>(m_Individuals.size());
-            m_Individuals[i].SetAdjFitness(static_cast<double>(std::clamp(adjusted, 0.0L, static_cast<long double>(std::numeric_limits<double>::max()))));
+            m_Individuals[i].SetAdjFitness(static_cast<Real>(std::clamp(adjusted, 0.0L, static_cast<long double>(std::numeric_limits<Real>::max()))));
         }
     }
 
@@ -627,8 +627,8 @@ namespace NEAT {
                             if ((a_RNG.RandFloat() < a_Parameters.InterspeciesCrossoverRate) && (a_Pop.m_Species.size() > 1)) {
                                 // Find different species via roulette over leader adjusted
                                 // fitness (shifted non-negative, uniform fallback).
-                                std::vector<double> probs;
-                                double allp = 0;
+                                std::vector<Real> probs;
+                                Real allp = 0;
                                 for (int i = 0; i < a_Pop.m_Species.size(); i++) {
                                     if (a_Pop.m_Species[i].m_ID == m_ID) {
                                         probs.push_back(0.0);
@@ -800,13 +800,13 @@ namespace NEAT {
     ////////////
     // Real-time code
     void Species::CalculateAverageFitness() {
-        double t_total_fitness = 0;
+        Real t_total_fitness = 0;
         int t_num_evaluated = 0;
 
         // consider individuals that were evaluated only!
         for (unsigned int i = 0; i < m_Individuals.size(); i++) {
             if (m_Individuals[i].IsEvaluated()) {
-                double tf = m_Individuals[i].GetFitness();
+                Real tf = m_Individuals[i].GetFitness();
                 if (std::isinf(tf) || std::isnan(tf))  // nan/inf guard
                 {
                     tf = 0.0;
@@ -817,7 +817,7 @@ namespace NEAT {
         }
 
         if (t_num_evaluated > 0) {
-            m_AverageFitness = t_total_fitness / static_cast<double>(t_num_evaluated);
+            m_AverageFitness = t_total_fitness / static_cast<Real>(t_num_evaluated);
         } else {
             m_AverageFitness = 0;
         }
@@ -862,8 +862,8 @@ namespace NEAT {
                     if ((a_RNG.RandFloat() < a_Parameters.InterspeciesCrossoverRate) && (a_Pop.m_Species.size() > 1)) {
                         // Find different species via roulette over leader adjusted
                         // fitness (shifted non-negative, uniform fallback).
-                        std::vector<double> probs;
-                        double allp = 0;
+                        std::vector<Real> probs;
+                        Real allp = 0;
                         for (int i = 0; i < a_Pop.m_Species.size(); i++) {
                             if ((a_Pop.m_Species[i].m_ID == m_ID) || (a_Pop.m_Species[i].NumEvaluated() == 0)) {
                                 probs.push_back(0.0);
@@ -1112,7 +1112,7 @@ namespace NEAT {
             MUTATE_GENOME_TRAITS
         };
         std::vector<int> t_muts;
-        std::vector<double> t_mut_probs;
+        std::vector<Real> t_mut_probs;
 
         // ADD_NODE;
         t_mut_probs.emplace_back(a_Parameters.MutateAddNeuronProb);
@@ -1185,7 +1185,7 @@ namespace NEAT {
         }
 
         bool has_possible_mutation = false;
-        for (double probability : t_mut_probs) {
+        for (Real probability : t_mut_probs) {
             if (!std::isfinite(probability) || probability < 0.0) throw std::invalid_argument("Mutation probabilities must be finite and non-negative");
             has_possible_mutation = has_possible_mutation || probability > 0.0;
         }
@@ -1296,14 +1296,14 @@ namespace NEAT {
 
         // Expected number of mutation operators per offspring, with optional
         // stagnation-driven adaptation of the budget.
-        double mutation_budget = a_Parameters.MutationOperatorsPerOffspring;
+        Real mutation_budget = a_Parameters.MutationOperatorsPerOffspring;
         if (a_Parameters.AdaptiveMutationRate > 0.0 && a_Pop.GetStagnation() > a_Parameters.AdaptiveMutationStart) {
-            const double stagnant_generations = static_cast<double>(a_Pop.GetStagnation() - a_Parameters.AdaptiveMutationStart);
-            const double factor = std::min(a_Parameters.AdaptiveMutationMaxFactor, 1.0 + a_Parameters.AdaptiveMutationRate * stagnant_generations);
+            const Real stagnant_generations = static_cast<Real>(a_Pop.GetStagnation() - a_Parameters.AdaptiveMutationStart);
+            const Real factor = std::min(a_Parameters.AdaptiveMutationMaxFactor, 1.0f + a_Parameters.AdaptiveMutationRate * stagnant_generations);
             mutation_budget *= factor;
         }
         unsigned int operator_count = static_cast<unsigned int>(std::floor(mutation_budget));
-        const double fractional = mutation_budget - std::floor(mutation_budget);
+        const Real fractional = mutation_budget - std::floor(mutation_budget);
         if (fractional > 0.0 && a_RNG.RandFloat() < fractional) ++operator_count;
         operator_count = std::max(1U, operator_count);
 
@@ -1325,7 +1325,7 @@ namespace NEAT {
 
     std::string Species::Serialize() const {
         std::ostringstream output;
-        output.precision(std::numeric_limits<double>::max_digits10);
+        output.precision(std::numeric_limits<Real>::max_digits10);
         output << "SpeciesStart\n";
         output << "SpeciesFormat 2\n";
         output << m_ID << ' ' << m_BestSpecies << ' ' << m_WorstSpecies << ' ' << m_AgeGenerations << ' ' << m_AgeEvaluations << ' ' << m_OffspringRqd << ' '

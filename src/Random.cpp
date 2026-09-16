@@ -61,46 +61,46 @@ namespace NEAT {
     }
 
     // Returns a random number from a uniform distribution in the range of [0 .. 1]
-    double RNG::RandFloat() {
-        std::uniform_real_distribution<double> dist(0.0, 1.0);
+    Real RNG::RandFloat() {
+        std::uniform_real_distribution<Real> dist(0.0, 1.0);
         return dist(gen);
     }
 
     // Returns a random number from a uniform distribution in the range of [-1 .. 1]
-    double RNG::RandFloatSigned() { return 2.0 * RandFloat() - 1.0; }
+    Real RNG::RandFloatSigned() { return 2.0 * RandFloat() - 1.0; }
 
     // Returns a random number from a gaussian (normal) distribution in the range of [-1 .. 1]
-    double RNG::RandGaussSigned() {
-        std::normal_distribution<double> dist(0.0, 1.0);
-        double val = dist(gen);
+    Real RNG::RandGaussSigned() {
+        std::normal_distribution<Real> dist(0.0, 1.0);
+        Real val = dist(gen);
         if (val > 1.0) val = 1.0;
         if (val < -1.0) val = -1.0;
         return val;
     }
 
-    double RNG::RandNormal(double mean, double standardDeviation) {
+    Real RNG::RandNormal(Real mean, Real standardDeviation) {
         if (!std::isfinite(mean) || !std::isfinite(standardDeviation) || standardDeviation <= 0.0)
             throw std::invalid_argument("RNG::RandNormal requires a finite mean and positive standard deviation.");
-        std::normal_distribution<double> distribution(mean, standardDeviation);
+        std::normal_distribution<Real> distribution(mean, standardDeviation);
         return distribution(gen);
     }
 
-    double RNG::RandCauchy(double location, double scale) {
+    Real RNG::RandCauchy(Real location, Real scale) {
         if (!std::isfinite(location) || !std::isfinite(scale) || scale <= 0.0)
             throw std::invalid_argument("RNG::RandCauchy requires a finite location and positive scale.");
-        std::cauchy_distribution<double> distribution(location, scale);
-        double result = distribution(gen);
+        std::cauchy_distribution<Real> distribution(location, scale);
+        Real result = distribution(gen);
         // The mathematical distribution is unbounded. Resample the extremely
         // rare non-finite floating-point result so callers always receive a usable value.
         while (!std::isfinite(result)) result = distribution(gen);
         return result;
     }
 
-    int RNG::Roulette(const std::vector<double> &a_probs) {
+    int RNG::Roulette(const std::vector<Real> &a_probs) {
         if (a_probs.empty()) throw std::invalid_argument("RNG::Roulette: probability vector is empty.");
 
-        double maximum = 0.0;
-        for (double p : a_probs) {
+        Real maximum = 0.0;
+        for (Real p : a_probs) {
             if (!std::isfinite(p)) throw std::invalid_argument("RNG::Roulette: probabilities must be finite.");
             if (p < 0.0) throw std::invalid_argument("RNG::Roulette: probabilities cannot be negative.");
             maximum = std::max(maximum, p);
@@ -115,16 +115,16 @@ namespace NEAT {
         // Scaling every weight by the maximum leaves the categorical distribution
         // unchanged and guarantees the running total cannot overflow.
         long double totalWide = 0.0L;
-        for (double probability : a_probs) totalWide += probability / maximum;
-        if (!std::isfinite(totalWide) || totalWide <= 0.0L || totalWide > static_cast<long double>(std::numeric_limits<double>::max()))
+        for (Real probability : a_probs) totalWide += probability / maximum;
+        if (!std::isfinite(totalWide) || totalWide <= 0.0L || totalWide > static_cast<long double>(std::numeric_limits<Real>::max()))
             throw std::overflow_error("RNG::Roulette: normalized probability total overflowed.");
-        const double total = static_cast<double>(totalWide);
-        std::uniform_real_distribution<double> dist(0.0, total);
-        double r = dist(gen);
-        double run = 0.0;
+        const Real total = static_cast<Real>(totalWide);
+        std::uniform_real_distribution<Real> dist(0.0, total);
+        Real r = dist(gen);
+        Real run = 0.0;
         size_t lastNonZero = 0;
         for (size_t idx = 0; idx < a_probs.size(); idx++) {
-            const double w = a_probs[idx] / maximum;
+            const Real w = a_probs[idx] / maximum;
             if (w > 0.0) {
                 lastNonZero = idx;
                 if (r < run + w) return static_cast<int>(idx);

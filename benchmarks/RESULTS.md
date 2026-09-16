@@ -30,6 +30,48 @@ Medians of 3 runs:
 
 Run-to-run spread observed on this machine: mostly <10%, up to ~15% on BuildPhenotype small and Epoch pop100, up to ~25% on Population save+load.
 
+## Float A/B (Real = float, 2026-09-16)
+
+Same-machine, same-harness comparison of the `double` baseline above vs the `Real = float` conversion. Each cell is the median of 3 runs on this machine (Homebrew clang 22.1.7, macOS). Deltas within ±~10% are inside the observed run-to-run noise band.
+
+| Benchmark                    | double (baseline) | float (Real) | delta      |
+| ---------------------------- | ----------------- | ------------ | ---------- |
+| BuildPhenotype small         | 1,333             | 929          | **-30%**   |
+| BuildPhenotype large         | 45,535            | 33,552       | **-26%**   |
+| Activate large net           | 13,161            | 11,524       | -12%       |
+| CompatibilityDistance        | 90,240            | 66,888       | **-26%**   |
+| Copy+mutate genome           | 1,267,248         | 1,213,882    | -4% ~noise |
+| Epoch pop100                 | 1,731,660         | 1,245,640    | -28%¹      |
+| XOR solve seed1              | 106.3 ms (gen 21) | 133.3 ms (gen 33) | trajectory² |
+| Genome save+load             | 18,284,800        | 15,802,030   | -14%       |
+| Population save+load         | 65,771,450        | 60,249,500   | -8%        |
+
+¹ Epoch is not apples-to-apples: `float` RNG draws (`uniform_real_distribution<float>`) form a different
+deterministic stream than `double`, so the same seed evolves a different population. A workload probe over the
+same 100-epoch recipe (seed 21) shows float carrying ~10% less link-work (189,471 vs 209,657 summed links over
+the run). Per unit of link-work, float is ~20% faster (657 vs 826 ns per summed link); most of the headline
+delta is that, the rest is the smaller evolving population.
+
+² XOR generations are trajectory-dependent by the same RNG-stream argument; both solve far inside the typical
+budget, and the TestEvolution suite solves all reference seeds in float (Debug, Release, dbgassert/ASSERT, and ASan+UBSan configs all green).
+
+Memory footprint (`sizeof`, same compiler):
+
+| Type         | double | float | delta |
+| ------------ | ------ | ----- | ----- |
+| Connection   | 192    | 112   | -42%  |
+| Neuron       | 344    | 200   | -42%  |
+| LinkGene     | 128    | 80    | -38%  |
+| NeuronGene   | 192    | 120   | -38%  |
+| Genome shell | 144    | 128   | -11%  |
+| Parameters   | 1,648  | 960   | -42%  |
+
+Conclusion: float buys clearly smaller memory (~11–42% per object; halved `vector<Real>` payloads) and real wins
+on the vector-bandwidth-bound paths (phenotype build, compatibility distance, text save/load); Copy+mutate stays
+dominated by `Mutate_AddLink`'s reachability guard (pointer-chasing, not scalar width). Seeded trajectories
+intentionally differ from the double era (no bit-identical replay); stability is statistically unchanged
+(all reference evolution seeds still solve, determinism per seed preserved).
+
 ## Observations / optimisation candidates
 
 - `Copy+mutate genome` (~1.27 ms) dominates reproduction: `Mutate_AddLink`'s cycle-guarded uniform sampling hammers the dense worst case in this stress test (see the MultiNEAT v2 port note below); every mating and species copy also round-trips full `std::vector`s of genes. Any per-epoch cost scales with this.
@@ -41,6 +83,7 @@ Run-to-run spread observed on this machine: mostly <10%, up to ~15% on BuildPhen
 
 | Date | Commit | Change | Deltas |
 | ---------- | ------ | --------------------------------------------------- | ------ |
+| 2026-09-16 | (float) | Global `Real = float` conversion (new `src/Types.h` scalar alias; flip it to `double` for an exact-precision A/B) | Float A/B section above; seeded trajectories differ by design (RNG stream), stability statistically unchanged |
 | 2026-09-16 | (thread-cpu) | Harness switched from wall time (`steady_clock`) to calling-thread CPU time; new baseline recorded on the MultiNEAT v2 backport (medians of 3 runs, XOR still gen 21) | new baseline above; old wall-time tables moved to Historical section |
 | 2026-09-15 | (base) | Baseline recorded after rename + test/bugfix commits | see Historical section |
 | 2026-09-15 | optimisation | Algorithmic fixes: BuildPhenotype ID-index table, CompatibilityDistance neuron-lookup hoist, HasLoops O(V+E) Kahn, IsDeadEndNeuron type table. XOR solve generations unchanged (30/16/35/41/30) — bit-identical trajectories. | see Historical section |
