@@ -40,8 +40,8 @@
 #include <stdexcept>
 
 namespace {
-    double FiniteTimeStep(const NEAT::NeuralNetwork &network, double requested) {
-        const double result = requested < 0.0 ? network.SpikingTimeStep() : requested;
+    Real FiniteTimeStep(const NEAT::NeuralNetwork &network, Real requested) {
+        const Real result = requested < 0.0 ? network.SpikingTimeStep() : requested;
         if (!std::isfinite(result) || result <= 0.0) {
             throw std::invalid_argument("e-prop time step must be finite and positive");
         }
@@ -56,7 +56,7 @@ namespace {
 
 namespace NEAT {
     void EPropLearner::ValidateConfig() const {
-        const auto positive_finite = [](double value) { return std::isfinite(value) && value > 0.0; };
+        const auto positive_finite = [](Real value) { return std::isfinite(value) && value > 0.0; };
         if (!positive_finite(m_config.learning_rate) || !positive_finite(m_config.surrogate_scale) || !positive_finite(m_config.surrogate_dampening) ||
             !std::isfinite(m_config.gradient_clip_norm) || m_config.gradient_clip_norm < 0.0 || !std::isfinite(m_config.weight_decay) ||
             m_config.weight_decay < 0.0 || !std::isfinite(m_config.min_weight) || !std::isfinite(m_config.max_weight) ||
@@ -135,15 +135,15 @@ namespace NEAT {
         return m_config.train_hidden_connections;
     }
 
-    double EPropLearner::SurrogateDerivative(const Neuron &neuron) const {
+    Real EPropLearner::SurrogateDerivative(const Neuron &neuron) const {
         if (neuron.m_refractory_remaining > 0.0 && !neuron.m_spike) {
             return 0.0;
         }
-        const double voltage_scale =
-            std::max({std::abs(neuron.m_spike_threshold - neuron.m_reset_potential), std::abs(neuron.m_spike_threshold - neuron.m_resting_potential), 1.0e-6});
-        const double relative_voltage = neuron.m_spike ? 0.0 : (neuron.m_membrane_potential - neuron.m_spike_threshold) / voltage_scale;
-        const double x = m_config.surrogate_scale * relative_voltage;
-        double shape = 0.0;
+        const Real voltage_scale = std::max({std::abs(neuron.m_spike_threshold - neuron.m_reset_potential),
+                                             std::abs(neuron.m_spike_threshold - neuron.m_resting_potential), static_cast<Real>(1.0e-6)});
+        const Real relative_voltage = neuron.m_spike ? 0.0 : (neuron.m_membrane_potential - neuron.m_spike_threshold) / voltage_scale;
+        const Real x = m_config.surrogate_scale * relative_voltage;
+        Real shape = 0.0;
         switch (m_config.surrogate) {
             case EPROP_FAST_SIGMOID:
                 shape = 1.0 / ((1.0 + std::abs(x)) * (1.0 + std::abs(x)));
@@ -207,20 +207,20 @@ namespace NEAT {
         }
         m_feedback.assign(m_neuron_count * m_output_count, 0.0);
         const std::size_t output_begin = network.NumInputs();
-        const double scale = 1.0 / std::sqrt(static_cast<double>(std::max<std::size_t>(1, m_output_count)));
+        const Real scale = 1.0 / std::sqrt(static_cast<Real>(std::max<std::size_t>(1, m_output_count)));
         std::uint64_t random_state = m_config.random_seed == 0 ? UINT64_C(0x6a09e667f3bcc909) : m_config.random_seed;
         const auto random_signed = [&random_state]() {
             random_state ^= random_state >> 12U;
             random_state ^= random_state << 25U;
             random_state ^= random_state >> 27U;
             const std::uint64_t value = random_state * UINT64_C(2685821657736338717);
-            const double unit = static_cast<double>(value >> 11U) * (1.0 / 9007199254740992.0);
+            const Real unit = static_cast<Real>(value >> 11U) * (1.0 / 9007199254740992.0);
             return 2.0 * unit - 1.0;
         };
 
         for (std::size_t neuron = network.NumInputs(); neuron < m_neuron_count; ++neuron) {
             for (std::size_t output = 0; output < m_output_count; ++output) {
-                double value = 0.0;
+                Real value = 0.0;
                 if (neuron == output_begin + output) {
                     value = 1.0;
                 } else if (m_config.feedback_mode == EPROP_RANDOM_FEEDBACK) {
@@ -265,13 +265,13 @@ namespace NEAT {
         ZeroGradients();
     }
 
-    std::vector<double> EPropLearner::BroadcastOutputSignals(const std::vector<double> &output_signals) const {
+    std::vector<Real> EPropLearner::BroadcastOutputSignals(const std::vector<Real> &output_signals) const {
         if (output_signals.size() != m_output_count) {
             throw std::invalid_argument(
                 "e-prop output learning-signal count must match "
                 "network outputs");
         }
-        std::vector<double> neuron_signals(m_neuron_count, 0.0);
+        std::vector<Real> neuron_signals(m_neuron_count, 0.0);
         for (std::size_t neuron = 0; neuron < m_neuron_count; ++neuron) {
             for (std::size_t output = 0; output < m_output_count; ++output) {
                 neuron_signals[neuron] += m_feedback[neuron * m_output_count + output] * output_signals[output];
@@ -280,14 +280,14 @@ namespace NEAT {
         return neuron_signals;
     }
 
-    void EPropLearner::AccumulateDirectSignals(NeuralNetwork &network, const std::vector<double> &neuron_signals, double time_step) {
+    void EPropLearner::AccumulateDirectSignals(NeuralNetwork &network, const std::vector<Real> &neuron_signals, Real time_step) {
         ValidateConfig();
         ValidateTopology(network);
         if (neuron_signals.size() != m_neuron_count) {
             throw std::invalid_argument("e-prop direct learning signals must match neurons");
         }
-        const double dt = FiniteTimeStep(network, time_step);
-        for (double signal : neuron_signals) {
+        const Real dt = FiniteTimeStep(network, time_step);
+        for (Real signal : neuron_signals) {
             if (!std::isfinite(signal)) {
                 throw std::invalid_argument("e-prop learning signals must be finite");
             }
@@ -320,13 +320,13 @@ namespace NEAT {
                     "and finite membrane resistance");
             }
 
-            const double membrane_fraction = dt / target_neuron.m_timeconst;
-            const double membrane_decay = 1.0 - membrane_fraction;
-            const double old_voltage = state.voltage_eligibility;
-            const double old_adaptation = state.adaptation_eligibility;
-            double voltage_eligibility = membrane_decay * old_voltage + membrane_fraction * target_neuron.m_membrane_resistance * state.synaptic_trace;
-            double adaptation_eligibility = 0.0;
-            const double surrogate = SurrogateDerivative(target_neuron);
+            const Real membrane_fraction = dt / target_neuron.m_timeconst;
+            const Real membrane_decay = 1.0 - membrane_fraction;
+            const Real old_voltage = state.voltage_eligibility;
+            const Real old_adaptation = state.adaptation_eligibility;
+            Real voltage_eligibility = membrane_decay * old_voltage + membrane_fraction * target_neuron.m_membrane_resistance * state.synaptic_trace;
+            Real adaptation_eligibility = 0.0;
+            const Real surrogate = SurrogateDerivative(target_neuron);
 
             if (target_neuron.m_activation_function_type == SPIKING_ADAPTIVE_LIF) {
                 if (!std::isfinite(target_neuron.m_adaptation_time_constant) || target_neuron.m_adaptation_time_constant <= 0.0 ||
@@ -343,13 +343,13 @@ namespace NEAT {
                 // A membrane-time-constant eligibility path keeps the
                 // online surrogate stable while still assigning temporal
                 // credit through its voltage and recovery state.
-                const double recovery_decay = std::exp(-dt * 1000.0 * std::max(0.0, target_neuron.m_izhikevich_a));
+                const Real recovery_decay = std::exp(-dt * 1000.0 * std::max(static_cast<Real>(0.0), target_neuron.m_izhikevich_a));
                 adaptation_eligibility = recovery_decay * old_adaptation + target_neuron.m_izhikevich_b * surrogate * voltage_eligibility;
                 voltage_eligibility -= membrane_fraction * adaptation_eligibility;
             }
 
-            const double spike_eligibility = surrogate * voltage_eligibility;
-            double eligibility = spike_eligibility;
+            const Real spike_eligibility = surrogate * voltage_eligibility;
+            Real eligibility = spike_eligibility;
             const std::size_t output_begin = network.NumInputs();
             const std::size_t output_end = output_begin + network.NumOutputs();
             if (target >= output_begin && target < output_end) {
@@ -375,22 +375,22 @@ namespace NEAT {
                     eligibility /= network.SpikingTime();
                 }
             }
-            const double gradient = neuron_signals[target] * eligibility;
+            const Real gradient = neuron_signals[target] * eligibility;
             if (!std::isfinite(gradient)) {
                 throw std::domain_error("e-prop eligibility gradient became non-finite");
             }
             state.gradient += gradient;
 
-            const double reset_jump = target_neuron.m_spike ? target_neuron.m_spike_threshold - target_neuron.m_reset_potential : 0.0;
+            const Real reset_jump = target_neuron.m_spike ? target_neuron.m_spike_threshold - target_neuron.m_reset_potential : 0.0;
             state.voltage_eligibility = voltage_eligibility * (1.0 - reset_jump * surrogate);
             state.adaptation_eligibility = adaptation_eligibility;
         }
         ++m_accumulated_steps;
     }
 
-    void EPropLearner::AccumulateLearningSignals(NeuralNetwork &network, const std::vector<double> &learning_signals, double time_step) {
+    void EPropLearner::AccumulateLearningSignals(NeuralNetwork &network, const std::vector<Real> &learning_signals, Real time_step) {
         ValidateTopology(network);
-        std::vector<double> direct;
+        std::vector<Real> direct;
         if (learning_signals.size() == m_output_count) {
             direct = BroadcastOutputSignals(learning_signals);
         } else if (learning_signals.size() == m_neuron_count - network.NumInputs()) {
@@ -413,23 +413,23 @@ namespace NEAT {
         result.outputs = network.OutputDecoded();
         if (m_accumulated_steps == 0) return result;
 
-        const double inverse_steps = 1.0 / static_cast<double>(m_accumulated_steps);
-        double squared_norm = 0.0;
+        const Real inverse_steps = 1.0 / static_cast<Real>(m_accumulated_steps);
+        Real squared_norm = 0.0;
         for (std::size_t index = 0; index < m_connection_state.size(); ++index) {
             if (!IsTrainable(network, index)) continue;
-            const double gradient = m_connection_state[index].gradient * inverse_steps;
+            const Real gradient = m_connection_state[index].gradient * inverse_steps;
             squared_norm += gradient * gradient;
         }
-        const double gradient_norm = std::sqrt(squared_norm);
-        double clip_scale = 1.0;
+        const Real gradient_norm = std::sqrt(squared_norm);
+        Real clip_scale = 1.0;
         if (m_config.gradient_clip_norm > 0.0 && gradient_norm > m_config.gradient_clip_norm) {
             clip_scale = m_config.gradient_clip_norm / gradient_norm;
         }
 
         ++m_optimizer_step;
         std::size_t updated = 0;
-        const double beta1_correction = 1.0 - std::pow(m_config.adam_beta1, static_cast<double>(m_optimizer_step));
-        const double beta2_correction = 1.0 - std::pow(m_config.adam_beta2, static_cast<double>(m_optimizer_step));
+        const Real beta1_correction = 1.0 - std::pow(m_config.adam_beta1, static_cast<Real>(m_optimizer_step));
+        const Real beta2_correction = 1.0 - std::pow(m_config.adam_beta2, static_cast<Real>(m_optimizer_step));
         for (std::size_t index = 0; index < m_connection_state.size(); ++index) {
             EPropConnectionState &state = m_connection_state[index];
             if (!IsTrainable(network, index)) {
@@ -437,12 +437,12 @@ namespace NEAT {
                 continue;
             }
             Connection &connection = network.m_connections[index];
-            const double gradient = state.gradient * inverse_steps * clip_scale;
+            const Real gradient = state.gradient * inverse_steps * clip_scale;
             if (m_config.optimizer == EPROP_ADAMW) {
                 state.first_moment = m_config.adam_beta1 * state.first_moment + (1.0 - m_config.adam_beta1) * gradient;
                 state.second_moment = m_config.adam_beta2 * state.second_moment + (1.0 - m_config.adam_beta2) * gradient * gradient;
-                const double first_hat = state.first_moment / beta1_correction;
-                const double second_hat = state.second_moment / beta2_correction;
+                const Real first_hat = state.first_moment / beta1_correction;
+                const Real second_hat = state.second_moment / beta2_correction;
                 connection.m_weight *= 1.0 - m_config.learning_rate * m_config.weight_decay;
                 connection.m_weight -= m_config.learning_rate * first_hat / (std::sqrt(second_hat) + m_config.adam_epsilon);
             } else {
@@ -462,38 +462,38 @@ namespace NEAT {
         return result;
     }
 
-    EPropStepResult EPropLearner::TrainStep(NeuralNetwork &network, const std::vector<double> &inputs, const std::vector<double> &targets, double time_step) {
+    EPropStepResult EPropLearner::TrainStep(NeuralNetwork &network, const std::vector<Real> &inputs, const std::vector<Real> &targets, Real time_step) {
         ValidateConfig();
         ValidateTopology(network);
         if (targets.size() != m_output_count) {
             throw std::invalid_argument("e-prop target count must match network outputs");
         }
-        for (double target : targets) {
+        for (Real target : targets) {
             if (!std::isfinite(target)) {
                 throw std::invalid_argument("e-prop targets must be finite");
             }
         }
-        const double dt = FiniteTimeStep(network, time_step);
+        const Real dt = FiniteTimeStep(network, time_step);
         EPropStepResult result;
         result.outputs = network.StepSpiking(inputs, dt);
-        std::vector<double> output_signals(m_output_count, 0.0);
+        std::vector<Real> output_signals(m_output_count, 0.0);
         for (std::size_t output = 0; output < m_output_count; ++output) {
-            const double error = result.outputs[output] - targets[output];
+            const Real error = result.outputs[output] - targets[output];
             if (m_config.loss == EPROP_MEAN_SQUARED_ERROR) {
                 result.loss += 0.5 * error * error;
-                output_signals[output] = error / static_cast<double>(m_output_count);
+                output_signals[output] = error / static_cast<Real>(m_output_count);
             } else {
-                const double absolute = std::abs(error);
+                const Real absolute = std::abs(error);
                 if (absolute <= m_config.huber_delta) {
                     result.loss += 0.5 * error * error;
-                    output_signals[output] = error / static_cast<double>(m_output_count);
+                    output_signals[output] = error / static_cast<Real>(m_output_count);
                 } else {
                     result.loss += m_config.huber_delta * (absolute - 0.5 * m_config.huber_delta);
-                    output_signals[output] = std::copysign(m_config.huber_delta, error) / static_cast<double>(m_output_count);
+                    output_signals[output] = std::copysign(m_config.huber_delta, error) / static_cast<Real>(m_output_count);
                 }
             }
         }
-        result.loss /= static_cast<double>(m_output_count);
+        result.loss /= static_cast<Real>(m_output_count);
         AccumulateDirectSignals(network, BroadcastOutputSignals(output_signals), dt);
         if (m_accumulated_steps >= m_config.update_interval) {
             EPropStepResult update = ApplyGradients(network);
@@ -505,12 +505,12 @@ namespace NEAT {
     }
 
     EPropStepResult EPropLearner::TrainStepWithSignals(NeuralNetwork &network,
-                                                       const std::vector<double> &inputs,
-                                                       const std::vector<double> &learning_signals,
-                                                       double time_step) {
+                                                       const std::vector<Real> &inputs,
+                                                       const std::vector<Real> &learning_signals,
+                                                       Real time_step) {
         ValidateConfig();
         ValidateTopology(network);
-        const double dt = FiniteTimeStep(network, time_step);
+        const Real dt = FiniteTimeStep(network, time_step);
         EPropStepResult result;
         result.outputs = network.StepSpiking(inputs, dt);
         AccumulateLearningSignals(network, learning_signals, dt);
@@ -524,9 +524,9 @@ namespace NEAT {
     }
 
     EPropSequenceResult EPropLearner::TrainSequence(NeuralNetwork &network,
-                                                    const std::vector<std::vector<double>> &inputs,
-                                                    const std::vector<std::vector<double>> &targets,
-                                                    double time_step,
+                                                    const std::vector<std::vector<Real>> &inputs,
+                                                    const std::vector<std::vector<Real>> &targets,
+                                                    Real time_step,
                                                     bool reset_network,
                                                     bool apply_final_update) {
         ValidateTopology(network);
@@ -554,7 +554,7 @@ namespace NEAT {
             }
         }
         if (!inputs.empty()) {
-            result.mean_loss /= static_cast<double>(inputs.size());
+            result.mean_loss /= static_cast<Real>(inputs.size());
         }
         if (apply_final_update && m_accumulated_steps > 0) {
             EPropStepResult final_update = ApplyGradients(network);
@@ -568,7 +568,7 @@ namespace NEAT {
     std::string EPropLearner::Serialize() const {
         ValidateConfig();
         std::ostringstream output;
-        output << std::setprecision(std::numeric_limits<double>::max_digits10);
+        output << std::setprecision(std::numeric_limits<Real>::max_digits10);
         output << "EPropFormat 1\n";
         output << "Config " << m_config.learning_rate << ' ' << static_cast<int>(m_config.optimizer) << ' ' << static_cast<int>(m_config.feedback_mode) << ' '
                << static_cast<int>(m_config.surrogate) << ' ' << static_cast<int>(m_config.loss) << ' ' << m_config.surrogate_scale << ' '
@@ -586,7 +586,7 @@ namespace NEAT {
             output << m_neuron_types[i] << ' ' << m_activation_types[i] << '\n';
         }
         output << "Feedback " << m_feedback.size() << '\n';
-        for (double value : m_feedback) output << value << '\n';
+        for (Real value : m_feedback) output << value << '\n';
         output << "Connections " << m_connection_state.size() << '\n';
         for (const auto &state : m_connection_state) {
             output << state.synaptic_trace << ' ' << state.voltage_eligibility << ' ' << state.adaptation_eligibility << ' ' << state.readout_eligibility << ' '
@@ -673,7 +673,7 @@ namespace NEAT {
             throw std::runtime_error("EPropLearner::Deserialize: invalid feedback size");
         }
         learner.m_feedback.resize(feedback_count);
-        for (double &value : learner.m_feedback) {
+        for (Real &value : learner.m_feedback) {
             if (!(input >> value) || !std::isfinite(value)) {
                 throw std::runtime_error(
                     "EPropLearner::Deserialize: malformed feedback "

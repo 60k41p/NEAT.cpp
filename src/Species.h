@@ -37,6 +37,7 @@
 #include "Genes.h"
 #include "Genome.h"
 #include "Innovation.h"
+#include "Types.h"
 
 namespace NEAT {
 
@@ -70,11 +71,11 @@ namespace NEAT {
         unsigned int m_AgeEvaluations;
 
         // how many of this species should be spawned for the next population
-        double m_OffspringRqd;
+        Real m_OffspringRqd;
 
        public:
         // best fitness found so far by this species
-        double m_BestFitness;
+        Real m_BestFitness;
 
         // Keep a local copy of the best genome
         // Useful in co-evolution
@@ -88,7 +89,7 @@ namespace NEAT {
         // Color. Useful for displaying Safe to access directly.
         int m_R, m_G, m_B;
 
-        double m_AverageFitness;
+        Real m_AverageFitness;
 
         ////////////////////////////
         // Constructors
@@ -126,9 +127,9 @@ namespace NEAT {
         ////////////////////////////
 
         // Access
-        double GetBestFitness() const { return m_BestFitness; }
-        double GetActualBestFitness() const {
-            double f = std::numeric_limits<double>::min();
+        Real GetBestFitness() const { return m_BestFitness; }
+        Real GetActualBestFitness() const {
+            Real f = std::numeric_limits<Real>::min();
             for (int i = 0; i < m_Individuals.size(); i++) {
                 if (m_Individuals[i].IsEvaluated()) {
                     if (m_Individuals[i].GetFitness() > f) {
@@ -152,8 +153,8 @@ namespace NEAT {
             m_EvalsNoImprovement = 0;
         }
         void IncreaseEvalsNoImprovement() { m_EvalsNoImprovement++; }
-        void SetOffspringRqd(double a_ofs) { m_OffspringRqd = a_ofs; }
-        double GetOffspringRqd() const { return m_OffspringRqd; }
+        void SetOffspringRqd(Real a_ofs) { m_OffspringRqd = a_ofs; }
+        Real GetOffspringRqd() const { return m_OffspringRqd; }
         unsigned int NumIndividuals() const { return m_Individuals.size(); }
         void ClearIndividuals() { m_Individuals.clear(); }
         int ID() const { return m_ID; }
@@ -201,9 +202,9 @@ namespace NEAT {
         // SpeciesDropoffAge generations.
         void AdjustFitness(Parameters &a_Parameters);
         // Fitness sharing with an explicit shift applied before age adjustment.
-        void AdjustFitness(Parameters &a_Parameters, double a_FitnessOffset);
+        void AdjustFitness(Parameters &a_Parameters, Real a_FitnessOffset);
         // Fitness sharing with population-wide transformed values (see Population::TransformFitnessValues).
-        void AdjustFitness(Parameters &a_Parameters, const std::vector<double> &a_TransformedFitness);
+        void AdjustFitness(Parameters &a_Parameters, const std::vector<Real> &a_TransformedFitness);
 
         // Sorts the individuals
         void SortIndividuals();

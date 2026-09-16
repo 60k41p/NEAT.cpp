@@ -25,7 +25,7 @@ namespace {
         }                                                                                   \
     } while (0)
 
-    bool ProbOk(double v) { return v >= 0.0 && v <= 1.0; }
+    bool ProbOk(Real v) { return v >= 0.0 && v <= 1.0; }
 
 }  // namespace
 

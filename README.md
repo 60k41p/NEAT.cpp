@@ -53,9 +53,11 @@ Add NEAT.cpp as a CMake subdirectory and link against `NEAT.cpp` (static) or `NE
 
 This is a fork of <https://github.com/peter-ch/MultiNEAT>.
 
-The primary divergence from the upstream is that the library is now `std`-only pure C++17; with Python bindings and the Boost dependency removed.
-Furthermore, traits now use `std::variant`, RNG uses `std::mt19937`, and cycle detection uses Kahn's algorithm.
-The MultiNEAT v2 feature set has been backported (see `PLAN.md`): spiking neuron models with STDP and e-prop learning, ES-HyperNEAT, the full selection/crossover/mutation/scaling/representative/allocation/threshold control surface, and versioned serialization — with v2 defaults adopted, so evolution trajectories differ from the v1 baseline by design.
+* The library is now `std`-only pure C++17; with Python bindings and the Boost dependency removed
+* Traits now use `std::variant`, RNG uses `std::mt19937`, and cycle detection uses Kahn's algorithm.
+* The MultiNEAT v2 feature set has been backported (see `PLAN.md`): spiking neuron models with STDP and e-prop learning, ES-HyperNEAT, the full selection/crossover/mutation/scaling/representative/allocation/threshold control surface, and versioned serialization — with v2 defaults adopted, so evolution trajectories differ from the v1 baseline by design.
+* All numerics (weights, activations, fitness, parameters) are single-precision via the `NEAT::Real` alias in `src/Types.h` (flip it to `double` for an exact-precision A/B); seeded trajectories replay identically per seed.
+* Robust unit testing and benchmark harnesses were added, and many performance optimisations were applied.
 
 ### Performance
 

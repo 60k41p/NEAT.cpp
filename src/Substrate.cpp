@@ -65,7 +65,7 @@ namespace NEAT {
         m_conduction_velocity = 1.0;
     };
 
-    Substrate::Substrate(std::vector<std::vector<double> > &a_inputs, std::vector<std::vector<double> > &a_hidden, std::vector<std::vector<double> > &a_outputs)
+    Substrate::Substrate(std::vector<std::vector<Real> > &a_inputs, std::vector<std::vector<Real> > &a_hidden, std::vector<std::vector<Real> > &a_outputs)
         : m_input_coords(a_inputs),
           m_hidden_coords(a_hidden),
           m_output_coords(a_outputs),

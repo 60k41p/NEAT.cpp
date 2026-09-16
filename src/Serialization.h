@@ -42,6 +42,7 @@
 #include <vector>
 
 #include "Traits.h"
+#include "Types.h"
 
 namespace NEAT {
     namespace Serialization {
@@ -76,7 +77,7 @@ namespace NEAT {
                     return value;
                 }
                 case 1: {
-                    double value = 0.0;
+                    Real value = 0.0;
                     input >> value;
                     RequireStream(input, "trait value");
                     return value;
@@ -172,19 +173,19 @@ namespace NEAT {
                     output << details.set.size();
                     for (const auto &item : details.set) output << ' ' << std::quoted(item);
                     output << ' ' << details.probs.size();
-                    for (double probability : details.probs) output << ' ' << probability;
+                    for (Real probability : details.probs) output << ' ' << probability;
                 } else if (schema.type == "intset") {
                     const auto &details = std::get<IntSetTraitParameters>(schema.m_Details);
                     output << details.set.size();
                     for (const auto &item : details.set) output << ' ' << item.value;
                     output << ' ' << details.probs.size();
-                    for (double probability : details.probs) output << ' ' << probability;
+                    for (Real probability : details.probs) output << ' ' << probability;
                 } else if (schema.type == "floatset") {
                     const auto &details = std::get<FloatSetTraitParameters>(schema.m_Details);
                     output << details.set.size();
                     for (const auto &item : details.set) output << ' ' << item.value;
                     output << ' ' << details.probs.size();
-                    for (double probability : details.probs) output << ' ' << probability;
+                    for (Real probability : details.probs) output << ' ' << probability;
                 } else {
                     throw std::runtime_error("trait schema: unsupported type '" + schema.type + "'.");
                 }
@@ -233,7 +234,7 @@ namespace NEAT {
                     input >> set_size;
                     details.set.resize(set_size);
                     for (auto &item : details.set) input >> std::quoted(item);
-                    details.probs = ReadNumericVector<double>(input);
+                    details.probs = ReadNumericVector<Real>(input);
                     schema.m_Details = details;
                 } else if (schema.type == "intset") {
                     IntSetTraitParameters details;
@@ -244,18 +245,18 @@ namespace NEAT {
                         item.value = value;
                         details.set.push_back(item);
                     }
-                    details.probs = ReadNumericVector<double>(input);
+                    details.probs = ReadNumericVector<Real>(input);
                     schema.m_Details = details;
                 } else if (schema.type == "floatset") {
                     FloatSetTraitParameters details;
-                    const auto values = ReadNumericVector<double>(input);
+                    const auto values = ReadNumericVector<Real>(input);
                     details.set.reserve(values.size());
-                    for (double value : values) {
+                    for (Real value : values) {
                         floatsetelement item;
                         item.value = value;
                         details.set.push_back(item);
                     }
-                    details.probs = ReadNumericVector<double>(input);
+                    details.probs = ReadNumericVector<Real>(input);
                     schema.m_Details = details;
                 } else {
                     throw std::runtime_error("trait schema: unsupported type '" + schema.type + "'.");
@@ -266,7 +267,7 @@ namespace NEAT {
             return schemas;
         }
 
-        inline void UseRoundTripPrecision(std::ostream &output) { output << std::setprecision(std::numeric_limits<double>::max_digits10); }
+        inline void UseRoundTripPrecision(std::ostream &output) { output << std::setprecision(std::numeric_limits<Real>::max_digits10); }
 
     }  // namespace Serialization
 }  // namespace NEAT

@@ -1330,7 +1330,7 @@ namespace NEAT {
         MutateNeuronActivationTypeProb = 0.05;
         MutateNeuronSpikingParametersProb = 0.25;
         MutateLinkSpikingParametersProb = 0.15;
-        RecurrentProb = std::max(RecurrentProb, 0.2);
+        RecurrentProb = std::max(RecurrentProb, static_cast<Real>(0.2));
         AllowLoops = true;
         InitialSTDPEnabledProb = enable_stdp ? 0.1 : 0.0;
         SpikingNeuronDiffCoeff = 0.1;
@@ -1381,13 +1381,13 @@ namespace NEAT {
             if (error != nullptr) *error = message;
             return false;
         };
-        const auto finite_range = [&fail](const char *name, double minimum, double maximum) {
+        const auto finite_range = [&fail](const char *name, Real minimum, Real maximum) {
             if (!std::isfinite(minimum) || !std::isfinite(maximum) || minimum > maximum) {
                 return fail(std::string(name) + " must have a finite, ordered minimum and maximum");
             }
             return true;
         };
-        const auto probability = [&fail](const char *name, double value) {
+        const auto probability = [&fail](const char *name, Real value) {
             if (!std::isfinite(value) || value < 0.0 || value > 1.0) {
                 return fail(std::string(name) + " must be between 0 and 1");
             }
@@ -1424,63 +1424,63 @@ namespace NEAT {
         if (DetectCompetetiveCoevolutionStagnation && (KillWorstSpeciesEach <= 0 || KillWorstAge < 0))
             return fail("competitive coevolution stagnation detection requires a positive interval and non-negative age");
 
-        const std::pair<const char *, double> probabilities[] = {{"SurvivalRate", SurvivalRate},
-                                                                 {"CrossoverRate", CrossoverRate},
-                                                                 {"OverallMutationRate", OverallMutationRate},
-                                                                 {"InterspeciesCrossoverRate", InterspeciesCrossoverRate},
-                                                                 {"MultipointCrossoverRate", MultipointCrossoverRate},
-                                                                 {"SinglePointCrossoverRate", SinglePointCrossoverRate},
-                                                                 {"BlendCrossoverRate", BlendCrossoverRate},
-                                                                 {"SimulatedBinaryCrossoverRate", SimulatedBinaryCrossoverRate},
-                                                                 {"PreferFitterParentRate", PreferFitterParentRate},
-                                                                 {"EliteFraction", EliteFraction},
-                                                                 {"MutateAddNeuronProb", MutateAddNeuronProb},
-                                                                 {"MutateAddLinkProb", MutateAddLinkProb},
-                                                                 {"MutateAddLinkFromBiasProb", MutateAddLinkFromBiasProb},
-                                                                 {"MutateRemLinkProb", MutateRemLinkProb},
-                                                                 {"MutateRemSimpleNeuronProb", MutateRemSimpleNeuronProb},
-                                                                 {"RecurrentProb", RecurrentProb},
-                                                                 {"RecurrentLoopProb", RecurrentLoopProb},
-                                                                 {"MutateWeightsProb", MutateWeightsProb},
-                                                                 {"MutateWeightsSevereProb", MutateWeightsSevereProb},
-                                                                 {"WeightMutationRate", WeightMutationRate},
-                                                                 {"WeightReplacementRate", WeightReplacementRate},
-                                                                 {"MutateActivationAProb", MutateActivationAProb},
-                                                                 {"MutateActivationBProb", MutateActivationBProb},
-                                                                 {"MutateNeuronActivationTypeProb", MutateNeuronActivationTypeProb},
-                                                                 {"MutateNeuronTimeConstantsProb", MutateNeuronTimeConstantsProb},
-                                                                 {"MutateNeuronBiasesProb", MutateNeuronBiasesProb},
-                                                                 {"MutateNeuronTraitsProb", MutateNeuronTraitsProb},
-                                                                 {"MutateLinkTraitsProb", MutateLinkTraitsProb},
-                                                                 {"MutateGenomeTraitsProb", MutateGenomeTraitsProb},
-                                                                 {"ActivationFunction_SignedSigmoid_Prob", ActivationFunction_SignedSigmoid_Prob},
-                                                                 {"ActivationFunction_UnsignedSigmoid_Prob", ActivationFunction_UnsignedSigmoid_Prob},
-                                                                 {"ActivationFunction_Tanh_Prob", ActivationFunction_Tanh_Prob},
-                                                                 {"ActivationFunction_TanhCubic_Prob", ActivationFunction_TanhCubic_Prob},
-                                                                 {"ActivationFunction_SignedStep_Prob", ActivationFunction_SignedStep_Prob},
-                                                                 {"ActivationFunction_UnsignedStep_Prob", ActivationFunction_UnsignedStep_Prob},
-                                                                 {"ActivationFunction_SignedGauss_Prob", ActivationFunction_SignedGauss_Prob},
-                                                                 {"ActivationFunction_UnsignedGauss_Prob", ActivationFunction_UnsignedGauss_Prob},
-                                                                 {"ActivationFunction_Abs_Prob", ActivationFunction_Abs_Prob},
-                                                                 {"ActivationFunction_SignedSine_Prob", ActivationFunction_SignedSine_Prob},
-                                                                 {"ActivationFunction_UnsignedSine_Prob", ActivationFunction_UnsignedSine_Prob},
-                                                                 {"ActivationFunction_Linear_Prob", ActivationFunction_Linear_Prob},
-                                                                 {"ActivationFunction_Relu_Prob", ActivationFunction_Relu_Prob},
-                                                                 {"ActivationFunction_Softplus_Prob", ActivationFunction_Softplus_Prob},
-                                                                 {"ActivationFunction_SpikingLIF_Prob", ActivationFunction_SpikingLIF_Prob},
-                                                                 {"ActivationFunction_SpikingAdaptiveLIF_Prob", ActivationFunction_SpikingAdaptiveLIF_Prob},
-                                                                 {"ActivationFunction_SpikingIzhikevich_Prob", ActivationFunction_SpikingIzhikevich_Prob},
-                                                                 {"ActivationFunction_McCullochPitts_Prob", ActivationFunction_McCullochPitts_Prob},
-                                                                 {"MutateNeuronSpikingParametersProb", MutateNeuronSpikingParametersProb},
-                                                                 {"MutateLinkSpikingParametersProb", MutateLinkSpikingParametersProb},
-                                                                 {"SpikingParameterMutationRate", SpikingParameterMutationRate},
-                                                                 {"InitialMCPInhibitoryVetoProb", InitialMCPInhibitoryVetoProb},
-                                                                 {"MutateMCPInhibitoryVetoProb", MutateMCPInhibitoryVetoProb},
-                                                                 {"InitialSTDPEnabledProb", InitialSTDPEnabledProb}};
+        const std::pair<const char *, Real> probabilities[] = {{"SurvivalRate", SurvivalRate},
+                                                               {"CrossoverRate", CrossoverRate},
+                                                               {"OverallMutationRate", OverallMutationRate},
+                                                               {"InterspeciesCrossoverRate", InterspeciesCrossoverRate},
+                                                               {"MultipointCrossoverRate", MultipointCrossoverRate},
+                                                               {"SinglePointCrossoverRate", SinglePointCrossoverRate},
+                                                               {"BlendCrossoverRate", BlendCrossoverRate},
+                                                               {"SimulatedBinaryCrossoverRate", SimulatedBinaryCrossoverRate},
+                                                               {"PreferFitterParentRate", PreferFitterParentRate},
+                                                               {"EliteFraction", EliteFraction},
+                                                               {"MutateAddNeuronProb", MutateAddNeuronProb},
+                                                               {"MutateAddLinkProb", MutateAddLinkProb},
+                                                               {"MutateAddLinkFromBiasProb", MutateAddLinkFromBiasProb},
+                                                               {"MutateRemLinkProb", MutateRemLinkProb},
+                                                               {"MutateRemSimpleNeuronProb", MutateRemSimpleNeuronProb},
+                                                               {"RecurrentProb", RecurrentProb},
+                                                               {"RecurrentLoopProb", RecurrentLoopProb},
+                                                               {"MutateWeightsProb", MutateWeightsProb},
+                                                               {"MutateWeightsSevereProb", MutateWeightsSevereProb},
+                                                               {"WeightMutationRate", WeightMutationRate},
+                                                               {"WeightReplacementRate", WeightReplacementRate},
+                                                               {"MutateActivationAProb", MutateActivationAProb},
+                                                               {"MutateActivationBProb", MutateActivationBProb},
+                                                               {"MutateNeuronActivationTypeProb", MutateNeuronActivationTypeProb},
+                                                               {"MutateNeuronTimeConstantsProb", MutateNeuronTimeConstantsProb},
+                                                               {"MutateNeuronBiasesProb", MutateNeuronBiasesProb},
+                                                               {"MutateNeuronTraitsProb", MutateNeuronTraitsProb},
+                                                               {"MutateLinkTraitsProb", MutateLinkTraitsProb},
+                                                               {"MutateGenomeTraitsProb", MutateGenomeTraitsProb},
+                                                               {"ActivationFunction_SignedSigmoid_Prob", ActivationFunction_SignedSigmoid_Prob},
+                                                               {"ActivationFunction_UnsignedSigmoid_Prob", ActivationFunction_UnsignedSigmoid_Prob},
+                                                               {"ActivationFunction_Tanh_Prob", ActivationFunction_Tanh_Prob},
+                                                               {"ActivationFunction_TanhCubic_Prob", ActivationFunction_TanhCubic_Prob},
+                                                               {"ActivationFunction_SignedStep_Prob", ActivationFunction_SignedStep_Prob},
+                                                               {"ActivationFunction_UnsignedStep_Prob", ActivationFunction_UnsignedStep_Prob},
+                                                               {"ActivationFunction_SignedGauss_Prob", ActivationFunction_SignedGauss_Prob},
+                                                               {"ActivationFunction_UnsignedGauss_Prob", ActivationFunction_UnsignedGauss_Prob},
+                                                               {"ActivationFunction_Abs_Prob", ActivationFunction_Abs_Prob},
+                                                               {"ActivationFunction_SignedSine_Prob", ActivationFunction_SignedSine_Prob},
+                                                               {"ActivationFunction_UnsignedSine_Prob", ActivationFunction_UnsignedSine_Prob},
+                                                               {"ActivationFunction_Linear_Prob", ActivationFunction_Linear_Prob},
+                                                               {"ActivationFunction_Relu_Prob", ActivationFunction_Relu_Prob},
+                                                               {"ActivationFunction_Softplus_Prob", ActivationFunction_Softplus_Prob},
+                                                               {"ActivationFunction_SpikingLIF_Prob", ActivationFunction_SpikingLIF_Prob},
+                                                               {"ActivationFunction_SpikingAdaptiveLIF_Prob", ActivationFunction_SpikingAdaptiveLIF_Prob},
+                                                               {"ActivationFunction_SpikingIzhikevich_Prob", ActivationFunction_SpikingIzhikevich_Prob},
+                                                               {"ActivationFunction_McCullochPitts_Prob", ActivationFunction_McCullochPitts_Prob},
+                                                               {"MutateNeuronSpikingParametersProb", MutateNeuronSpikingParametersProb},
+                                                               {"MutateLinkSpikingParametersProb", MutateLinkSpikingParametersProb},
+                                                               {"SpikingParameterMutationRate", SpikingParameterMutationRate},
+                                                               {"InitialMCPInhibitoryVetoProb", InitialMCPInhibitoryVetoProb},
+                                                               {"MutateMCPInhibitoryVetoProb", MutateMCPInhibitoryVetoProb},
+                                                               {"InitialSTDPEnabledProb", InitialSTDPEnabledProb}};
         for (const auto &item : probabilities) {
             if (!probability(item.first, item.second)) return false;
         }
-        const double crossover_mode_total = MultipointCrossoverRate + SinglePointCrossoverRate + BlendCrossoverRate + SimulatedBinaryCrossoverRate;
+        const Real crossover_mode_total = MultipointCrossoverRate + SinglePointCrossoverRate + BlendCrossoverRate + SimulatedBinaryCrossoverRate;
         if (!std::isfinite(crossover_mode_total) || crossover_mode_total > 1.0 + 1.0e-12) return fail("crossover method probabilities must sum to at most 1");
 
         if (!finite_range("weight range", MinWeight, MaxWeight) || !finite_range("activation A range", MinActivationA, MaxActivationA) ||
@@ -1489,7 +1489,7 @@ namespace NEAT {
             !finite_range("neuron bias range", MinNeuronBias, MaxNeuronBias)) {
             return false;
         }
-        const std::pair<const char *, std::pair<double, double>> spiking_ranges[] = {
+        const std::pair<const char *, std::pair<Real, Real>> spiking_ranges[] = {
             {"spiking time-constant range", {MinSpikingTimeConstant, MaxSpikingTimeConstant}},
             {"spike-threshold range", {MinSpikeThreshold, MaxSpikeThreshold}},
             {"reset-potential range", {MinResetPotential, MaxResetPotential}},
@@ -1522,41 +1522,41 @@ namespace NEAT {
                 "negative");
         }
 
-        const std::pair<const char *, double> non_negative[] = {{"YoungAgeFitnessBoost", YoungAgeFitnessBoost},
-                                                                {"StagnationDelta", StagnationDelta},
-                                                                {"OldAgePenalty", OldAgePenalty},
-                                                                {"WeightMutationMaxPower", WeightMutationMaxPower},
-                                                                {"WeightReplacementMaxPower", WeightReplacementMaxPower},
-                                                                {"ActivationAMutationMaxPower", ActivationAMutationMaxPower},
-                                                                {"ActivationBMutationMaxPower", ActivationBMutationMaxPower},
-                                                                {"TimeConstantMutationMaxPower", TimeConstantMutationMaxPower},
-                                                                {"BiasMutationMaxPower", BiasMutationMaxPower},
-                                                                {"CrossoverBlendAlpha", CrossoverBlendAlpha},
-                                                                {"CrossoverSBXEta", CrossoverSBXEta},
-                                                                {"WeightMutationPolynomialEta", WeightMutationPolynomialEta},
-                                                                {"DisjointCoeff", DisjointCoeff},
-                                                                {"ExcessCoeff", ExcessCoeff},
-                                                                {"ActivationADiffCoeff", ActivationADiffCoeff},
-                                                                {"ActivationBDiffCoeff", ActivationBDiffCoeff},
-                                                                {"WeightDiffCoeff", WeightDiffCoeff},
-                                                                {"TimeConstantDiffCoeff", TimeConstantDiffCoeff},
-                                                                {"BiasDiffCoeff", BiasDiffCoeff},
-                                                                {"ActivationFunctionDiffCoeff", ActivationFunctionDiffCoeff},
-                                                                {"SpikingNeuronDiffCoeff", SpikingNeuronDiffCoeff},
-                                                                {"SpikingLinkDiffCoeff", SpikingLinkDiffCoeff},
-                                                                {"CompatTreshold", CompatTreshold},
-                                                                {"MinCompatTreshold", MinCompatTreshold},
-                                                                {"CompatTresholdModifier", CompatTresholdModifier},
-                                                                {"MinDeltaCompatEqualGenomes", MinDeltaCompatEqualGenomes},
-                                                                {"NoveltySearch_P_min", NoveltySearch_P_min},
-                                                                {"NoveltySearch_Pmin_min", NoveltySearch_Pmin_min},
-                                                                {"DivisionThreshold", DivisionThreshold},
-                                                                {"VarianceThreshold", VarianceThreshold},
-                                                                {"BandThreshold", BandThreshold},
-                                                                {"SpikingParameterMutationPower", SpikingParameterMutationPower},
-                                                                {"StagnationPenalty", StagnationPenalty},
-                                                                {"CompatibilityThresholdGain", CompatibilityThresholdGain},
-                                                                {"AdaptiveMutationRate", AdaptiveMutationRate}};
+        const std::pair<const char *, Real> non_negative[] = {{"YoungAgeFitnessBoost", YoungAgeFitnessBoost},
+                                                              {"StagnationDelta", StagnationDelta},
+                                                              {"OldAgePenalty", OldAgePenalty},
+                                                              {"WeightMutationMaxPower", WeightMutationMaxPower},
+                                                              {"WeightReplacementMaxPower", WeightReplacementMaxPower},
+                                                              {"ActivationAMutationMaxPower", ActivationAMutationMaxPower},
+                                                              {"ActivationBMutationMaxPower", ActivationBMutationMaxPower},
+                                                              {"TimeConstantMutationMaxPower", TimeConstantMutationMaxPower},
+                                                              {"BiasMutationMaxPower", BiasMutationMaxPower},
+                                                              {"CrossoverBlendAlpha", CrossoverBlendAlpha},
+                                                              {"CrossoverSBXEta", CrossoverSBXEta},
+                                                              {"WeightMutationPolynomialEta", WeightMutationPolynomialEta},
+                                                              {"DisjointCoeff", DisjointCoeff},
+                                                              {"ExcessCoeff", ExcessCoeff},
+                                                              {"ActivationADiffCoeff", ActivationADiffCoeff},
+                                                              {"ActivationBDiffCoeff", ActivationBDiffCoeff},
+                                                              {"WeightDiffCoeff", WeightDiffCoeff},
+                                                              {"TimeConstantDiffCoeff", TimeConstantDiffCoeff},
+                                                              {"BiasDiffCoeff", BiasDiffCoeff},
+                                                              {"ActivationFunctionDiffCoeff", ActivationFunctionDiffCoeff},
+                                                              {"SpikingNeuronDiffCoeff", SpikingNeuronDiffCoeff},
+                                                              {"SpikingLinkDiffCoeff", SpikingLinkDiffCoeff},
+                                                              {"CompatTreshold", CompatTreshold},
+                                                              {"MinCompatTreshold", MinCompatTreshold},
+                                                              {"CompatTresholdModifier", CompatTresholdModifier},
+                                                              {"MinDeltaCompatEqualGenomes", MinDeltaCompatEqualGenomes},
+                                                              {"NoveltySearch_P_min", NoveltySearch_P_min},
+                                                              {"NoveltySearch_Pmin_min", NoveltySearch_Pmin_min},
+                                                              {"DivisionThreshold", DivisionThreshold},
+                                                              {"VarianceThreshold", VarianceThreshold},
+                                                              {"BandThreshold", BandThreshold},
+                                                              {"SpikingParameterMutationPower", SpikingParameterMutationPower},
+                                                              {"StagnationPenalty", StagnationPenalty},
+                                                              {"CompatibilityThresholdGain", CompatibilityThresholdGain},
+                                                              {"AdaptiveMutationRate", AdaptiveMutationRate}};
         for (const auto &item : non_negative) {
             if (!std::isfinite(item.second) || item.second < 0.0) return fail(std::string(item.first) + " must be finite and non-negative");
         }
@@ -1572,7 +1572,7 @@ namespace NEAT {
             return fail("RankSelectionPressure must be between 1 and 2");
         if (!std::isfinite(FitnessRankPressure) || FitnessRankPressure < 1.0 || FitnessRankPressure > 2.0)
             return fail("FitnessRankPressure must be between 1 and 2");
-        const std::pair<const char *, double> positive_values[] = {
+        const std::pair<const char *, Real> positive_values[] = {
             {"RankSelectionExponent", RankSelectionExponent}, {"BoltzmannTemperature", BoltzmannTemperature},
             {"WeightMutationSigma", WeightMutationSigma},     {"WeightMutationCauchyScale", WeightMutationCauchyScale},
             {"FitnessSigmaScale", FitnessSigmaScale},         {"FitnessBoltzmannTemperature", FitnessBoltzmannTemperature}};
@@ -1582,14 +1582,14 @@ namespace NEAT {
         if (!std::isfinite(NoveltySearch_Pmin_lowering_multiplier) || NoveltySearch_Pmin_lowering_multiplier <= 0.0 ||
             !std::isfinite(NoveltySearch_Pmin_raising_multiplier) || NoveltySearch_Pmin_raising_multiplier <= 0.0)
             return fail("novelty threshold multipliers must be finite and positive");
-        const std::pair<const char *, double> finite_values[] = {
+        const std::pair<const char *, Real> finite_values[] = {
             {"CPPN_Bias", CPPN_Bias}, {"Width", Width},     {"Height", Height},   {"Depth", Depth},
             {"Qtree_X", Qtree_X},     {"Qtree_Y", Qtree_Y}, {"Qtree_Z", Qtree_Z}, {"LeoThreshold", LeoThreshold}};
         for (const auto &item : finite_values) {
             if (!std::isfinite(item.second)) return fail(std::string(item.first) + " must be finite");
         }
 
-        const double activation_total =
+        const Real activation_total =
             ActivationFunction_SignedSigmoid_Prob + ActivationFunction_UnsignedSigmoid_Prob + ActivationFunction_Tanh_Prob + ActivationFunction_TanhCubic_Prob +
             ActivationFunction_SignedStep_Prob + ActivationFunction_UnsignedStep_Prob + ActivationFunction_SignedGauss_Prob +
             ActivationFunction_UnsignedGauss_Prob + ActivationFunction_Abs_Prob + ActivationFunction_SignedSine_Prob + ActivationFunction_UnsignedSine_Prob +
@@ -1598,9 +1598,9 @@ namespace NEAT {
         if ((MutateAddNeuronProb > 0.0 || MutateNeuronActivationTypeProb > 0.0) && activation_total <= 0.0)
             return fail("at least one activation function must have positive probability");
 
-        const auto validate_set_probabilities = [&fail](const std::string &prefix, std::size_t set_size, const std::vector<double> &probs) {
+        const auto validate_set_probabilities = [&fail](const std::string &prefix, std::size_t set_size, const std::vector<Real> &probs) {
             if (!probs.empty() && probs.size() != set_size) return fail(prefix + "probability count must match the set size");
-            for (const double value : probs) {
+            for (const Real value : probs) {
                 if (!std::isfinite(value) || value < 0.0) return fail(prefix + "set probabilities must be finite and non-negative");
             }
             return true;

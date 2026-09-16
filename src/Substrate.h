@@ -35,6 +35,7 @@
 #include <vector>
 
 #include "NeuralNetwork.h"
+#include "Types.h"
 
 namespace NEAT {
 
@@ -43,9 +44,9 @@ namespace NEAT {
     // It basically contains 3 lists of coordinates - for the nodes.
     class Substrate {
        public:
-        std::vector<std::vector<double> > m_input_coords;
-        std::vector<std::vector<double> > m_hidden_coords;
-        std::vector<std::vector<double> > m_output_coords;
+        std::vector<std::vector<Real> > m_input_coords;
+        std::vector<std::vector<Real> > m_hidden_coords;
+        std::vector<std::vector<Real> > m_output_coords;
 
         // the substrate is made from leaky integrator neurons?
         bool m_leaky;
@@ -77,20 +78,20 @@ namespace NEAT {
         ActivationFunction m_output_nodes_activation;
 
         // additional parameters
-        double m_max_weight_and_bias;
-        double m_min_time_const;
-        double m_max_time_const;
+        Real m_max_weight_and_bias;
+        Real m_min_time_const;
+        Real m_max_time_const;
 
         // Physical wiring budget: connections longer than this (in substrate
         // coordinate units) are pruned by ES-HyperNEAT finalization.
         // Negative disables pruning.
-        double m_max_connection_length;
+        Real m_max_connection_length;
         // When true, axonal delays are set from length / m_conduction_velocity.
         bool m_use_spatial_distance_for_delays;
-        double m_conduction_velocity;
+        Real m_conduction_velocity;
 
         Substrate();
-        Substrate(std::vector<std::vector<double> > &a_inputs, std::vector<std::vector<double> > &a_hidden, std::vector<std::vector<double> > &a_outputs);
+        Substrate(std::vector<std::vector<Real> > &a_inputs, std::vector<std::vector<Real> > &a_hidden, std::vector<std::vector<Real> > &a_outputs);
 
         // Sets a custom connectivity scheme The neurons must be set before calling this
         void SetCustomConnectivity(std::vector<std::vector<int> > &a_conns);

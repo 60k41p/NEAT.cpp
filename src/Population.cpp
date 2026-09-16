@@ -58,11 +58,11 @@ namespace NEAT {
     // Transforms raw objective values into non-negative allocation weights.
     // SHIFTED (default) preserves the historical shift in an overflow-safe
     // normalized domain; the rank/sigma/Boltzmann modes are opt-in.
-    inline std::vector<double> TransformFitnessValues(const std::vector<double> &raw_fitness, const Parameters &parameters) {
+    inline std::vector<Real> TransformFitnessValues(const std::vector<Real> &raw_fitness, const Parameters &parameters) {
         if (raw_fitness.empty()) return {};
 
         constexpr long double epsilon = 1.0e-12L;
-        std::vector<double> transformed(raw_fitness.size(), 0.0);
+        std::vector<Real> transformed(raw_fitness.size(), 0.0);
         std::vector<std::size_t> finite_indices;
         finite_indices.reserve(raw_fitness.size());
         for (std::size_t i = 0; i < raw_fitness.size(); ++i) {
@@ -88,7 +88,7 @@ namespace NEAT {
                     if (scale <= legacy_offset) {
                         const long double normalizer = maximum - minimum + legacy_offset;
                         for (const std::size_t index : finite_indices) {
-                            transformed[index] = static_cast<double>((static_cast<long double>(raw_fitness[index]) - minimum + legacy_offset) / normalizer);
+                            transformed[index] = static_cast<Real>((static_cast<long double>(raw_fitness[index]) - minimum + legacy_offset) / normalizer);
                         }
                     } else {
                         const long double scaled_minimum = minimum / scale;
@@ -97,12 +97,12 @@ namespace NEAT {
                         const long double normalizer = scaled_range + scaled_offset;
                         for (const std::size_t index : finite_indices) {
                             transformed[index] =
-                                static_cast<double>((static_cast<long double>(raw_fitness[index]) / scale - scaled_minimum + scaled_offset) / normalizer);
+                                static_cast<Real>((static_cast<long double>(raw_fitness[index]) / scale - scaled_minimum + scaled_offset) / normalizer);
                         }
                     }
                 } else {
                     for (const std::size_t index : finite_indices) {
-                        transformed[index] = static_cast<double>(static_cast<long double>(raw_fitness[index]) / maximum);
+                        transformed[index] = static_cast<Real>(static_cast<long double>(raw_fitness[index]) / maximum);
                     }
                 }
                 break;
@@ -125,7 +125,7 @@ namespace NEAT {
                         weight = (2.0L - pressure) / count + 2.0L * (count - average_rank - 1.0L) * (pressure - 1.0L) / (count * (count - 1.0L));
                     }
                     for (std::size_t rank = first; rank < last; ++rank) {
-                        transformed[finite_indices[rank]] = static_cast<double>(std::max(epsilon, weight));
+                        transformed[finite_indices[rank]] = static_cast<Real>(std::max(epsilon, weight));
                     }
                     first = last;
                 }
@@ -153,7 +153,7 @@ namespace NEAT {
                     const long double weight = deviation > 0.0L ? 1.0L + (static_cast<long double>(raw_fitness[index]) / scale - mean) /
                                                                              (static_cast<long double>(parameters.FitnessSigmaScale) * deviation)
                                                                 : 1.0L;
-                    transformed[index] = static_cast<double>(std::max(epsilon, weight));
+                    transformed[index] = static_cast<Real>(std::max(epsilon, weight));
                 }
                 break;
             }
@@ -166,15 +166,15 @@ namespace NEAT {
                 for (const std::size_t index : finite_indices) {
                     const long double exponent =
                         (static_cast<long double>(raw_fitness[index]) - maximum) / static_cast<long double>(parameters.FitnessBoltzmannTemperature);
-                    transformed[index] = static_cast<double>(std::max(epsilon, std::exp(exponent)));
+                    transformed[index] = static_cast<Real>(std::max(epsilon, std::exp(exponent)));
                 }
                 break;
             }
         }
 
-        double maximum = 0.0;
+        Real maximum = 0.0;
         for (const std::size_t index : finite_indices) {
-            const double value = transformed[index];
+            const Real value = transformed[index];
             if (std::isfinite(value)) maximum = std::max(maximum, value);
         }
         if (maximum <= 0.0) {
@@ -214,9 +214,9 @@ namespace NEAT {
         candidates.resize(limit);
 
         std::size_t best_index = candidates.front();
-        double best_distance = std::numeric_limits<double>::max();
+        Real best_distance = std::numeric_limits<Real>::max();
         for (const std::size_t candidate : candidates) {
-            double distance = 0.0;
+            Real distance = 0.0;
             for (std::size_t other = 0; other < count; ++other) {
                 if (candidate == other) continue;
                 distance += species.m_Individuals[candidate].CompatibilityDistance(species.m_Individuals[other], parameters);
@@ -230,14 +230,14 @@ namespace NEAT {
     }
 
     // The constructor
-    Population::Population(const Genome &a_Seed, const Parameters &a_Parameters, bool a_RandomizeWeights, double a_RandomizationRange, int a_RNG_seed) {
+    Population::Population(const Genome &a_Seed, const Parameters &a_Parameters, bool a_RandomizeWeights, Real a_RandomizationRange, int a_RNG_seed) {
         std::string parameter_error;
         if (!a_Parameters.Validate(&parameter_error)) throw std::invalid_argument("Invalid evolution parameters: " + parameter_error);
         if (a_RandomizationRange < 0.0 || !std::isfinite(a_RandomizationRange))
             throw std::invalid_argument("Randomization range must be finite and non-negative");
 
         m_RNG.Seed(a_RNG_seed);
-        m_BestFitnessEver = std::numeric_limits<double>::lowest();
+        m_BestFitnessEver = std::numeric_limits<Real>::lowest();
         m_Parameters = a_Parameters;
 
         m_Generation = 0;
@@ -347,7 +347,7 @@ namespace NEAT {
 
     Population::Population(const std::string a_sFileName) {
         auto a_FileName = a_sFileName.c_str();
-        m_BestFitnessEver = std::numeric_limits<double>::lowest();
+        m_BestFitnessEver = std::numeric_limits<Real>::lowest();
 
         m_Generation = 0;
         m_NumEvaluations = 0;
@@ -487,22 +487,22 @@ namespace NEAT {
         ASSERT(m_Genomes.size() > 0);
         ASSERT(m_Species.size() > 0);
 
-        std::vector<double> raw_fitness;
+        std::vector<Real> raw_fitness;
         raw_fitness.reserve(NumGenomes());
         for (const auto &species : m_Species) {
             for (const auto &genome : species.m_Individuals) raw_fitness.push_back(genome.GetFitness());
         }
-        const std::vector<double> transformed = TransformFitnessValues(raw_fitness, m_Parameters);
+        const std::vector<Real> transformed = TransformFitnessValues(raw_fitness, m_Parameters);
 
         std::size_t offset = 0;
         for (auto &species : m_Species) {
             const std::size_t species_size = species.m_Individuals.size();
-            species.AdjustFitness(m_Parameters, std::vector<double>(transformed.begin() + static_cast<std::ptrdiff_t>(offset),
-                                                                    transformed.begin() + static_cast<std::ptrdiff_t>(offset + species_size)));
+            species.AdjustFitness(m_Parameters, std::vector<Real>(transformed.begin() + static_cast<std::ptrdiff_t>(offset),
+                                                                  transformed.begin() + static_cast<std::ptrdiff_t>(offset + species_size)));
             offset += species_size;
         }
 
-        double maximum_adjusted = 0.0;
+        Real maximum_adjusted = 0.0;
         for (const auto &species : m_Species) {
             for (const auto &genome : species.m_Individuals) {
                 if (std::isfinite(genome.GetAdjFitness())) {
@@ -532,8 +532,8 @@ namespace NEAT {
             throw std::runtime_error("Population size does not match Parameters::PopulationSize");
         }
 
-        double t_total_adjusted_fitness = 0.0;
-        double t_average_adjusted_fitness = 0.0;
+        Real t_total_adjusted_fitness = 0.0;
+        Real t_average_adjusted_fitness = 0.0;
         Genome t_t;
 
         // get the total adjusted fitness for all individuals
@@ -548,7 +548,7 @@ namespace NEAT {
         // must be above 0
         ASSERT(t_total_adjusted_fitness > 0.0);
 
-        t_average_adjusted_fitness = t_total_adjusted_fitness / static_cast<double>(population_size);
+        t_average_adjusted_fitness = t_total_adjusted_fitness / static_cast<Real>(population_size);
         if (!std::isfinite(t_average_adjusted_fitness) || t_average_adjusted_fitness <= 0.0) {
             t_average_adjusted_fitness = 1.0;
         }
@@ -687,11 +687,11 @@ namespace NEAT {
                 // Make sure all are evaluated as we don't run in realtime
                 m_Species[i].m_Individuals[j].SetEvaluated();
 
-                const double t_Fitness = m_Species[i].m_Individuals[j].GetFitness();
+                const Real t_Fitness = m_Species[i].m_Individuals[j].GetFitness();
                 if (!std::isfinite(t_Fitness)) continue;
                 if (m_BestFitnessEver < t_Fitness) {
                     // Reset the stagnation counter only if the fitness jump is greater or equal to the delta.
-                    if (fabs(t_Fitness - m_BestFitnessEver) >= m_Parameters.StagnationDelta) {
+                    if (std::fabs(t_Fitness - m_BestFitnessEver) >= m_Parameters.StagnationDelta) {
                         m_GensSinceBestFitnessLastChanged = 0;
                     }
 
@@ -702,10 +702,10 @@ namespace NEAT {
         }
 
         // Find and save the current best genome
-        double t_bestf = std::numeric_limits<double>::lowest();
+        Real t_bestf = std::numeric_limits<Real>::lowest();
         for (unsigned int i = 0; i < m_Species.size(); i++) {
             for (unsigned int j = 0; j < m_Species[i].m_Individuals.size(); j++) {
-                const double fitness = m_Species[i].m_Individuals[j].GetFitness();
+                const Real fitness = m_Species[i].m_Individuals[j].GetFitness();
                 if (std::isfinite(fitness) && fitness > t_bestf) {
                     t_bestf = fitness;
                     m_BestGenome = m_Species[i].m_Individuals[j];
@@ -720,7 +720,7 @@ namespace NEAT {
                     const unsigned int target = m_Parameters.TargetSpecies > 0
                                                     ? m_Parameters.TargetSpecies
                                                     : m_Parameters.MinSpecies + (m_Parameters.MaxSpecies - m_Parameters.MinSpecies) / 2U;
-                    const double normalized_error = (static_cast<double>(m_Species.size()) - static_cast<double>(target)) / static_cast<double>(target);
+                    const Real normalized_error = (static_cast<Real>(m_Species.size()) - static_cast<Real>(target)) / static_cast<Real>(target);
                     m_Parameters.CompatTreshold *= std::exp(m_Parameters.CompatibilityThresholdGain * normalized_error);
                 } else {
                     if (m_Species.size() > m_Parameters.MaxSpecies) {
@@ -789,7 +789,7 @@ namespace NEAT {
 
                         // Reset variables for simplifying mode
                         m_GensSinceMPCLastChanged = 0;
-                        m_OldMPC = std::numeric_limits<double>::max();  // Really big one
+                        m_OldMPC = std::numeric_limits<Real>::max();  // Really big one
 
                         // reset the age of species
                         for (unsigned int i = 0; i < m_Species.size(); i++) {
@@ -824,10 +824,10 @@ namespace NEAT {
         // Optional floors protect viable niches before the remaining capacity is
         // apportioned in proportion to adjusted fitness.
         {
-            std::vector<double> quotas(m_Species.size(), 0.0);
-            std::vector<double> requirements(m_Species.size(), 0.0);
+            std::vector<Real> quotas(m_Species.size(), 0.0);
+            std::vector<Real> requirements(m_Species.size(), 0.0);
             for (std::size_t i = 0; i < m_Species.size(); ++i) {
-                const double requirement = m_Species[i].GetOffspringRqd();
+                const Real requirement = m_Species[i].GetOffspringRqd();
                 if (!std::isfinite(requirement) || requirement < 0.0) {
                     throw std::runtime_error("Species offspring requirements must be finite and non-negative");
                 }
@@ -866,30 +866,30 @@ namespace NEAT {
                 }
                 if (std::none_of(included.begin(), included.end(), [](bool value) { return value; })) included.front() = true;
                 const unsigned int remaining = m_Parameters.PopulationSize - reserved;
-                double total_weight = 0.0;
+                Real total_weight = 0.0;
                 for (std::size_t i = 0; i < requirements.size(); ++i) {
                     if (included[i]) total_weight += requirements[i];
                 }
                 if (total_weight <= 0.0) {
-                    total_weight = static_cast<double>(std::count(included.begin(), included.end(), true));
+                    total_weight = static_cast<Real>(std::count(included.begin(), included.end(), true));
                     for (std::size_t i = 0; i < quotas.size(); ++i) {
-                        if (included[i]) quotas[i] = static_cast<double>(floors[i]) + static_cast<double>(remaining) / total_weight;
+                        if (included[i]) quotas[i] = static_cast<Real>(floors[i]) + static_cast<Real>(remaining) / total_weight;
                     }
                 } else {
                     for (std::size_t i = 0; i < quotas.size(); ++i) {
                         if (included[i]) {
-                            quotas[i] = static_cast<double>(floors[i]) + static_cast<double>(remaining) * requirements[i] / total_weight;
+                            quotas[i] = static_cast<Real>(floors[i]) + static_cast<Real>(remaining) * requirements[i] / total_weight;
                         }
                     }
                 }
             }
 
             std::vector<unsigned int> offspring_counts(m_Species.size(), 0);
-            std::vector<double> offspring_remainders(m_Species.size(), 0.0);
+            std::vector<Real> offspring_remainders(m_Species.size(), 0.0);
             unsigned int assigned_offspring = 0;
             for (std::size_t i = 0; i < quotas.size(); ++i) {
-                const double integral = std::floor(quotas[i]);
-                if (integral > static_cast<double>(std::numeric_limits<unsigned int>::max())) {
+                const Real integral = std::floor(quotas[i]);
+                if (integral > static_cast<Real>(std::numeric_limits<unsigned int>::max())) {
                     throw std::overflow_error("Species offspring requirement is too large");
                 }
                 offspring_counts[i] = static_cast<unsigned int>(integral);
@@ -901,7 +901,7 @@ namespace NEAT {
                 unsigned int remaining = m_Parameters.PopulationSize - assigned_offspring;
                 if (m_Parameters.OffspringAllocation == STOCHASTIC_REMAINDER) {
                     while (remaining > 0) {
-                        double total = std::accumulate(offspring_remainders.begin(), offspring_remainders.end(), 0.0);
+                        Real total = std::accumulate(offspring_remainders.begin(), offspring_remainders.end(), 0.0);
                         if (total <= 0.0) break;
                         const std::size_t selected = static_cast<std::size_t>(m_RNG.Roulette(offspring_remainders));
                         ++offspring_counts[selected];
@@ -936,7 +936,7 @@ namespace NEAT {
                 if (excess != 0) throw std::runtime_error("Unable to reconcile species offspring counts");
             }
             for (std::size_t i = 0; i < m_Species.size(); ++i) {
-                m_Species[i].SetOffspringRqd(static_cast<double>(offspring_counts[i]));
+                m_Species[i].SetOffspringRqd(static_cast<Real>(offspring_counts[i]));
             }
         }
 
@@ -1031,12 +1031,12 @@ namespace NEAT {
         if (m_Species.empty()) throw std::runtime_error("Cannot choose a parent from an empty population");
 
         std::vector<std::size_t> eligible;
-        std::vector<double> probs;
-        double minimum = 0.0;
+        std::vector<Real> probs;
+        Real minimum = 0.0;
         for (std::size_t i = 0; i < m_Species.size(); ++i) {
             const auto &species = m_Species[i];
             if (species.NumEvaluated() == 0 || species.NumIndividuals() == 0) continue;
-            const double fitness = std::isfinite(species.m_AverageFitness) ? species.m_AverageFitness : 0.0;
+            const Real fitness = std::isfinite(species.m_AverageFitness) ? species.m_AverageFitness : 0.0;
             minimum = eligible.empty() ? fitness : std::min(minimum, fitness);
             eligible.push_back(i);
             probs.push_back(fitness);
@@ -1045,9 +1045,9 @@ namespace NEAT {
             throw std::runtime_error("No evaluated species is available for reproduction");
         }
         if (minimum < 0.0) {
-            for (double &probability : probs) probability -= minimum;
+            for (Real &probability : probs) probability -= minimum;
         }
-        if (std::none_of(probs.begin(), probs.end(), [](double probability) { return probability > 0.0; })) {
+        if (std::none_of(probs.begin(), probs.end(), [](Real probability) { return probability > 0.0; })) {
             std::fill(probs.begin(), probs.end(), 1.0);
         }
 
@@ -1117,14 +1117,14 @@ namespace NEAT {
                 //}
 
                 if (!m_Species[i].m_Individuals[j].IsEvaluated()) continue;
-                double t_fitness = m_Species[i].m_Individuals[j].GetFitness();
+                Real t_fitness = m_Species[i].m_Individuals[j].GetFitness();
                 if (std::isnan(t_fitness) || std::isinf(t_fitness)) {
                     t_fitness = 0;
                 }
 
                 if (t_fitness > m_BestFitnessEver) {
                     // Reset the stagnation counter only if the fitness jump is greater or equal to the delta.
-                    if (fabs(t_fitness - m_BestFitnessEver) >= m_Parameters.StagnationDelta) {
+                    if (std::fabs(t_fitness - m_BestFitnessEver) >= m_Parameters.StagnationDelta) {
                         m_EvalsSinceBestFitnessLastChanged = 0;
                     }
 
@@ -1134,7 +1134,7 @@ namespace NEAT {
             }
         }
 
-        double t_f = std::numeric_limits<double>::min();
+        Real t_f = std::numeric_limits<Real>::min();
         for (int i = 0; i < m_Species.size(); i++) {
             for (int j = 0; j < m_Species[i].m_Individuals.size(); j++) {
                 if (m_Species[i].m_Individuals[j].GetFitness() > t_f) {
@@ -1152,7 +1152,7 @@ namespace NEAT {
         // adjust the compatibility treshold
         bool t_changed = false;
         if (m_Parameters.DynamicCompatibility == true) {
-            double t_oldcompat = m_Parameters.CompatTreshold;
+            Real t_oldcompat = m_Parameters.CompatTreshold;
             if ((m_NumEvaluations % m_Parameters.CompatTreshChangeInterval_Evaluations) == 0) {
                 if (m_Species.size() > m_Parameters.MaxSpecies) {
                     m_Parameters.CompatTreshold += m_Parameters.CompatTresholdModifier;
@@ -1404,7 +1404,7 @@ namespace NEAT {
     Genome Population::RemoveWorstIndividual() {
         unsigned int t_worst_idx = 0;          // within the species
         unsigned int t_worst_species_idx = 0;  // within the population
-        double t_worst_fitness = std::numeric_limits<double>::max();
+        Real t_worst_fitness = std::numeric_limits<Real>::max();
         int numev = 0;
 
         Genome t_genome;
@@ -1413,29 +1413,29 @@ namespace NEAT {
 
         // Shift fitness into the non-negative domain (as in fitness sharing)
         // so negative-fitness individuals compare correctly.
-        double minimum_fitness = 0.0;
+        Real minimum_fitness = 0.0;
         bool have_finite_fitness = false;
         for (unsigned int i = 0; i < m_Species.size(); i++) {
             for (unsigned int j = 0; j < m_Species[i].m_Individuals.size(); j++) {
                 if (m_Species[i].m_Individuals[j].IsEvaluated() && std::isfinite(m_Species[i].m_Individuals[j].GetFitness())) {
-                    const double fitness = m_Species[i].m_Individuals[j].GetFitness();
+                    const Real fitness = m_Species[i].m_Individuals[j].GetFitness();
                     minimum_fitness = have_finite_fitness ? std::min(minimum_fitness, fitness) : fitness;
                     have_finite_fitness = true;
                 }
             }
         }
-        const double fitness_offset = have_finite_fitness && minimum_fitness <= 0.0 ? -minimum_fitness + 1.0e-7 : 0.0;
+        const Real fitness_offset = have_finite_fitness && minimum_fitness <= 0.0 ? -minimum_fitness + 1.0e-7 : 0.0;
 
         // Find and kill the individual with the worst fitness-shared score.
         for (unsigned int i = 0; i < m_Species.size(); i++) {
             if (m_Species[i].m_Individuals.size() > 0) {
-                double adjinv = 1.0 / static_cast<double>(m_Species[i].m_Individuals.size());
+                Real adjinv = 1.0 / static_cast<Real>(m_Species[i].m_Individuals.size());
                 for (unsigned int j = 0; j < m_Species[i].m_Individuals.size(); j++) {
                     // only evaluated individuals can be removed
                     if (m_Species[i].m_Individuals[j].IsEvaluated()) {
                         numev++;
-                        const double fitness = std::isfinite(m_Species[i].m_Individuals[j].GetFitness()) ? m_Species[i].m_Individuals[j].GetFitness() : 0.0;
-                        const double t_adjusted_fitness = (fitness + fitness_offset) * adjinv;
+                        const Real fitness = std::isfinite(m_Species[i].m_Individuals[j].GetFitness()) ? m_Species[i].m_Individuals[j].GetFitness() : 0.0;
+                        const Real t_adjusted_fitness = (fitness + fitness_offset) * adjinv;
 
                         if (t_adjusted_fitness < t_worst_fitness) {
                             t_worst_fitness = t_adjusted_fitness;
@@ -1497,15 +1497,15 @@ namespace NEAT {
         }
     }
 
-    double Population::ComputeSparseness(Genome &genome) {
+    Real Population::ComputeSparseness(Genome &genome) {
         // this will hold the distances from our new behavior
-        std::vector<double> t_distances_list;
+        std::vector<Real> t_distances_list;
         t_distances_list.clear();
 
         // first add all distances from the population
         for (unsigned int i = 0; i < m_Species.size(); i++) {
             for (unsigned int j = 0; j < m_Species[i].m_Individuals.size(); j++) {
-                double distance = genome.m_PhenotypeBehavior->Distance_To(m_Species[i].m_Individuals[j].m_PhenotypeBehavior);
+                Real distance = genome.m_PhenotypeBehavior->Distance_To(m_Species[i].m_Individuals[j].m_PhenotypeBehavior);
                 t_distances_list.emplace_back(distance);
             }
         }
@@ -1519,7 +1519,7 @@ namespace NEAT {
         std::sort(t_distances_list.begin(), t_distances_list.end());
 
         // now compute the sparseness
-        double t_sparseness = 0;
+        Real t_sparseness = 0;
         for (unsigned int i = 1; i < (m_Parameters.NoveltySearch_K + 1); i++) {
             t_sparseness += t_distances_list[i];
         }
@@ -1559,7 +1559,7 @@ namespace NEAT {
         }
 
         // We have the new behavior, now let's calculate the sparseness of the point in behavior space
-        double t_sparseness = ComputeSparseness(*t_new_baby);
+        Real t_sparseness = ComputeSparseness(*t_new_baby);
 
         // OK now we have the sparseness for this behavior if the sparseness is above Pmin, add this behavior to the archive
         m_GensSinceLastArchiving++;
@@ -1677,7 +1677,7 @@ namespace NEAT {
             throw std::runtime_error("Population::Serialize: " + validation_error);
         }
         std::ostringstream output;
-        output << std::setprecision(std::numeric_limits<double>::max_digits10);
+        output << std::setprecision(std::numeric_limits<Real>::max_digits10);
         output << "PopulationStart\n";
         output << "PopulationFormat 2\n";
         output << "PopulationState " << m_Generation << ' ' << m_NumEvaluations << ' ' << m_NextGenomeID << ' ' << m_NextSpeciesID << ' ' << m_BestFitnessEver

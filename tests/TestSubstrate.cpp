@@ -43,9 +43,9 @@ int TestSubstrate(int argc, char *argv[]) {
 
     // Dimensionality math over mixed coordinate sizes.
     {
-        std::vector<std::vector<double>> ins{{0.0, 0.0}, {1.0, 1.0}};
-        std::vector<std::vector<double>> hid{{0.0, 0.0}};
-        std::vector<std::vector<double>> outs{{0.0, 0.0}};
+        std::vector<std::vector<Real>> ins{{0.0, 0.0}, {1.0, 1.0}};
+        std::vector<std::vector<Real>> hid{{0.0, 0.0}};
+        std::vector<std::vector<Real>> outs{{0.0, 0.0}};
         Substrate s(ins, hid, outs);
         CHECK(s.GetMaxDims() == 2);
         CHECK(s.GetMinCPPNInputs() == 2 * 2 + 1);

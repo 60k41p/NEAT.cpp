@@ -29,7 +29,7 @@ namespace {
         }                                                                                   \
     } while (0)
 
-    bool Near(double a, double b, double eps = 1e-9) { return std::fabs(a - b) <= eps; }
+    bool Near(Real a, Real b, Real eps = 1e-9) { return std::fabs(a - b) <= eps; }
 
     std::string ReadWholeFile(const std::filesystem::path &p) {
         std::ifstream in(p, std::ios::binary);

@@ -65,10 +65,10 @@ namespace NEAT {
     ActivationFunction GetRandomActivation(const Parameters &a_Parameters, RNG &a_RNG);
 
     // squared x
-    inline double sqr(double x) { return x * x; }
+    inline Real sqr(Real x) { return x * x; }
 
     // Uniform draw from [minimum .. maximum] (degenerate range returns the bound).
-    inline double RandomRange(RNG &rng, double minimum, double maximum) {
+    inline Real RandomRange(RNG &rng, Real minimum, Real maximum) {
         if (minimum == maximum) return minimum;
         return minimum + rng.RandFloat() * (maximum - minimum);
     }
@@ -76,7 +76,7 @@ namespace NEAT {
     // Initializes a new neuron gene's spiking parameters from the evolvable
     // ranges (midpoint when no RNG is given, e.g. deterministic builders).
     inline void InitializeNeuronSpiking(NeuronGene &neuron, const Parameters &parameters, RNG *rng = nullptr) {
-        const auto value = [rng](double minimum, double maximum) {
+        const auto value = [rng](Real minimum, Real maximum) {
             return rng == nullptr ? minimum + (maximum - minimum) * 0.5 : RandomRange(*rng, minimum, maximum);
         };
         if (IsSpikingActivation(neuron.m_ActFunction)) {
@@ -103,7 +103,7 @@ namespace NEAT {
 
     // Initializes a new link gene's synapse/STDP parameters from the evolvable ranges.
     inline void InitializeLinkSpiking(LinkGene &link, const Parameters &parameters, RNG *rng = nullptr) {
-        const auto value = [rng](double minimum, double maximum) {
+        const auto value = [rng](Real minimum, Real maximum) {
             return rng == nullptr ? minimum + (maximum - minimum) * 0.5 : RandomRange(*rng, minimum, maximum);
         };
         link.m_SynapticDelay = value(parameters.MinSynapticDelay, parameters.MaxSynapticDelay);
@@ -119,7 +119,7 @@ namespace NEAT {
 
     // Copies a substrate coordinate into a phenotype neuron, preserving the
     // historical x/y/z and substrate-coordinate aliases.
-    inline void SetSpatialCoordinates(Neuron &neuron, const std::vector<double> &coordinate) {
+    inline void SetSpatialCoordinates(Neuron &neuron, const std::vector<Real> &coordinate) {
         neuron.m_substrate_coords = coordinate;
         neuron.m_x = coordinate.size() > 0 ? coordinate[0] : 0.0;
         neuron.m_y = coordinate.size() > 1 ? coordinate[1] : 0.0;
@@ -131,9 +131,9 @@ namespace NEAT {
 
     // Validates that every substrate coordinate group is non-empty and finite.
     inline void ValidateSpatialSubstrate(const Substrate &substrate, const char *algorithm) {
-        const auto validate_group = [algorithm](const std::vector<std::vector<double>> &coordinates, const char *group) {
+        const auto validate_group = [algorithm](const std::vector<std::vector<Real>> &coordinates, const char *group) {
             for (const auto &coordinate : coordinates) {
-                if (coordinate.empty() || !std::all_of(coordinate.begin(), coordinate.end(), [](double value) { return std::isfinite(value); })) {
+                if (coordinate.empty() || !std::all_of(coordinate.begin(), coordinate.end(), [](Real value) { return std::isfinite(value); })) {
                     throw std::invalid_argument(std::string(algorithm) + " " + group + " coordinates must be non-empty and finite");
                 }
             }
@@ -405,8 +405,8 @@ namespace NEAT {
 
         // add and connect hidden neurons if seed type is != 0
         if ((in.SeedType == LAYERED) && (in.NumHidden > 0)) {
-            double lt_inc = 1.0 / (in.NumLayers + 1);
-            double initlt = lt_inc;
+            Real lt_inc = 1.0 / (in.NumLayers + 1);
+            Real initlt = lt_inc;
             for (unsigned int n = 0; n < in.NumLayers; n++) {
                 for (unsigned int i = 0; i < in.NumHidden; i++) {
                     NeuronGene t_ngene(HIDDEN, t_nnum, 1.0);
@@ -571,13 +571,13 @@ namespace NEAT {
 
     int Genome::GetID() const { return m_ID; }
 
-    void Genome::SetAdjFitness(double a_af) { m_AdjustedFitness = a_af; }
+    void Genome::SetAdjFitness(Real a_af) { m_AdjustedFitness = a_af; }
 
-    void Genome::SetFitness(double a_f) { m_Fitness = a_f; }
+    void Genome::SetFitness(Real a_f) { m_Fitness = a_f; }
 
-    double Genome::GetAdjFitness() const { return m_AdjustedFitness; }
+    Real Genome::GetAdjFitness() const { return m_AdjustedFitness; }
 
-    double Genome::GetFitness() const { return m_Fitness; }
+    Real Genome::GetFitness() const { return m_Fitness; }
 
     void Genome::SetNeuronY(unsigned int a_idx, int a_y) { m_NeuronGenes.at(a_idx).y = a_y; }
 
@@ -612,9 +612,9 @@ namespace NEAT {
         return m_NeuronGenes[t_idx];
     }
 
-    double Genome::GetOffspringAmount() const { return m_OffspringAmount; }
+    Real Genome::GetOffspringAmount() const { return m_OffspringAmount; }
 
-    void Genome::SetOffspringAmount(double a_oa) { m_OffspringAmount = a_oa; }
+    void Genome::SetOffspringAmount(Real a_oa) { m_OffspringAmount = a_oa; }
 
     bool Genome::IsEvaluated() const { return m_Evaluated; }
 
@@ -816,8 +816,8 @@ namespace NEAT {
             t_n.m_mcp_inhibitory_veto = m_NeuronGenes[i].m_MCPInhibitoryVeto;
             t_n.m_split_y = m_NeuronGenes[i].SplitY();
             t_n.m_type = m_NeuronGenes[i].Type();
-            t_n.m_x = static_cast<double>(m_NeuronGenes[i].x);
-            t_n.m_y = static_cast<double>(m_NeuronGenes[i].y);
+            t_n.m_x = static_cast<Real>(m_NeuronGenes[i].x);
+            t_n.m_y = static_cast<Real>(m_NeuronGenes[i].y);
 
             a_Net.AddNeuron(t_n);
         }
@@ -855,7 +855,7 @@ namespace NEAT {
             // if a float trait "hebb_rate" exists
             if (m_LinkGenes[i].m_Traits.count("hebb_rate") == 1) {
                 try {
-                    t_c.m_hebb_rate = std::get<double>(m_LinkGenes[i].m_Traits.at("hebb_rate").value);
+                    t_c.m_hebb_rate = std::get<Real>(m_LinkGenes[i].m_Traits.at("hebb_rate").value);
                 } catch (...) {
                     // do nothing
                 }
@@ -863,7 +863,7 @@ namespace NEAT {
             // if a float trait "hebb_pre_rate" exists
             if (m_LinkGenes[i].m_Traits.count("hebb_pre_rate") == 1) {
                 try {
-                    t_c.m_hebb_pre_rate = std::get<double>(m_LinkGenes[i].m_Traits.at("hebb_pre_rate").value);
+                    t_c.m_hebb_pre_rate = std::get<Real>(m_LinkGenes[i].m_Traits.at("hebb_pre_rate").value);
                 } catch (...) {
                     // do nothing
                 }
@@ -969,7 +969,7 @@ namespace NEAT {
 
                 // Inputs for the generation of time consts and biases across the nodes in the substrate We input only the position of the first node and ignore
                 // the other one
-                std::vector<double> t_inputs;
+                std::vector<Real> t_inputs;
                 t_inputs.resize(NumInputs());
 
                 for (unsigned int n = 0; n < net.m_neurons[i].m_substrate_coords.size(); n++) {
@@ -978,11 +978,11 @@ namespace NEAT {
 
                 if (subst.m_with_distance) {
                     // compute the Eucledian distance between the point and the origin
-                    double sum = 0;
+                    Real sum = 0;
                     for (int n = 0; n < max_dims; n++) {
                         sum += sqr(t_inputs[n]);
                     }
-                    sum = sqrt(sum);
+                    sum = std::sqrt(sum);
                     t_inputs[NumInputs() - 2] = sum;
                 }
                 t_inputs[NumInputs() - 1] = 1.0;  // the CPPN's bias
@@ -994,8 +994,8 @@ namespace NEAT {
                     t_temp_phenotype.Activate();
                 }
 
-                double t_tc = t_temp_phenotype.Output()[NumOutputs() - 2];
-                double t_bias = t_temp_phenotype.Output()[NumOutputs() - 1];
+                Real t_tc = t_temp_phenotype.Output()[NumOutputs() - 2];
+                Real t_bias = t_temp_phenotype.Output()[NumOutputs() - 1];
 
                 Clamp(t_tc, -1, 1);
                 Clamp(t_bias, -1, 1);
@@ -1113,7 +1113,7 @@ namespace NEAT {
 
             // Take the weight of this connection by querying the CPPN
             // as many times as deep (recurrent or looped CPPNs may be very slow!!!*)
-            std::vector<double> t_inputs;
+            std::vector<Real> t_inputs;
             t_inputs.resize(NumInputs());
 
             int from_dims = net.m_neurons[j].m_substrate_coords.size();
@@ -1136,11 +1136,11 @@ namespace NEAT {
 
             if (subst.m_with_distance) {
                 // compute the Eucledian distance between the two points differing dimensionality doesn't matter as the extra dimensions are 0s
-                double sum = 0;
+                Real sum = 0;
                 for (int n = 0; n < max_dims; n++) {
                     sum += sqr(t_inputs[n] - t_inputs[max_dims + n]);
                 }
-                sum = sqrt(sum);
+                sum = std::sqrt(sum);
 
                 t_inputs[NumInputs() - 2] = sum;
             }
@@ -1157,8 +1157,8 @@ namespace NEAT {
             }
 
             // the output is a weight
-            double t_link = 0;
-            double t_weight = 0;
+            Real t_link = 0;
+            Real t_weight = 0;
 
             if (subst.m_query_weights_only) {
                 t_weight = t_temp_phenotype.Output()[0];
@@ -1203,10 +1203,10 @@ namespace NEAT {
         // * in future expansions
     }
 
-    // std::map<std::pair<int,int>, double> distance_cache;
+    // std::map<std::pair<int,int>, Real> distance_cache;
 
     // Returns the absolute distance between this genome and a_G
-    double Genome::CompatibilityDistance(Genome &a_G, Parameters &a_Parameters) {
+    Real Genome::CompatibilityDistance(Genome &a_G, Parameters &a_Parameters) {
         // first check if in cache, if so, return that
         /*auto q1 = std::make_pair(this->GetID(), a_G.GetID());
         auto q2 = std::make_pair(a_G.GetID(), this->GetID());
@@ -1226,25 +1226,25 @@ namespace NEAT {
         std::vector<LinkGene>::const_iterator t_g2;
 
         // this variable is the total distance between the genomes if it passes beyond the compatibility treshold, the function returns false
-        double t_total_distance = 0.0;
+        Real t_total_distance = 0.0;
 
-        double t_total_weight_difference = 0.0;
-        double t_total_timeconstant_difference = 0.0;
-        double t_total_bias_difference = 0.0;
-        double t_total_A_difference = 0.0;
-        double t_total_B_difference = 0.0;
-        double t_total_num_activation_difference = 0.0;
-        double t_total_spiking_neuron_difference = 0.0;
-        double t_total_spiking_link_difference = 0.0;
-        std::map<std::string, double> t_total_neuron_trait_difference;
-        std::map<std::string, double> t_total_link_trait_difference;
-        std::map<std::string, double> t_genome_link_trait_difference;
+        Real t_total_weight_difference = 0.0;
+        Real t_total_timeconstant_difference = 0.0;
+        Real t_total_bias_difference = 0.0;
+        Real t_total_A_difference = 0.0;
+        Real t_total_B_difference = 0.0;
+        Real t_total_num_activation_difference = 0.0;
+        Real t_total_spiking_neuron_difference = 0.0;
+        Real t_total_spiking_link_difference = 0.0;
+        std::map<std::string, Real> t_total_neuron_trait_difference;
+        std::map<std::string, Real> t_total_link_trait_difference;
+        std::map<std::string, Real> t_genome_link_trait_difference;
 
         // count of matching genes
-        double t_num_excess = 0;
-        double t_num_disjoint = 0;
-        double t_num_matching_links = 0;
-        double t_num_matching_neurons = 0;
+        Real t_num_excess = 0;
+        Real t_num_disjoint = 0;
+        Real t_num_matching_links = 0;
+        Real t_num_matching_neurons = 0;
 
         // calculate genome trait difference here
         t_genome_link_trait_difference = m_GenomeGene.GetTraitDistances(a_G.m_GenomeGene.m_Traits);
@@ -1297,7 +1297,7 @@ namespace NEAT {
                     t_num_matching_links++;
 
                     if (a_Parameters.WeightDiffCoeff > 0.0) {
-                        double t_wdiff = (t_g1->GetWeight() - t_g2->GetWeight());
+                        Real t_wdiff = (t_g1->GetWeight() - t_g2->GetWeight());
                         if (t_wdiff < 0) t_wdiff = -t_wdiff;  // make sure it is positive
                         t_total_weight_difference += t_wdiff;
                     }
@@ -1305,11 +1305,11 @@ namespace NEAT {
                     if (a_Parameters.SpikingLinkDiffCoeff > 0.0) {
                         const LinkGene &t_first = *t_g1;
                         const LinkGene &t_second = *t_g2;
-                        auto normalized = [](double lhs, double rhs, double minimum, double maximum) {
-                            const double span = maximum - minimum;
+                        auto normalized = [](Real lhs, Real rhs, Real minimum, Real maximum) {
+                            const Real span = maximum - minimum;
                             return span > 0.0 ? std::abs(lhs - rhs) / span : (lhs == rhs ? 0.0 : 1.0);
                         };
-                        double difference = 0.0;
+                        Real difference = 0.0;
                         difference +=
                             normalized(t_first.m_SynapticDelay, t_second.m_SynapticDelay, a_Parameters.MinSynapticDelay, a_Parameters.MaxSynapticDelay);
                         difference += normalized(t_first.m_SynapticTimeConstant, t_second.m_SynapticTimeConstant, a_Parameters.MinSynapticTimeConstant,
@@ -1323,7 +1323,7 @@ namespace NEAT {
                     }
 
                     // calculate link trait difference here
-                    std::map<std::string, double> link_trait_difference = t_g1->GetTraitDistances(t_g2->m_Traits);
+                    std::map<std::string, Real> link_trait_difference = t_g1->GetTraitDistances(t_g2->m_Traits);
                     // add to the totals
                     for (auto it = link_trait_difference.begin(); it != link_trait_difference.end(); it++) {
                         if (t_total_link_trait_difference.count(it->first) == 0) {
@@ -1373,25 +1373,25 @@ namespace NEAT {
                     t_num_matching_neurons++;
 
                     if (a_Parameters.ActivationADiffCoeff > 0.0) {
-                        double t_A_difference = m_NeuronGenes[i].m_A - t_other_gene.m_A;
+                        Real t_A_difference = m_NeuronGenes[i].m_A - t_other_gene.m_A;
                         if (t_A_difference < 0.0f) t_A_difference = -t_A_difference;
                         t_total_A_difference += t_A_difference;
                     }
 
                     if (a_Parameters.ActivationBDiffCoeff > 0.0) {
-                        double t_B_difference = m_NeuronGenes[i].m_B - t_other_gene.m_B;
+                        Real t_B_difference = m_NeuronGenes[i].m_B - t_other_gene.m_B;
                         if (t_B_difference < 0.0f) t_B_difference = -t_B_difference;
                         t_total_B_difference += t_B_difference;
                     }
 
                     if (a_Parameters.TimeConstantDiffCoeff > 0.0) {
-                        double t_time_constant_difference = m_NeuronGenes[i].m_TimeConstant - t_other_gene.m_TimeConstant;
+                        Real t_time_constant_difference = m_NeuronGenes[i].m_TimeConstant - t_other_gene.m_TimeConstant;
                         if (t_time_constant_difference < 0.0f) t_time_constant_difference = -t_time_constant_difference;
                         t_total_timeconstant_difference += t_time_constant_difference;
                     }
 
                     if (a_Parameters.BiasDiffCoeff > 0.0) {
-                        double t_bias_difference = m_NeuronGenes[i].m_Bias - t_other_gene.m_Bias;
+                        Real t_bias_difference = m_NeuronGenes[i].m_Bias - t_other_gene.m_Bias;
                         if (t_bias_difference < 0.0f) t_bias_difference = -t_bias_difference;
                         t_total_bias_difference += t_bias_difference;
                     }
@@ -1406,11 +1406,11 @@ namespace NEAT {
                     if (a_Parameters.SpikingNeuronDiffCoeff > 0.0 &&
                         (IsSpikingActivation(m_NeuronGenes[i].m_ActFunction) || IsSpikingActivation(t_other_gene.m_ActFunction))) {
                         const NeuronGene &t_mine = m_NeuronGenes[i];
-                        auto normalized = [](double lhs, double rhs, double minimum, double maximum) {
-                            const double span = maximum - minimum;
+                        auto normalized = [](Real lhs, Real rhs, Real minimum, Real maximum) {
+                            const Real span = maximum - minimum;
                             return span > 0.0 ? std::abs(lhs - rhs) / span : (lhs == rhs ? 0.0 : 1.0);
                         };
-                        double difference = 0.0;
+                        Real difference = 0.0;
                         difference +=
                             normalized(t_mine.m_SpikeThreshold, t_other_gene.m_SpikeThreshold, a_Parameters.MinSpikeThreshold, a_Parameters.MaxSpikeThreshold);
                         difference +=
@@ -1426,7 +1426,7 @@ namespace NEAT {
                     }
 
                     // calculate and add node trait difference here
-                    std::map<std::string, double> neuron_trait_difference = m_NeuronGenes[i].GetTraitDistances(t_other_gene.m_Traits);
+                    std::map<std::string, Real> neuron_trait_difference = m_NeuronGenes[i].GetTraitDistances(t_other_gene.m_Traits);
                     // add to the totals
                     for (auto it = neuron_trait_difference.begin(); it != neuron_trait_difference.end(); it++) {
                         if (t_total_neuron_trait_difference.count(it->first) == 0) {
@@ -1440,18 +1440,18 @@ namespace NEAT {
         }
 
         // choose between normalizing for genome size or not
-        double t_normalizer = 1.0;
+        Real t_normalizer = 1.0;
         if (a_Parameters.NormalizeGenomeSize) {
-            t_normalizer = static_cast<double>(t_max_genome_size);
+            t_normalizer = static_cast<Real>(t_max_genome_size);
         }
 
         // if there are no matching links or neurons, make it 1.0 to avoid divide error
         if (t_num_matching_links <= 0) t_num_matching_links = 1;
         if (t_num_matching_neurons <= 0) t_num_matching_neurons = 1;
         if (t_normalizer <= 0.0) t_normalizer = 1.0;
-        double tnrm = 1.0 / t_normalizer;
-        double tnml = 1.0 / t_num_matching_links;
-        double tnmn = 1.0 / t_num_matching_neurons;
+        Real tnrm = 1.0 / t_normalizer;
+        Real tnml = 1.0 / t_num_matching_links;
+        Real tnmn = 1.0 / t_num_matching_neurons;
 
         t_total_distance =
             (a_Parameters.ExcessCoeff * (t_num_excess * tnrm)) + (a_Parameters.DisjointCoeff * (t_num_disjoint * tnrm)) +
@@ -1468,21 +1468,21 @@ namespace NEAT {
         for (auto it = t_total_link_trait_difference.begin(); it != t_total_link_trait_difference.end(); it++) {
             const auto schema = a_Parameters.LinkTraits.find(it->first);
             if (schema == a_Parameters.LinkTraits.end()) continue;
-            double n = (schema->second.m_ImportanceCoeff * it->second) * tnml;
+            Real n = (schema->second.m_ImportanceCoeff * it->second) * tnml;
             if (std::isnan(n) || std::isinf(n)) n = 0.0;
             t_total_distance += n;
         }
         for (auto it = t_total_neuron_trait_difference.begin(); it != t_total_neuron_trait_difference.end(); it++) {
             const auto schema = a_Parameters.NeuronTraits.find(it->first);
             if (schema == a_Parameters.NeuronTraits.end()) continue;
-            double n = (schema->second.m_ImportanceCoeff * it->second) * tnmn;
+            Real n = (schema->second.m_ImportanceCoeff * it->second) * tnmn;
             if (std::isnan(n) || std::isinf(n)) n = 0.0;
             t_total_distance += n;
         }
         for (auto it = t_genome_link_trait_difference.begin(); it != t_genome_link_trait_difference.end(); it++) {
             const auto schema = a_Parameters.GenomeTraits.find(it->first);
             if (schema == a_Parameters.GenomeTraits.end()) continue;
-            double n = (schema->second.m_ImportanceCoeff * it->second);
+            Real n = (schema->second.m_ImportanceCoeff * it->second);
             if (std::isnan(n) || std::isinf(n)) n = 0.0;
             t_total_distance += n;
         }
@@ -1498,7 +1498,7 @@ namespace NEAT {
         // full compatibility cases
         if (this == &a_G) return true;
 
-        double t_total_distance = CompatibilityDistance(a_G, a_Parameters);
+        Real t_total_distance = CompatibilityDistance(a_G, a_Parameters);
 
         /*if ((NumLinks() == 0) && (a_G.NumLinks() == 0))
             return true;*/
@@ -1511,7 +1511,7 @@ namespace NEAT {
 
     // Returns a random activation function from the canonical set based ot probabilities
     ActivationFunction GetRandomActivation(const Parameters &a_Parameters, RNG &a_RNG) {
-        std::vector<double> t_probs;
+        std::vector<Real> t_probs;
 
         t_probs.emplace_back(a_Parameters.ActivationFunction_SignedSigmoid_Prob);
         t_probs.emplace_back(a_Parameters.ActivationFunction_UnsignedSigmoid_Prob);
@@ -1532,8 +1532,8 @@ namespace NEAT {
         t_probs.emplace_back(a_Parameters.ActivationFunction_SpikingIzhikevich_Prob);
         t_probs.emplace_back(a_Parameters.ActivationFunction_McCullochPitts_Prob);
 
-        double total = 0.0;
-        for (const double probability : t_probs) {
+        Real total = 0.0;
+        for (const Real probability : t_probs) {
             if (!std::isfinite(probability) || probability < 0.0)
                 throw std::invalid_argument("Activation-function probabilities must be finite and non-negative");
             total += probability;
@@ -1609,7 +1609,7 @@ namespace NEAT {
         // Now the link has been selected
 
         // the weight of the link that is being split
-        double t_orig_weight = m_LinkGenes[t_link_num].GetWeight();
+        Real t_orig_weight = m_LinkGenes[t_link_num].GetWeight();
         t_chosenlink = m_LinkGenes[t_link_num];  // save the whole link
 
         // remove the link from the genome
@@ -1634,16 +1634,16 @@ namespace NEAT {
             t_l2id = a_Innovs.AddLinkInnovation(t_nid, t_out);
 
             // Adjust the SplitY
-            double t_sy = m_NeuronGenes[GetNeuronIndex(t_in)].SplitY() + m_NeuronGenes[GetNeuronIndex(t_out)].SplitY();
+            Real t_sy = m_NeuronGenes[GetNeuronIndex(t_in)].SplitY() + m_NeuronGenes[GetNeuronIndex(t_out)].SplitY();
             t_sy /= 2.0;
 
             // Create the neuron gene
             NeuronGene t_ngene(HIDDEN, t_nid, t_sy);
 
-            double t_A = a_RNG.RandFloat();
-            double t_B = a_RNG.RandFloat();
-            double t_TC = a_RNG.RandFloat();
-            double t_Bs = a_RNG.RandFloat();
+            Real t_A = a_RNG.RandFloat();
+            Real t_B = a_RNG.RandFloat();
+            Real t_TC = a_RNG.RandFloat();
+            Real t_Bs = a_RNG.RandFloat();
             Scale(t_A, 0, 1, a_Parameters.MinActivationA, a_Parameters.MaxActivationA);
             Scale(t_B, 0, 1, a_Parameters.MinActivationB, a_Parameters.MaxActivationB);
             Scale(t_TC, 0, 1, a_Parameters.MinNeuronTimeConstant, a_Parameters.MaxNeuronTimeConstant);
@@ -1756,16 +1756,16 @@ namespace NEAT {
             }
 
             // Add the neuron and the links
-            double t_sy = m_NeuronGenes[GetNeuronIndex(t_in)].SplitY() + m_NeuronGenes[GetNeuronIndex(t_out)].SplitY();
+            Real t_sy = m_NeuronGenes[GetNeuronIndex(t_in)].SplitY() + m_NeuronGenes[GetNeuronIndex(t_out)].SplitY();
             t_sy /= 2.0;
 
             // Create the neuron gene
             NeuronGene t_ngene(HIDDEN, t_nid, t_sy);
 
-            double t_A = a_RNG.RandFloat();
-            double t_B = a_RNG.RandFloat();
-            double t_TC = a_RNG.RandFloat();
-            double t_Bs = a_RNG.RandFloat();
+            Real t_A = a_RNG.RandFloat();
+            Real t_B = a_RNG.RandFloat();
+            Real t_TC = a_RNG.RandFloat();
+            Real t_Bs = a_RNG.RandFloat();
             Scale(t_A, 0, 1, a_Parameters.MinActivationA, a_Parameters.MaxActivationA);
             Scale(t_B, 0, 1, a_Parameters.MinActivationB, a_Parameters.MaxActivationB);
             Scale(t_TC, 0, 1, a_Parameters.MinNeuronTimeConstant, a_Parameters.MaxNeuronTimeConstant);
@@ -2025,7 +2025,7 @@ namespace NEAT {
         int t_innovid = a_Innovs.CheckInnovation(t_n1id, t_n2id, NEW_LINK);
 
         // Choose the weight for this link
-        double t_weight = a_RNG.RandFloat();
+        Real t_weight = a_RNG.RandFloat();
         Scale(t_weight, 0, 1, a_Parameters.MinWeight, a_Parameters.MaxWeight);
 
         // A novel innovation?
@@ -2329,7 +2329,7 @@ namespace NEAT {
         // Else the link is not present and we will replace the neuron and 2 links with one link
         else {
             // Remember the first link's weight
-            double t_weight = m_LinkGenes[t_l1idx].GetWeight();
+            Real t_weight = m_LinkGenes[t_l1idx].GetWeight();
 
             // See the innovation database for an innovation number
             int t_innovid = a_Innovs.CheckInnovation(m_LinkGenes[t_l1idx].FromNeuronID(), m_LinkGenes[t_l2idx].ToNeuronID(), NEW_LINK);
@@ -2389,8 +2389,8 @@ namespace NEAT {
         if (tailstart <= m_initial_num_links) tailstart = m_initial_num_links;
         for (size_t i = 0, end = m_LinkGenes.size(); i < end; ++i) {
             if (!severe && (a_RNG.RandFloat() < a_Parameters.WeightMutationRate)) {
-                const double original = m_LinkGenes[i].GetWeight();
-                double w = original;
+                const Real original = m_LinkGenes[i].GetWeight();
+                Real w = original;
                 bool in_tail = (static_cast<int>(i) >= tailstart);
                 if (in_tail || a_RNG.RandFloat() < a_Parameters.WeightReplacementRate)
                     w = a_RNG.RandFloatSigned() * a_Parameters.WeightReplacementMaxPower;
@@ -2413,20 +2413,20 @@ namespace NEAT {
                             break;
 
                         case POLYNOMIAL_MUTATION: {
-                            const double range = a_Parameters.MaxWeight - a_Parameters.MinWeight;
+                            const Real range = a_Parameters.MaxWeight - a_Parameters.MinWeight;
                             if (range <= 0.0 || a_Parameters.WeightMutationMaxPower <= 0.0) break;
                             Clamp(w, a_Parameters.MinWeight, a_Parameters.MaxWeight);
-                            const double delta_lower = (w - a_Parameters.MinWeight) / range;
-                            const double delta_upper = (a_Parameters.MaxWeight - w) / range;
-                            const double draw = a_RNG.RandFloat();
-                            const double exponent = 1.0 / (a_Parameters.WeightMutationPolynomialEta + 1.0);
-                            double delta = 0.0;
+                            const Real delta_lower = (w - a_Parameters.MinWeight) / range;
+                            const Real delta_upper = (a_Parameters.MaxWeight - w) / range;
+                            const Real draw = a_RNG.RandFloat();
+                            const Real exponent = 1.0 / (a_Parameters.WeightMutationPolynomialEta + 1.0);
+                            Real delta = 0.0;
                             if (draw <= 0.5) {
-                                const double value =
+                                const Real value =
                                     2.0 * draw + (1.0 - 2.0 * draw) * std::pow(1.0 - delta_lower, a_Parameters.WeightMutationPolynomialEta + 1.0);
                                 delta = std::pow(value, exponent) - 1.0;
                             } else {
-                                const double value =
+                                const Real value =
                                     2.0 * (1.0 - draw) + 2.0 * (draw - 0.5) * std::pow(1.0 - delta_upper, a_Parameters.WeightMutationPolynomialEta + 1.0);
                                 delta = 1.0 - std::pow(value, exponent);
                             }
@@ -2445,8 +2445,8 @@ namespace NEAT {
                 }
             } else if (severe) {
                 if (a_RNG.RandFloat() < a_Parameters.WeightMutationRate) {
-                    const double original = m_LinkGenes[i].GetWeight();
-                    double w = a_RNG.RandFloat();
+                    const Real original = m_LinkGenes[i].GetWeight();
+                    Real w = a_RNG.RandFloat();
                     Scale(w, 0.0, 1.0, a_Parameters.MinWeight, a_Parameters.MaxWeight);
                     if (w != original) {
                         m_LinkGenes[i].SetWeight(w);
@@ -2462,7 +2462,7 @@ namespace NEAT {
     void Genome::Randomize_LinkWeights(const Parameters &a_Parameters, RNG &a_RNG) {
         // For all links..
         for (unsigned int i = 0; i < NumLinks(); i++) {
-            double nf = 0;
+            Real nf = 0;
             nf = a_RNG.RandFloat();
             Scale(nf, 0.0, 1.0, a_Parameters.MinWeight, a_Parameters.MaxWeight);
             m_LinkGenes[i].SetWeight(nf);
@@ -2487,7 +2487,7 @@ namespace NEAT {
         for (unsigned int i = 0; i < NumNeurons(); i++) {
             // skip inputs and bias
             if ((m_NeuronGenes[i].Type() != INPUT) && (m_NeuronGenes[i].Type() != BIAS)) {
-                double t_randnum = a_RNG.RandFloatSigned() * a_Parameters.ActivationAMutationMaxPower;
+                Real t_randnum = a_RNG.RandFloatSigned() * a_Parameters.ActivationAMutationMaxPower;
 
                 m_NeuronGenes[i].m_A += t_randnum;
 
@@ -2504,7 +2504,7 @@ namespace NEAT {
         for (unsigned int i = 0; i < NumNeurons(); i++) {
             // skip inputs and bias
             if ((m_NeuronGenes[i].Type() != INPUT) && (m_NeuronGenes[i].Type() != BIAS)) {
-                double t_randnum = a_RNG.RandFloatSigned() * a_Parameters.ActivationBMutationMaxPower;
+                Real t_randnum = a_RNG.RandFloatSigned() * a_Parameters.ActivationBMutationMaxPower;
 
                 m_NeuronGenes[i].m_B += t_randnum;
 
@@ -2541,7 +2541,7 @@ namespace NEAT {
         for (unsigned int i = 0; i < NumNeurons(); i++) {
             // skip inputs and bias
             if ((m_NeuronGenes[i].Type() != INPUT) && (m_NeuronGenes[i].Type() != BIAS)) {
-                double t_randnum = a_RNG.RandFloatSigned() * a_Parameters.TimeConstantMutationMaxPower;
+                Real t_randnum = a_RNG.RandFloatSigned() * a_Parameters.TimeConstantMutationMaxPower;
 
                 m_NeuronGenes[i].m_TimeConstant += t_randnum;
 
@@ -2561,7 +2561,7 @@ namespace NEAT {
         for (unsigned int i = 0; i < NumNeurons(); i++) {
             // skip inputs and bias
             if ((m_NeuronGenes[i].Type() != INPUT) && (m_NeuronGenes[i].Type() != BIAS)) {
-                double t_randnum = a_RNG.RandFloatSigned() * a_Parameters.BiasMutationMaxPower;
+                Real t_randnum = a_RNG.RandFloatSigned() * a_Parameters.BiasMutationMaxPower;
 
                 m_NeuronGenes[i].m_Bias += t_randnum;
 
@@ -2602,10 +2602,10 @@ namespace NEAT {
 
     bool Genome::Mutate_NeuronSpikingParameters(const Parameters &a_Parameters, RNG &a_RNG) {
         bool mutated = false;
-        const auto perturb = [&](double &value, double minimum, double maximum) {
+        const auto perturb = [&](Real &value, Real minimum, Real maximum) {
             if (a_RNG.RandFloat() >= a_Parameters.SpikingParameterMutationRate) return;
-            const double original = value;
-            const double span = maximum - minimum;
+            const Real original = value;
+            const Real span = maximum - minimum;
             value += a_RNG.RandFloatSigned() * span * a_Parameters.SpikingParameterMutationPower;
             Clamp(value, minimum, maximum);
             if (value == original && minimum < maximum) value = RandomRange(a_RNG, minimum, maximum);
@@ -2640,9 +2640,9 @@ namespace NEAT {
 
     bool Genome::Mutate_LinkSpikingParameters(const Parameters &a_Parameters, RNG &a_RNG) {
         bool mutated = false;
-        const auto perturb = [&](double &value, double minimum, double maximum) {
+        const auto perturb = [&](Real &value, Real minimum, Real maximum) {
             if (a_RNG.RandFloat() >= a_Parameters.SpikingParameterMutationRate) return;
-            const double original = value;
+            const Real original = value;
             value += a_RNG.RandFloatSigned() * (maximum - minimum) * a_Parameters.SpikingParameterMutationPower;
             Clamp(value, minimum, maximum);
             if (value == original && minimum < maximum) value = RandomRange(a_RNG, minimum, maximum);
@@ -2864,12 +2864,12 @@ namespace NEAT {
                         }
                         case BLEND: {
                             t_selectedgene = *t_curMom;
-                            const double mom_weight = t_curMom->GetWeight();
-                            const double dad_weight = t_curDad->GetWeight();
-                            const double minimum = std::min(mom_weight, dad_weight);
-                            const double maximum = std::max(mom_weight, dad_weight);
-                            const double span = maximum - minimum;
-                            double weight =
+                            const Real mom_weight = t_curMom->GetWeight();
+                            const Real dad_weight = t_curDad->GetWeight();
+                            const Real minimum = std::min(mom_weight, dad_weight);
+                            const Real maximum = std::max(mom_weight, dad_weight);
+                            const Real span = maximum - minimum;
+                            Real weight =
                                 minimum - a_Parameters.CrossoverBlendAlpha * span + a_RNG.RandFloat() * (span * (1.0 + 2.0 * a_Parameters.CrossoverBlendAlpha));
                             Clamp(weight, a_Parameters.MinWeight, a_Parameters.MaxWeight);
                             t_selectedgene.SetWeight(weight);
@@ -2878,13 +2878,13 @@ namespace NEAT {
                         }
                         case SIMULATED_BINARY: {
                             t_selectedgene = *t_curMom;
-                            const double draw = a_RNG.RandFloat();
-                            const double exponent = 1.0 / (a_Parameters.CrossoverSBXEta + 1.0);
-                            const double beta = draw <= 0.5 ? std::pow(2.0 * draw, exponent) : std::pow(1.0 / (2.0 * (1.0 - draw)), exponent);
-                            const double first = t_curMom->GetWeight();
-                            const double second = t_curDad->GetWeight();
-                            double weight = a_RNG.RandFloat() < 0.5 ? 0.5 * ((1.0 + beta) * first + (1.0 - beta) * second)
-                                                                    : 0.5 * ((1.0 - beta) * first + (1.0 + beta) * second);
+                            const Real draw = a_RNG.RandFloat();
+                            const Real exponent = 1.0 / (a_Parameters.CrossoverSBXEta + 1.0);
+                            const Real beta = draw <= 0.5 ? std::pow(2.0 * draw, exponent) : std::pow(1.0 / (2.0 * (1.0 - draw)), exponent);
+                            const Real first = t_curMom->GetWeight();
+                            const Real second = t_curDad->GetWeight();
+                            Real weight = a_RNG.RandFloat() < 0.5 ? 0.5 * ((1.0 + beta) * first + (1.0 - beta) * second)
+                                                                  : 0.5 * ((1.0 - beta) * first + (1.0 + beta) * second);
                             Clamp(weight, a_Parameters.MinWeight, a_Parameters.MaxWeight);
                             t_selectedgene.SetWeight(weight);
                             t_selectedgene.MateTraits(t_curDad->m_Traits, a_RNG);
@@ -3077,7 +3077,7 @@ namespace NEAT {
 
             if (t_Str == "Neuron") {
                 int t_id, t_type, t_activationfunc;
-                double t_splity, t_a, t_b, t_timeconst, t_bias;
+                Real t_splity, t_a, t_b, t_timeconst, t_bias;
 
                 a_DataFile >> t_id;
                 a_DataFile >> t_type;
@@ -3105,7 +3105,7 @@ namespace NEAT {
             }
             if (t_Str == "Link") {
                 int t_from, t_to, t_innov, t_isrecur;
-                double t_weight;
+                Real t_weight;
 
                 a_DataFile >> t_from;
                 a_DataFile >> t_to;
@@ -3229,7 +3229,7 @@ namespace NEAT {
                 m_GenomeGene.m_Traits = Serialization::ReadTraits(data);
             } else if (token == "Neuron") {
                 int id, type, activation;
-                double split_y, a, b, time_constant, bias;
+                Real split_y, a, b, time_constant, bias;
                 data >> id >> type >> split_y >> activation >> a >> b >> time_constant >> bias;
                 NeuronGene neuron(static_cast<NeuronType>(type), id, split_y);
                 neuron.m_ActFunction = static_cast<ActivationFunction>(activation);
@@ -3261,7 +3261,7 @@ namespace NEAT {
                     neuron.m_IzhikevichA >> neuron.m_IzhikevichB >> neuron.m_IzhikevichC >> neuron.m_IzhikevichD;
             } else if (token == "Link") {
                 int from, to, innovation, recurrent;
-                double weight;
+                Real weight;
                 data >> from >> to >> innovation >> recurrent >> weight;
                 m_LinkGenes.emplace_back(from, to, innovation, weight, recurrent != 0);
                 last_link = static_cast<int>(m_LinkGenes.size()) - 1;
@@ -3431,19 +3431,19 @@ namespace NEAT {
             if (s != "") {
                 // there is such trait..
                 if (traits.count(s) != 0) {
-                    /*int a; double b; std::string c;
+                    /*int a; Real b; std::string c;
                     if ((*it).m_Traits[s].value.type() == typeid(int))
                         a = bs::get<int>((*it).m_Traits[s].value);
-                    if ((*it).m_Traits[s].value.type() == typeid(double))
-                        b = bs::get<double>((*it).m_Traits[s].value);
+                    if ((*it).m_Traits[s].value.type() == typeid(Real))
+                        b = bs::get<Real>((*it).m_Traits[s].value);
                     if ((*it).m_Traits[s].value.type() == typeid(std::string))
                         c = bs::get<std::string>((*it).m_Traits[s].value);
 
-                    int a1; double b1; std::string c1;
+                    int a1; Real b1; std::string c1;
                     if ((t->second.dep_values).type() == typeid(int))
                         a1 = bs::get<int>((t->second.dep_values));
-                    if ((t->second.dep_values).type() == typeid(double))
-                        b1 = bs::get<double>((t->second.dep_values));
+                    if ((t->second.dep_values).type() == typeid(Real))
+                        b1 = bs::get<Real>((t->second.dep_values));
                     if ((t->second.dep_values).type() == typeid(std::string))
                         c1 = bs::get<std::string>((t->second.dep_values));*/
 
@@ -3464,8 +3464,8 @@ namespace NEAT {
                 if (std::holds_alternative<int>(t->second.value)) {
                     std::cout << std::get<int>(t->second.value);
                 }
-                if (std::holds_alternative<double>(t->second.value)) {
-                    std::cout << std::get<double>(t->second.value);
+                if (std::holds_alternative<Real>(t->second.value)) {
+                    std::cout << std::get<Real>(t->second.value);
                 }
                 if (std::holds_alternative<std::string>(t->second.value)) {
                     std::cout << "\"" << std::get<std::string>(t->second.value) << "\"";
@@ -3549,18 +3549,18 @@ namespace NEAT {
             throw std::invalid_argument(std::string("ES-HyperNEAT MaxDepth exceeds the supported safe ") +
                                         (three_dimensional ? "3D limit of 6" : "2D limit of 9"));
         }
-        const std::pair<const char *, double> finite_values[] = {{"DivisionThreshold", params.DivisionThreshold},
-                                                                 {"VarianceThreshold", params.VarianceThreshold},
-                                                                 {"BandThreshold", params.BandThreshold},
-                                                                 {"CPPN_Bias", params.CPPN_Bias},
-                                                                 {"Width", params.Width},
-                                                                 {"Height", params.Height},
-                                                                 {"Depth", params.Depth},
-                                                                 {"Qtree_X", params.Qtree_X},
-                                                                 {"Qtree_Y", params.Qtree_Y},
-                                                                 {"Qtree_Z", params.Qtree_Z},
-                                                                 {"LeoThreshold", params.LeoThreshold},
-                                                                 {"maximum substrate weight", subst.m_max_weight_and_bias}};
+        const std::pair<const char *, Real> finite_values[] = {{"DivisionThreshold", params.DivisionThreshold},
+                                                               {"VarianceThreshold", params.VarianceThreshold},
+                                                               {"BandThreshold", params.BandThreshold},
+                                                               {"CPPN_Bias", params.CPPN_Bias},
+                                                               {"Width", params.Width},
+                                                               {"Height", params.Height},
+                                                               {"Depth", params.Depth},
+                                                               {"Qtree_X", params.Qtree_X},
+                                                               {"Qtree_Y", params.Qtree_Y},
+                                                               {"Qtree_Z", params.Qtree_Z},
+                                                               {"LeoThreshold", params.LeoThreshold},
+                                                               {"maximum substrate weight", subst.m_max_weight_and_bias}};
         for (const auto &value : finite_values) {
             if (!std::isfinite(value.second)) {
                 throw std::invalid_argument(std::string("ES-HyperNEAT ") + value.first + " must be finite");
@@ -3581,10 +3581,10 @@ namespace NEAT {
                 "The CPPN does not provide enough inputs or outputs for "
                 "ES-HyperNEAT");
         }
-        const auto validate_coordinates = [dimensions](const std::vector<std::vector<double>> &coordinates) {
+        const auto validate_coordinates = [dimensions](const std::vector<std::vector<Real>> &coordinates) {
             for (const auto &coordinate : coordinates) {
                 if (coordinate.empty() || coordinate.size() > static_cast<std::size_t>(dimensions) ||
-                    !std::all_of(coordinate.begin(), coordinate.end(), [](double value) { return std::isfinite(value); })) {
+                    !std::all_of(coordinate.begin(), coordinate.end(), [](Real value) { return std::isfinite(value); })) {
                     return false;
                 }
             }
@@ -3601,23 +3601,23 @@ namespace NEAT {
         }
 
         struct TreeNode {
-            double x;
-            double y;
-            double z;
-            double width;
-            double height;
-            double depth;
-            double weight = 0.0;
-            double leo = 0.0;
+            Real x;
+            Real y;
+            Real z;
+            Real width;
+            Real height;
+            Real depth;
+            Real weight = 0.0;
+            Real leo = 0.0;
             unsigned int level;
             std::vector<std::unique_ptr<TreeNode>> children;
 
             bool Divided() const { return !children.empty(); }
         };
         struct CandidateConnection {
-            std::vector<double> source;
-            std::vector<double> target;
-            double weight;
+            std::vector<Real> source;
+            std::vector<Real> target;
+            Real weight;
         };
 
         const std::size_t children_per_node = three_dimensional ? 8U : 4U;
@@ -3637,13 +3637,13 @@ namespace NEAT {
             cppn_activation_steps = std::max(1, static_cast<int>(GetDepth()));
         }
 
-        const auto normalized_coordinate = [dimensions](const std::vector<double> &coordinate) {
-            std::vector<double> result(static_cast<std::size_t>(dimensions), 0.0);
+        const auto normalized_coordinate = [dimensions](const std::vector<Real> &coordinate) {
+            std::vector<Real> result(static_cast<std::size_t>(dimensions), 0.0);
             std::copy(coordinate.begin(), coordinate.end(), result.begin());
             return result;
         };
-        const auto query_cppn = [&](const std::vector<double> &source, const std::vector<double> &target) {
-            std::vector<double> inputs(static_cast<std::size_t>(m_NumInputs), 0.0);
+        const auto query_cppn = [&](const std::vector<Real> &source, const std::vector<Real> &target) {
+            std::vector<Real> inputs(static_cast<std::size_t>(m_NumInputs), 0.0);
             for (int dimension = 0; dimension < dimensions; ++dimension) {
                 if (static_cast<std::size_t>(dimension) < source.size())
                     inputs[static_cast<std::size_t>(dimension)] = source[static_cast<std::size_t>(dimension)];
@@ -3651,9 +3651,9 @@ namespace NEAT {
                     inputs[static_cast<std::size_t>(dimensions + dimension)] = target[static_cast<std::size_t>(dimension)];
             }
             if (subst.m_with_distance) {
-                double squared_distance = 0.0;
+                Real squared_distance = 0.0;
                 for (int dimension = 0; dimension < dimensions; ++dimension) {
-                    const double difference = inputs[static_cast<std::size_t>(dimension)] - inputs[static_cast<std::size_t>(dimensions + dimension)];
+                    const Real difference = inputs[static_cast<std::size_t>(dimension)] - inputs[static_cast<std::size_t>(dimensions + dimension)];
                     squared_distance += difference * difference;
                 }
                 inputs[inputs.size() - 2] = std::sqrt(squared_distance);
@@ -3663,40 +3663,40 @@ namespace NEAT {
             cppn.Flush();
             cppn.Input(inputs);
             for (int step = 0; step < cppn_activation_steps; ++step) cppn.Activate();
-            const std::vector<double> outputs = cppn.Output();
+            const std::vector<Real> outputs = cppn.Output();
             if (outputs.size() < static_cast<std::size_t>(required_outputs) || !std::isfinite(outputs.front()) ||
                 (params.Leo && !std::isfinite(outputs.back()))) {
                 throw std::runtime_error("ES-HyperNEAT CPPN produced an invalid output");
             }
-            return std::pair<double, double>(outputs.front(), params.Leo ? outputs.back() : 0.0);
+            return std::pair<Real, Real>(outputs.front(), params.Leo ? outputs.back() : 0.0);
         };
         const auto variance = [](const TreeNode &node) {
-            if (!node.Divided()) return 0.0;
-            double mean = 0.0;
+            if (!node.Divided()) return static_cast<Real>(0);
+            Real mean = 0.0;
             for (const auto &child : node.children) mean += child->weight;
-            mean /= static_cast<double>(node.children.size());
-            double result = 0.0;
+            mean /= static_cast<Real>(node.children.size());
+            Real result = 0.0;
             for (const auto &child : node.children) {
-                const double difference = child->weight - mean;
+                const Real difference = child->weight - mean;
                 result += difference * difference;
             }
-            return result / static_cast<double>(node.children.size());
+            return result / static_cast<Real>(node.children.size());
         };
-        const auto generated_coordinate = [dimensions](double x, double y, double z) {
-            std::vector<double> coordinate(static_cast<std::size_t>(dimensions), 0.0);
+        const auto generated_coordinate = [dimensions](Real x, Real y, Real z) {
+            std::vector<Real> coordinate(static_cast<std::size_t>(dimensions), 0.0);
             coordinate[0] = x;
             coordinate[1] = y;
             if (dimensions == 3) coordinate[2] = z;
             return coordinate;
         };
 
-        const auto sample_connections = [&](const std::vector<double> &fixed, bool outgoing) {
+        const auto sample_connections = [&](const std::vector<Real> &fixed, bool outgoing) {
             auto root = std::make_unique<TreeNode>(TreeNode{params.Qtree_X,
                                                             params.Qtree_Y,
-                                                            three_dimensional ? params.Qtree_Z : 0.0,
+                                                            three_dimensional ? params.Qtree_Z : 0.0f,
                                                             params.Width,
                                                             params.Height,
-                                                            three_dimensional ? params.Depth : 0.0,
+                                                            three_dimensional ? params.Depth : 0.0f,
                                                             0.0,
                                                             0.0,
                                                             1,
@@ -3707,19 +3707,19 @@ namespace NEAT {
             while (!pending.empty()) {
                 TreeNode *parent = pending.front();
                 pending.pop();
-                const double child_width = parent->width / 2.0;
-                const double child_height = parent->height / 2.0;
-                const double child_depth = three_dimensional ? parent->depth / 2.0 : 0.0;
-                const double xs[] = {parent->x - child_width, parent->x - child_width, parent->x + child_width, parent->x + child_width};
-                const double ys[] = {parent->y - child_height, parent->y + child_height, parent->y + child_height, parent->y - child_height};
+                const Real child_width = parent->width / 2.0;
+                const Real child_height = parent->height / 2.0;
+                const Real child_depth = three_dimensional ? parent->depth / 2.0 : 0.0;
+                const Real xs[] = {parent->x - child_width, parent->x - child_width, parent->x + child_width, parent->x + child_width};
+                const Real ys[] = {parent->y - child_height, parent->y + child_height, parent->y + child_height, parent->y - child_height};
                 const std::size_t depth_layers = three_dimensional ? 2U : 1U;
                 parent->children.reserve(children_per_node);
                 for (std::size_t depth_layer = 0; depth_layer < depth_layers; ++depth_layer) {
-                    const double z = three_dimensional ? parent->z + (depth_layer == 0 ? -child_depth : child_depth) : 0.0;
+                    const Real z = three_dimensional ? parent->z + (depth_layer == 0 ? -child_depth : child_depth) : 0.0;
                     for (std::size_t index = 0; index < 4; ++index) {
                         auto child = std::make_unique<TreeNode>(
                             TreeNode{xs[index], ys[index], z, child_width, child_height, child_depth, 0.0, 0.0, parent->level + 1, {}});
-                        const std::vector<double> coordinate = generated_coordinate(child->x, child->y, child->z);
+                        const std::vector<Real> coordinate = generated_coordinate(child->x, child->y, child->z);
                         const auto outputs = outgoing ? query_cppn(fixed, coordinate) : query_cppn(coordinate, fixed);
                         child->weight = outputs.first;
                         child->leo = outputs.second;
@@ -3746,13 +3746,13 @@ namespace NEAT {
                     }
                     if (params.Leo && child.leo <= params.LeoThreshold) continue;
 
-                    const std::vector<double> center = generated_coordinate(child.x, child.y, child.z);
-                    std::vector<double> left = center;
-                    std::vector<double> right = center;
-                    std::vector<double> top = center;
-                    std::vector<double> bottom = center;
-                    std::vector<double> front = center;
-                    std::vector<double> back = center;
+                    const std::vector<Real> center = generated_coordinate(child.x, child.y, child.z);
+                    std::vector<Real> left = center;
+                    std::vector<Real> right = center;
+                    std::vector<Real> top = center;
+                    std::vector<Real> bottom = center;
+                    std::vector<Real> front = center;
+                    std::vector<Real> back = center;
                     left[0] -= parent.width;
                     right[0] += parent.width;
                     top[1] -= parent.height;
@@ -3761,13 +3761,13 @@ namespace NEAT {
                         front[2] -= parent.depth;
                         back[2] += parent.depth;
                     }
-                    const auto boundary_difference = [&](const std::vector<double> &coordinate) {
-                        const double boundary_weight = outgoing ? query_cppn(fixed, coordinate).first : query_cppn(coordinate, fixed).first;
+                    const auto boundary_difference = [&](const std::vector<Real> &coordinate) {
+                        const Real boundary_weight = outgoing ? query_cppn(fixed, coordinate).first : query_cppn(coordinate, fixed).first;
                         return std::abs(child.weight - boundary_weight);
                     };
-                    const double horizontal = std::min(boundary_difference(left), boundary_difference(right));
-                    const double vertical = std::min(boundary_difference(top), boundary_difference(bottom));
-                    const double spatial = three_dimensional ? std::min(boundary_difference(front), boundary_difference(back)) : 0.0;
+                    const Real horizontal = std::min(boundary_difference(left), boundary_difference(right));
+                    const Real vertical = std::min(boundary_difference(top), boundary_difference(bottom));
+                    const Real spatial = three_dimensional ? std::min(boundary_difference(front), boundary_difference(back)) : 0.0;
                     if (std::max({horizontal, vertical, spatial}) <= params.BandThreshold) continue;
 
                     connections.push_back(outgoing ? CandidateConnection{fixed, center, child.weight} : CandidateConnection{center, fixed, child.weight});
@@ -3780,9 +3780,9 @@ namespace NEAT {
         const std::size_t input_count = subst.m_input_coords.size();
         const std::size_t output_count = subst.m_output_coords.size();
         const std::size_t hidden_offset = input_count + output_count;
-        std::map<std::vector<double>, std::size_t> hidden_indices;
-        std::vector<std::vector<double>> hidden_coordinates;
-        const auto add_hidden = [&](const std::vector<double> &coordinate) -> std::pair<std::size_t, bool> {
+        std::map<std::vector<Real>, std::size_t> hidden_indices;
+        std::vector<std::vector<Real>> hidden_coordinates;
+        const auto add_hidden = [&](const std::vector<Real> &coordinate) -> std::pair<std::size_t, bool> {
             const auto existing = hidden_indices.find(coordinate);
             if (existing != hidden_indices.end()) return {existing->second, false};
             if (hidden_coordinates.size() >= tree_node_limit) {
@@ -3796,7 +3796,7 @@ namespace NEAT {
 
         std::vector<Connection> generated_connections;
         std::set<std::pair<std::size_t, std::size_t>> connection_endpoints;
-        const auto add_connection = [&](std::size_t source, std::size_t target, double raw_weight) {
+        const auto add_connection = [&](std::size_t source, std::size_t target, Real raw_weight) {
             if (source == target || !std::isfinite(raw_weight) || !connection_endpoints.emplace(source, target).second) {
                 return;
             }
@@ -3811,16 +3811,16 @@ namespace NEAT {
         };
 
         for (std::size_t input = 0; input < input_count; ++input) {
-            const std::vector<double> coordinate = normalized_coordinate(subst.m_input_coords[input]);
+            const std::vector<Real> coordinate = normalized_coordinate(subst.m_input_coords[input]);
             for (const auto &candidate : sample_connections(coordinate, true)) {
                 const auto hidden = add_hidden(candidate.target);
                 add_connection(input, hidden_offset + hidden.first, candidate.weight);
             }
         }
 
-        std::vector<std::vector<double>> frontier = hidden_coordinates;
+        std::vector<std::vector<Real>> frontier = hidden_coordinates;
         for (unsigned int iteration = 0; iteration < params.IterationLevel && !frontier.empty(); ++iteration) {
-            std::vector<std::vector<double>> next_frontier;
+            std::vector<std::vector<Real>> next_frontier;
             for (const auto &source_coordinate : frontier) {
                 const auto source = hidden_indices.find(source_coordinate);
                 if (source == hidden_indices.end()) throw std::logic_error("ES-HyperNEAT lost a generated hidden node");
@@ -3834,7 +3834,7 @@ namespace NEAT {
         }
 
         for (std::size_t output = 0; output < output_count; ++output) {
-            const std::vector<double> coordinate = normalized_coordinate(subst.m_output_coords[output]);
+            const std::vector<Real> coordinate = normalized_coordinate(subst.m_output_coords[output]);
             for (const auto &candidate : sample_connections(coordinate, false)) {
                 const auto source = hidden_indices.find(candidate.source);
                 if (source != hidden_indices.end()) {
@@ -3878,9 +3878,9 @@ namespace NEAT {
         for (auto &connection : generated_connections) {
             const Neuron &source = generated_neurons[static_cast<std::size_t>(connection.m_source_neuron_idx)];
             const Neuron &target = generated_neurons[static_cast<std::size_t>(connection.m_target_neuron_idx)];
-            const double dx = target.m_x - source.m_x;
-            const double dy = target.m_y - source.m_y;
-            const double dz = target.m_z - source.m_z;
+            const Real dx = target.m_x - source.m_x;
+            const Real dy = target.m_y - source.m_y;
+            const Real dz = target.m_z - source.m_z;
             connection.m_length = std::sqrt(dx * dx + dy * dy + dz * dz);
             if (subst.m_use_spatial_distance_for_delays) {
                 connection.m_synaptic_delay = connection.m_length / subst.m_conduction_velocity;

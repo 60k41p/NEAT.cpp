@@ -20,7 +20,7 @@ namespace {
         }                                                                                   \
     } while (0)
 
-    bool Near(double a, double b, double eps = 1e-9) { return std::fabs(a - b) <= eps; }
+    bool Near(Real a, Real b, Real eps = 1e-9) { return std::fabs(a - b) <= eps; }
 
 }  // namespace
 
@@ -30,18 +30,18 @@ int TestUtils(int argc, char *argv[]) {
 
     // GetMaxMin
     {
-        std::vector<double> v{3.0, -1.5, 7.25, 0.0};
-        double mn = 0.0, mx = 0.0;
+        std::vector<Real> v{3.0, -1.5, 7.25, 0.0};
+        Real mn = 0.0, mx = 0.0;
         GetMaxMin(v, mn, mx);
         CHECK(Near(mn, -1.5));
         CHECK(Near(mx, 7.25));
     }
 
     // Regression: all-negative input must yield the most-negative value as max,
-    // not the smallest positive double (numeric_limits::min() seeding bug).
+    // not the smallest positive Real (numeric_limits::min() seeding bug).
     {
-        std::vector<double> v{-5.0, -3.0, -9.0, -0.25};
-        double mn = 0.0, mx = 0.0;
+        std::vector<Real> v{-5.0, -3.0, -9.0, -0.25};
+        Real mn = 0.0, mx = 0.0;
         GetMaxMin(v, mn, mx);
         CHECK(Near(mn, -9.0));
         CHECK(Near(mx, -0.25));
@@ -49,8 +49,8 @@ int TestUtils(int argc, char *argv[]) {
 
     // Empty input yields 0,0 instead of garbage extremes.
     {
-        std::vector<double> v;
-        double mn = 123.0, mx = 456.0;
+        std::vector<Real> v;
+        Real mn = 123.0, mx = 456.0;
         GetMaxMin(v, mn, mx);
         CHECK(Near(mn, 0.0));
         CHECK(Near(mx, 0.0));
@@ -61,7 +61,7 @@ int TestUtils(int argc, char *argv[]) {
 
     // Vector scale honors the requested target range.
     {
-        std::vector<double> v{0.0, 5.0, 10.0};
+        std::vector<Real> v{0.0, 5.0, 10.0};
         Scale(v, -1.0, 1.0);
         CHECK(Near(v[0], -1.0));
         CHECK(Near(v[1], 0.0));
@@ -74,13 +74,13 @@ int TestUtils(int argc, char *argv[]) {
         CHECK(itos(-42) == std::string("-42"));
         CHECK(itos(12345) == std::string("12345"));
         // ftos must at least parse back to the same value
-        const double x = 3.25;
+        const Real x = 3.25;
         CHECK(Near(std::stod(ftos(x)), x, 1e-9));
     }
 
-    // Clamp double / float / int
+    // Clamp Real / float / int
     {
-        double d = -5.0;
+        Real d = -5.0;
         Clamp(d, -1.0, 1.0);
         CHECK(Near(d, -1.0));
         d = 5.0;
@@ -121,9 +121,9 @@ int TestUtils(int argc, char *argv[]) {
         CHECK(RoundUnderOffset(1.2, 0.1) == 2);
     }
 
-    // Scale double / float: [0..4] -> [-12..12], 2 maps to 0
+    // Scale Real / float: [0..4] -> [-12..12], 2 maps to 0
     {
-        double a = 2.0;
+        Real a = 2.0;
         Scale(a, 0.0, 4.0, -12.0, 12.0);
         CHECK(Near(a, 0.0));
         a = 0.0;
@@ -141,7 +141,7 @@ int TestUtils(int argc, char *argv[]) {
     // Scale with a degenerate source range snaps to the target midpoint
     // (no division by zero); degenerate target range snaps to the target.
     {
-        double a = 1.0;
+        Real a = 1.0;
         Scale(a, 1.0, 1.0, 0.0, 1.0);
         CHECK(Near(a, 0.5));
         a = 7.0;

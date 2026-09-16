@@ -37,6 +37,8 @@
 #include <string>
 #include <vector>
 
+#include "Types.h"
+
 namespace NEAT {
 
     class RNG {
@@ -60,25 +62,25 @@ namespace NEAT {
         int RandInt(int x, int y);
 
         // Returns a random number from a uniform distribution in the range of [0 .. 1]
-        double RandFloat();
+        Real RandFloat();
 
         // Returns a random number from a uniform distribution in the range of [-1 .. 1]
-        double RandFloatSigned();
+        Real RandFloatSigned();
 
         // Returns a random number from a gaussian (normal) distribution in the range of [-1 .. 1]
-        double RandGaussSigned();
+        Real RandGaussSigned();
 
         // Returns a random number from a normal distribution (throws on non-finite
         // mean or non-positive/non-finite standard deviation)
-        double RandNormal(double mean = 0.0, double standardDeviation = 1.0);
+        Real RandNormal(Real mean = 0.0, Real standardDeviation = 1.0);
 
         // Returns a random number from a Cauchy distribution (throws on non-finite
         // location or non-positive/non-finite scale; resamples non-finite draws)
-        double RandCauchy(double location = 0.0, double scale = 1.0);
+        Real RandCauchy(Real location = 0.0, Real scale = 1.0);
 
         // Returns an index given a vector of probabilities (throws on empty,
         // non-finite or negative input; all-zero falls back to uniform choice)
-        int Roulette(const std::vector<double> &a_probs);
+        int Roulette(const std::vector<Real> &a_probs);
 
         // Serializes/deserializes the engine state for deterministic checkpoints
         std::string Serialize() const;

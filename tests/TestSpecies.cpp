@@ -38,7 +38,7 @@ namespace {
         return NEAT::Genome(p, init);
     }
 
-    NEAT::Genome MakeScoredSeed(int id, double fitness) {
+    NEAT::Genome MakeScoredSeed(int id, Real fitness) {
         NEAT::Genome g = MakeSeed();
         g.SetID(id);
         g.SetFitness(fitness);
@@ -78,7 +78,7 @@ int TestSpecies(int argc, char *argv[]) {
         CHECK(s.m_Individuals[0].GetFitness() >= s.m_Individuals[1].GetFitness());
         CHECK(s.m_Individuals[1].GetFitness() >= s.m_Individuals[2].GetFitness());
         s.CalculateAverageFitness();
-        const double expected = (1.0 + 5.0 + 3.0) / 3.0;
+        const Real expected = (1.0 + 5.0 + 3.0) / 3.0;
         CHECK(std::fabs(s.m_AverageFitness - expected) < 1e-9);
         CHECK(s.GetLeader().GetFitness() == 5.0);
     }
@@ -186,8 +186,8 @@ int TestSpecies(int argc, char *argv[]) {
         s.AdjustFitness(p);
         // Species age 0 < YoungAgeTreshold, so fitness gets the young-age boost
         // and is then divided by species size.
-        CHECK(std::fabs(s.m_Individuals[0].GetAdjFitness() - 0.5 * p.YoungAgeFitnessBoost) < 1e-9);
-        CHECK(std::fabs(s.m_Individuals[1].GetAdjFitness() - 1.5 * p.YoungAgeFitnessBoost) < 1e-9);
+        CHECK(std::fabs(s.m_Individuals[0].GetAdjFitness() - 0.5 * p.YoungAgeFitnessBoost) < 1e-6);
+        CHECK(std::fabs(s.m_Individuals[1].GetAdjFitness() - 1.5 * p.YoungAgeFitnessBoost) < 1e-6);
 
         // Stagnation beyond the threshold crushes the adjusted fitness —
         // but never for the species flagged best (the fresh constructor sets that).

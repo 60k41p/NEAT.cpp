@@ -42,6 +42,7 @@
 #include "Parameters.h"
 #include "Random.h"
 #include "Traits.h"
+#include "Types.h"
 #include "Utils.h"
 
 namespace NEAT {
@@ -115,12 +116,12 @@ namespace NEAT {
                     if (itp.min > itp.max) {
                         throw std::invalid_argument("Floating-point trait minimum exceeds maximum");
                     }
-                    double x = a_RNG.RandFloat();
+                    Real x = a_RNG.RandFloat();
                     Scale(x, 0, 1, itp.min, itp.max);
                     t = x;
                 } else if (it->second.type == "str") {
                     StringTraitParameters itp = std::get<StringTraitParameters>(it->second.m_Details);
-                    std::vector<double> probs = itp.probs;
+                    std::vector<Real> probs = itp.probs;
                     if (itp.set.empty()) {
                         throw std::runtime_error("Empty set of string traits");
                     }
@@ -130,7 +131,7 @@ namespace NEAT {
                     t = itp.set[idx];
                 } else if (it->second.type == "intset") {
                     IntSetTraitParameters itp = std::get<IntSetTraitParameters>(it->second.m_Details);
-                    std::vector<double> probs = itp.probs;
+                    std::vector<Real> probs = itp.probs;
                     if (itp.set.empty()) {
                         throw std::runtime_error("Empty set of int traits");
                     }
@@ -140,7 +141,7 @@ namespace NEAT {
                     t = itp.set[idx];
                 } else if (it->second.type == "floatset") {
                     FloatSetTraitParameters itp = std::get<FloatSetTraitParameters>(it->second.m_Details);
-                    std::vector<double> probs = itp.probs;
+                    std::vector<Real> probs = itp.probs;
                     if (itp.set.empty()) {
                         throw std::runtime_error("Empty set of float traits");
                     }
@@ -185,10 +186,10 @@ namespace NEAT {
                             int m1 = std::get<int>(mine);
                             int m2 = std::get<int>(yours);
                             m_Traits[it->first].value = static_cast<int>((static_cast<long long>(m1) + static_cast<long long>(m2)) / 2LL);
-                        } else if (std::holds_alternative<double>(mine)) {
-                            double m1 = std::get<double>(mine);
-                            double m2 = std::get<double>(yours);
-                            m_Traits[it->first].value = (m1 + m2) / 2.0;
+                        } else if (std::holds_alternative<Real>(mine)) {
+                            Real m1 = std::get<Real>(mine);
+                            Real m2 = std::get<Real>(yours);
+                            m_Traits[it->first].value = (m1 + m2) / 2;
                         } else if (std::holds_alternative<std::string>(mine)) {
                             // strings are always either-or
                             m_Traits[it->first].value = (a_RNG.RandFloat() < 0.5) ? mine : yours;
@@ -278,8 +279,8 @@ namespace NEAT {
                             if (itp.min > itp.max) {
                                 throw std::invalid_argument("Floating-point trait minimum exceeds maximum");
                             }
-                            double val = std::get<double>(traitIt->second.value);
-                            double original = val;
+                            Real val = std::get<Real>(traitIt->second.value);
+                            Real original = val;
                             // determine type of mutation - modify or replace, according to parameters
                             if (a_RNG.RandFloat() < itp.mut_replace_prob) {
                                 // replace
@@ -313,7 +314,7 @@ namespace NEAT {
                             StringTraitParameters itp = std::get<StringTraitParameters>(it->second.m_Details);
                             const std::string original = std::get<std::string>(traitIt->second.value);
                             std::vector<std::string> alternatives;
-                            std::vector<double> probs;
+                            std::vector<Real> probs;
                             for (std::size_t i = 0; i < itp.set.size(); ++i) {
                                 if (itp.set[i] != original) {
                                     alternatives.push_back(itp.set[i]);
@@ -330,7 +331,7 @@ namespace NEAT {
                             IntSetTraitParameters itp = std::get<IntSetTraitParameters>(it->second.m_Details);
                             const intsetelement original = std::get<intsetelement>(traitIt->second.value);
                             std::vector<intsetelement> alternatives;
-                            std::vector<double> probs;
+                            std::vector<Real> probs;
                             for (std::size_t i = 0; i < itp.set.size(); ++i) {
                                 if (itp.set[i].value != original.value) {
                                     alternatives.push_back(itp.set[i]);
@@ -347,7 +348,7 @@ namespace NEAT {
                             FloatSetTraitParameters itp = std::get<FloatSetTraitParameters>(it->second.m_Details);
                             const floatsetelement original = std::get<floatsetelement>(traitIt->second.value);
                             std::vector<floatsetelement> alternatives;
-                            std::vector<double> probs;
+                            std::vector<Real> probs;
                             for (std::size_t i = 0; i < itp.set.size(); ++i) {
                                 if (itp.set[i].value != original.value) {
                                     alternatives.push_back(itp.set[i]);
@@ -370,12 +371,12 @@ namespace NEAT {
         // Compute and return distances between each matching pair of traits.
         // The non-const overload forwards to the const one so distance queries
         // also work on const genes.
-        std::map<std::string, double> GetTraitDistances(const std::map<std::string, Trait> &other) {
+        std::map<std::string, Real> GetTraitDistances(const std::map<std::string, Trait> &other) {
             return static_cast<const Gene &>(*this).GetTraitDistances(other);
         }
 
-        std::map<std::string, double> GetTraitDistances(const std::map<std::string, Trait> &other) const {
-            std::map<std::string, double> dist;
+        std::map<std::string, Real> GetTraitDistances(const std::map<std::string, Trait> &other) const {
+            std::map<std::string, Real> dist;
             for (auto it = other.begin(); it != other.end(); ++it) {
                 const auto mineIt = m_Traits.find(it->first);
                 if (mineIt == m_Traits.end()) {
@@ -412,9 +413,9 @@ namespace NEAT {
                     if (std::holds_alternative<int>(mine)) {
                         // distance between ints - calculate directly
                         dist[it->first] = std::abs(std::get<int>(mine) - std::get<int>(yours));
-                    } else if (std::holds_alternative<double>(mine)) {
+                    } else if (std::holds_alternative<Real>(mine)) {
                         // distance between floats - calculate directly
-                        dist[it->first] = std::abs(std::get<double>(mine) - std::get<double>(yours));
+                        dist[it->first] = std::abs(std::get<Real>(mine) - std::get<Real>(yours));
                     } else if (std::holds_alternative<std::string>(mine)) {
                         // distance between strings - matching is 0, non-matching is 1
                         dist[it->first] = (std::get<std::string>(mine) == std::get<std::string>(yours)) ? 0.0 : 1.0;
@@ -450,27 +451,27 @@ namespace NEAT {
         int m_InnovationID;
 
         // This variable is modified during evolution The weight of the connection
-        double m_Weight;
+        Real m_Weight;
 
         // Is it recurrent?
         bool m_IsRecurrent;
 
         // Spiking synapse parameters. They are inert during the historical
         // rate-network activation paths.
-        double m_SynapticDelay;
-        double m_SynapticTimeConstant;
+        Real m_SynapticDelay;
+        Real m_SynapticTimeConstant;
         bool m_STDPEnabled;
-        double m_STDPPlus;
-        double m_STDPMinus;
-        double m_STDPTauPlus;
-        double m_STDPTauMinus;
-        double m_STDPMinWeight;
-        double m_STDPMaxWeight;
+        Real m_STDPPlus;
+        Real m_STDPMinus;
+        Real m_STDPTauPlus;
+        Real m_STDPTauMinus;
+        Real m_STDPMinWeight;
+        Real m_STDPMaxWeight;
 
        public:
-        double GetWeight() const { return m_Weight; }
+        Real GetWeight() const { return m_Weight; }
 
-        void SetWeight(const double a_Weight) { m_Weight = a_Weight; }
+        void SetWeight(const Real a_Weight) { m_Weight = a_Weight; }
 
         ////////////////
         // Constructors
@@ -492,7 +493,7 @@ namespace NEAT {
             m_STDPMaxWeight = 8.0;
         }
 
-        LinkGene(int a_InID, int a_OutID, int a_InnovID, double a_Wgt, bool a_Recurrent = false) {
+        LinkGene(int a_InID, int a_OutID, int a_InnovID, Real a_Wgt, bool a_Recurrent = false) {
             m_FromNeuronID = a_InID;
             m_ToNeuronID = a_OutID;
             m_InnovationID = a_InnovID;
@@ -569,7 +570,7 @@ namespace NEAT {
         // useful for displaying the genome
         int x, y;
         // Position (depth) within the network
-        double m_SplitY;
+        Real m_SplitY;
 
         /////////////////////////////////////////////////////////
         // Any additional properties of the neuron
@@ -594,13 +595,13 @@ namespace NEAT {
         // Sine    : using A    (frequency, phase)
         // Square  : using A, B (high phase lenght, low phase length)
         // Linear  : using B    (shift)
-        double m_A, m_B;
+        Real m_A, m_B;
 
         // Time constant value used when the neuron is activating in leaky integrator mode
-        double m_TimeConstant;
+        Real m_TimeConstant;
 
         // Bias value used when the neuron is activating in leaky integrator mode
-        double m_Bias;
+        Real m_Bias;
 
         // The type of activation function the neuron has
         ActivationFunction m_ActFunction;
@@ -609,18 +610,18 @@ namespace NEAT {
         // threshold/reset/resting/refractory/resistance values. Adaptive LIF
         // additionally uses the adaptation values. Izhikevich uses its
         // canonical a/b/c/d parameterization.
-        double m_SpikeThreshold;
-        double m_ResetPotential;
-        double m_RestingPotential;
-        double m_RefractoryPeriod;
-        double m_MembraneResistance;
-        double m_AdaptationTimeConstant;
-        double m_AdaptationIncrement;
-        double m_RateTimeConstant;
-        double m_IzhikevichA;
-        double m_IzhikevichB;
-        double m_IzhikevichC;
-        double m_IzhikevichD;
+        Real m_SpikeThreshold;
+        Real m_ResetPotential;
+        Real m_RestingPotential;
+        Real m_RefractoryPeriod;
+        Real m_MembraneResistance;
+        Real m_AdaptationTimeConstant;
+        Real m_AdaptationIncrement;
+        Real m_RateTimeConstant;
+        Real m_IzhikevichA;
+        Real m_IzhikevichB;
+        Real m_IzhikevichC;
+        Real m_IzhikevichD;
         // In the original McCulloch-Pitts calculus any active inhibitory
         // afferent vetoes firing, irrespective of excitatory drive.
         bool m_MCPInhibitoryVeto;
@@ -659,7 +660,7 @@ namespace NEAT {
                     a_lhs.m_MCPInhibitoryVeto == a_rhs.m_MCPInhibitoryVeto);
         }
 
-        NeuronGene(NeuronType a_type, int a_id, double a_splity) {
+        NeuronGene(NeuronType a_type, int a_id, Real a_splity) {
             m_ID = a_id;
             m_Type = a_type;
             m_SplitY = a_splity;
@@ -688,10 +689,10 @@ namespace NEAT {
 
         NeuronType Type() const { return m_Type; }
 
-        double SplitY() const { return m_SplitY; }
+        Real SplitY() const { return m_SplitY; }
 
         // Initializing
-        void Init(double a_A, double a_B, double a_TimeConstant, double a_Bias, ActivationFunction a_ActFunc) {
+        void Init(Real a_A, Real a_B, Real a_TimeConstant, Real a_Bias, ActivationFunction a_ActFunc) {
             m_A = a_A;
             m_B = a_B;
             m_TimeConstant = a_TimeConstant;

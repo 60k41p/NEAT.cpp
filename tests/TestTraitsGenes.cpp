@@ -23,9 +23,9 @@ namespace {
         }                                                                                   \
     } while (0)
 
-    bool Near(double a, double b, double eps = 1e-9) { return std::fabs(a - b) <= eps; }
+    bool Near(Real a, Real b, Real eps = 1e-9) { return std::fabs(a - b) <= eps; }
 
-    NEAT::TraitParameters MakeIntTrait(int mn, int mx, double mut_prob = 1.0) {
+    NEAT::TraitParameters MakeIntTrait(int mn, int mx, Real mut_prob = 1.0) {
         NEAT::TraitParameters tp;
         tp.type = "int";
         tp.m_MutationProb = mut_prob;
@@ -39,7 +39,7 @@ namespace {
         return tp;
     }
 
-    NEAT::TraitParameters MakeFloatTrait(double mn, double mx, double mut_prob = 1.0) {
+    NEAT::TraitParameters MakeFloatTrait(Real mn, Real mx, Real mut_prob = 1.0) {
         NEAT::TraitParameters tp;
         tp.type = "float";
         tp.m_MutationProb = mut_prob;
@@ -105,7 +105,7 @@ int TestTraitsGenes(int argc, char *argv[]) {
 
         const int speed = std::get<int>(g.m_Traits["speed"].value);
         CHECK(speed >= 0 && speed <= 10);
-        const double rate = std::get<double>(g.m_Traits["rate"].value);
+        const Real rate = std::get<Real>(g.m_Traits["rate"].value);
         CHECK(rate >= -1.0 && rate <= 1.0);
         const std::string color = std::get<std::string>(g.m_Traits["color"].value);
         CHECK(color == "red" || color == "green" || color == "blue");
