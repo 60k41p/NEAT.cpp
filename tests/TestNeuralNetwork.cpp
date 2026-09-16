@@ -525,7 +525,7 @@ int TestNeuralNetwork(int argc, char *argv[]) {
         b.m_x = 3.0;
         b.m_y = 4.0;
         b.m_z = 0.0;
-        CHECK(Near(net.GetConnectionLenght(a, b), 5.0));
+        CHECK(Near(net.GetConnectionLength(a, b), 5.0));
         CHECK(Near(net.GetConnectionLength(a, b), 5.0));
         a.m_type = INPUT;
         b.m_type = OUTPUT;

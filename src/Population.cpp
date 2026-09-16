@@ -315,8 +315,6 @@ namespace NEAT {
                     throw std::runtime_error("Unable to initialize a valid, non-cloning genome within ConstraintTrials");
                 }
             }
-
-            // m_Genomes[i].CalculateDepth();
         }
         // Speciate
         Speciate();
@@ -632,10 +630,6 @@ namespace NEAT {
 
         // Now sort the species by fitness (best first)
         std::sort(m_Species.begin(), m_Species.end(), species_greater);
-
-        // for(int i=0;i<m_Species.size();i++)
-        // std::cout << m_Species[i].GetBestFitness() << "\n";
-        // std::cout << "\n\n";
     }
 
     // Updates the species
@@ -676,8 +670,8 @@ namespace NEAT {
             }
         }
 
-        // This prevents the previous best species from sudden death If the best species happened to be another one, reset the old species age so it still will
-        // have a chance of survival and improvement if it grows old and stagnates again, it is no longer the best one so it will die off anyway.
+        // This prevents the previous best species from sudden death If the best species happened to be another one, reset the old species age so it still
+        // will have a chance of survival and improvement if it grows old and stagnates again, it is no longer the best one so it will die off anyway.
         if ((t_oldbestid != t_newbestid) && (t_oldbestid != -1)) {
             m_Species[t_oldbestidx].ResetAgeGens();
         }
@@ -1043,7 +1037,8 @@ namespace NEAT {
         // Increase generation number
         m_Generation++;
 
-        // At this point we may also empty our innovation database This is the place where we control whether we want to keep innovation numbers forever or not.
+        // At this point we may also empty our innovation database This is the place where we control whether we want to keep innovation numbers forever or
+        // not.
         if (!m_Parameters.InnovationsForever) {
             m_InnovationDatabase.Flush();
         }
@@ -1182,14 +1177,7 @@ namespace NEAT {
         // Find and save the best genome and fitness
         m_EvalsSinceBestFitnessLastChanged++;
         for (int i = 0; i < m_Species.size(); i++) {
-            // m_Species[i].IncreaseEvalsNoImprovement();
-
             for (int j = 0; j < m_Species[i].m_Individuals.size(); j++) {
-                // if (m_Species[i].m_Individuals[j].GetFitness() <= 0.0)
-                //{
-                //     m_Species[i].m_Individuals[j].SetFitness(0.00001);
-                //}
-
                 if (!m_Species[i].m_Individuals[j].IsEvaluated()) continue;
                 Real t_fitness = m_Species[i].m_Individuals[j].GetFitness();
                 if (std::isnan(t_fitness) || std::isinf(t_fitness)) {
@@ -1258,24 +1246,6 @@ namespace NEAT {
 
         // If the compatibility treshold was changed, reassign all individuals by species
         if (t_changed) {
-            /*int numgs=0;
-            for(int i=0; i<m_Species.size(); i++)
-            {
-                numgs += m_Species[i].m_Individuals.size();
-            }
-
-        #ifdef VDEBUG
-            std::cout << "reassigning species. numgs=" << numgs << "\n";
-        #endif
-
-            for(int i=0; i<numgs; i++)
-            {
-                ReassignSpecies(i);
-            }
-
-            // After reassigning, some empty species may be left, so delete them
-            ClearEmptySpecies();*/
-
             m_Genomes.clear();
             for (unsigned int i = 0; i < m_Species.size(); i++) {
                 for (unsigned int j = 0; j < m_Species[i].m_Individuals.size(); j++) {
@@ -1285,82 +1255,6 @@ namespace NEAT {
 
             Speciate();
         }
-
-        // Faster reassign
-        /*if (t_changed)
-        {
-            std::cout << "reassigning species\n";
-
-            // Perform reproduction for each species
-            m_TempSpecies.clear();
-            m_TempSpecies = m_Species;
-            for(int i=0; i<m_TempSpecies.size(); i++)
-            {
-                m_TempSpecies[i].Clear();
-            }
-
-            std::vector<Genome*> allgenomes;
-            for(int i=0; i<m_Species.size();i++)
-            {
-                for(int j=0; j<m_Species[i].m_Individuals.size(); j++)
-                {
-                    allgenomes.push_back(&m_Species[i].m_Individuals[j]);
-                }
-            }
-
-            for(int i=0; i<allgenomes.size(); i++)
-            {
-                // Add the baby to its proper species
-                bool t_found = false;
-                auto t_cur_species = m_TempSpecies.begin();
-                Genome& baby = *(allgenomes[i]);
-
-                // No species yet?
-                if (t_cur_species == m_TempSpecies.end())
-                {
-                    // create the first species and place the baby there
-                    m_TempSpecies.push_back( Species(baby, m_Parameters, GetNextSpeciesID()) ); // clone the pop's parameters when creating species
-                    IncrementNextSpeciesID();
-                }
-                else
-                {
-                    // try to find a compatible species
-                    Genome& t_to_compare = t_cur_species->GetRepresentative(); // was GetRepresentative()
-
-                    t_found = false;
-                    while((t_cur_species != m_TempSpecies.end()) && (!t_found))
-                    {
-                        if (baby.IsCompatibleWith( t_to_compare, m_Parameters ))
-                        {
-                            // found a compatible species
-                            t_cur_species->AddIndividual(baby);
-                            t_found = true; // the search is over
-                        }
-                        else
-                        {
-                            // keep searching for a matching species
-                            t_cur_species++;
-                            if (t_cur_species != m_TempSpecies.end())
-                            {
-                                t_to_compare = t_cur_species->GetRepresentative(); // was GetRepresentative()
-                            }
-                        }
-                    }
-
-                    // if couldn't find a match, make a new species
-                    if (!t_found)
-                    {
-                        m_TempSpecies.push_back( Species(baby, m_Parameters, GetNextSpeciesID()) ); // clone the pop's parameters when creating species
-                        IncrementNextSpeciesID();
-                    }
-                }
-            }
-
-            m_Species = m_TempSpecies;
-
-            // After reassigning, some empty species may be left, so delete them
-            ClearEmptySpecies();
-        }*/
 
 #ifdef VDEBUG
         SameGenomeIDCheck();
@@ -1435,16 +1329,7 @@ namespace NEAT {
                     std::cout << "found compatible species\n";
 #endif
                 } else {
-                    // keep searching for a matching species
-                    /*t_cur_species++;
-                    while((t_cur_species->NumIndividuals() == 0) && (t_cur_species != m_Species.end()))
-                        t_cur_species++;
-
-                    if (t_cur_species != m_Species.end())
-                    {
-                        t_to_compare = t_cur_species->GetRepresentative(); // was GetRepresentative()
-                    }*/
-
+                    // keep searching for a matching species, skipping empties
                     while (1) {
                         t_cur_species++;
                         if (t_cur_species == m_Species.end()) {
@@ -1454,10 +1339,6 @@ namespace NEAT {
                             t_to_compare = t_cur_species->GetRepresentative();
                             break;
                         }
-                        /*else
-                        {
-                            t_cur_species++;
-                        }*/
                     };
                 }
             }
@@ -1628,9 +1509,9 @@ namespace NEAT {
         return sum / static_cast<Real>(k);
     }
 
-    // This is the main method performing novelty search. Performs one reproduction and assigns novelty scores based on the current population and the archive.
-    // If a successful behavior was encountered, returns true and the genome a_SuccessfulGenome is overwritten with the genome generating the successful
-    // behavior
+    // This is the main method performing novelty search. Performs one reproduction and assigns novelty scores based on the current population and the
+    // archive. If a successful behavior was encountered, returns true and the genome a_SuccessfulGenome is overwritten with the genome generating the
+    // successful behavior
     bool Population::NoveltySearchTick(Genome &a_SuccessfulGenome) {
         if (m_BehaviorArchive == nullptr) {
             throw std::runtime_error("Novelty search behavior data has not been initialized");

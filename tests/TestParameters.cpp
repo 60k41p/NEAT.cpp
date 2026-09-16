@@ -87,6 +87,8 @@ int TestParameters(int argc, char *argv[]) {
         p.MutateWeightsProb = 0.9;
         p.SurvivalRate = 0.33;
         p.TournamentSize = 7;
+        p.MutateToggleEnableProb = 0.07;
+        p.DisabledGeneInheritRate = 0.6;
 
         const auto tmp = std::filesystem::temp_directory_path() / "multineat_test_params_rt.neat";
         p.Save(tmp.string().c_str());
@@ -106,6 +108,8 @@ int TestParameters(int argc, char *argv[]) {
         CHECK(Near(q.MutateWeightsProb, 0.9));
         CHECK(Near(q.SurvivalRate, 0.33));
         CHECK(q.TournamentSize == 7);
+        CHECK(Near(q.MutateToggleEnableProb, 0.07));
+        CHECK(Near(q.DisabledGeneInheritRate, 0.6));
 
         // const char* overload on the same file.
         Parameters r;
@@ -227,6 +231,20 @@ int TestParameters(int argc, char *argv[]) {
         p.MultipointCrossoverRate = 0.8;
         p.SinglePointCrossoverRate = 0.5;
         CHECK(!p.Validate());
+        // Enable-bit knobs are validated as probabilities.
+        p.Reset();
+        p.MutateToggleEnableProb = 2.0;
+        CHECK(!p.Validate());
+        p.Reset();
+        p.DisabledGeneInheritRate = -0.5;
+        CHECK(!p.Validate());
+        // LeoSeed without Leo is a configuration error.
+        p.Reset();
+        p.LeoSeed = true;
+        CHECK(!p.Validate(&error));
+        CHECK(!error.empty());
+        p.Leo = true;
+        CHECK(p.Validate());
     }
 
     // ConfigureSpiking / ConfigureMcCullochPitts presets.
@@ -248,16 +266,28 @@ int TestParameters(int argc, char *argv[]) {
     {
         Parameters p;
         p.Reset();
+        CHECK(Near(p.MutateToggleEnableProb, 0.0));
+        CHECK(Near(p.DisabledGeneInheritRate, 0.75));
         p.PopulationSize = 64;
         p.ParentSelectionMode = TOURNAMENT;
         p.WeightMutationDistribution = GAUSSIAN_MUTATION;
         p.MutateNeuronSpikingParametersProb = 0.3;
+        p.MutateToggleEnableProb = 0.11;
+        p.DisabledGeneInheritRate = 0.9;
+        p.Leo = true;
+        p.LeoSeed = true;
+        p.GeometrySeed = true;
         const std::string data = p.Serialize();
         const Parameters q = Parameters::Deserialize(data);
         CHECK(q.PopulationSize == 64);
         CHECK(q.ParentSelectionMode == TOURNAMENT);
         CHECK(q.WeightMutationDistribution == GAUSSIAN_MUTATION);
         CHECK(Near(q.MutateNeuronSpikingParametersProb, 0.3));
+        CHECK(Near(q.MutateToggleEnableProb, 0.11));
+        CHECK(Near(q.DisabledGeneInheritRate, 0.9));
+        CHECK(q.Leo == true);
+        CHECK(q.LeoSeed == true);
+        CHECK(q.GeometrySeed == true);
         CHECK(q.Validate());
     }
 

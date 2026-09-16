@@ -130,10 +130,10 @@ namespace NEAT {
         // Remove node Links connected to this node are also removed
         void RemoveNeuronGene(int a_id);
 
-        // Returns the count of links inputting from the specified neuron ID
+        // Returns the count of expressed (enabled) links inputting from the specified neuron ID
         int LinksInputtingFrom(int a_id) const;
 
-        // Returns the count of links outputting to the specified neuron ID
+        // Returns the count of expressed (enabled) links outputting to the specified neuron ID
         int LinksOutputtingTo(int a_id) const;
 
         // A recursive function returning the max depth from the specified neuron to the inputs
@@ -182,24 +182,12 @@ namespace NEAT {
         // Builds this genome from an opened file
         Genome(std::ifstream &a_DataFile);
 
-        // Builds this genome from any input stream (file format versions 1-4
+        // Builds this genome from any input stream (file format versions 1-5
         // as well as the legacy format). Throws on malformed/invalid data.
         Genome(std::istream &a_DataStream);
 
-        // This creates a CTRNN fully-connected genome
-
-        // Genome(int a_ID, int a_NumInputs, int a_NumHidden, int a_NumOutputs,
-        //       ActivationFunction a_OutputActType, ActivationFunction a_HiddenActType, const Parameters &a_Parameters);
-
-        // Genome(unsigned int a_ID, unsigned int a_NumInputs, unsigned int a_NumHidden, unsigned int a_NumOutputs,
-        //        ActivationFunction a_OutputActType, ActivationFunction a_HiddenActType, const Parameters &a_Parameters);
-
         // This creates a standart minimal genome - perceptron-like structure
         Genome(const Parameters &a_Parameters, const GenomeInitStruct &init_struct);
-
-        /////////////
-        // Other possible constructors for different types of networks go here
-        // TODO
 
         ////////////////////////////
         // Destructor
@@ -293,7 +281,14 @@ namespace NEAT {
         ////////////
         // Other possible methods for building a phenotype go here Like CPPN/HyperNEAT stuff
         ////////////
+        // Builds a HyperNEAT phenotype based on the substrate. Without
+        // parameters this preserves the historical behavior: the expression
+        // gate (output 0, unless querying weights only) passes on any
+        // positive value. With parameters and Leo enabled, output 0 carries
+        // the weight and output 1 the LEO signal, expressed only above
+        // LeoThreshold (Stanley, D'Ambrosio & Gauci 2009).
         void BuildHyperNEATPhenotype(NeuralNetwork &net, Substrate &subst);
+        void BuildHyperNEATPhenotype(NeuralNetwork &net, Substrate &subst, const Parameters &params);
 
         // Saves this genome to a file
         void Save(const char *a_filename);
@@ -355,6 +350,11 @@ namespace NEAT {
 
         // Removes a hidden neuron having only one input and only one output with a direct link between them.
         bool Mutate_RemoveSimpleNeuron(InnovationDatabase &a_Innovs, const Parameters &a_Parameters, RNG &a_RNG);
+
+        // Flips the enable bit of one uniformly random link gene, disabling an
+        // expressed link or reactivating a disabled one. Returns false when the
+        // genome has no links.
+        bool Mutate_ToggleEnable(RNG &a_RNG);
 
         // Perturbs the weights
         bool Mutate_LinkWeights(const Parameters &a_Parameters, RNG &a_RNG);

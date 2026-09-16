@@ -177,6 +177,11 @@ namespace NEAT {
         // the gene of the fitter parent will be prefered, instead of choosing one at random
         Real PreferFitterParentRate;
 
+        // Probability that a matching link gene is disabled in the child when
+        // it is disabled in either parent (Stanley & Miikkulainen 2002,
+        // Section 4: 75% by default). Applies to every crossover mode.
+        Real DisabledGeneInheritRate;
+
         // Performing truncation selection or not? (goes first)
         bool TruncationSelection;
 
@@ -274,6 +279,11 @@ namespace NEAT {
 
         // Probability for a baby that a simple neuron will be replaced with a link
         Real MutateRemSimpleNeuronProb;
+
+        // Probability for a baby to be mutated by flipping the enable bit of a
+        // single link gene (Stanley & Miikkulainen 2002, Section 3.2). A flip
+        // can either disable an expressed link or reactivate a disabled one.
+        Real MutateToggleEnableProb;
 
         // Maximum number of tries to find 2 neurons to add/remove a link
         unsigned int LinkTries;
@@ -539,14 +549,29 @@ namespace NEAT {
         Real Qtree_Y;
         Real Qtree_Z;
 
-        // Use Link Expression output
+        // Use Link Expression output (Stanley, D'Ambrosio & Gauci 2009). When
+        // true, the plain-HyperNEAT builder interprets CPPN output 0 as the
+        // connection weight and output 1 as the LEO signal, expressing a link
+        // only when the LEO output exceeds LeoThreshold. The ES-HyperNEAT
+        // builder instead reads the LEO signal from the last CPPN output.
         bool Leo;
 
         // Threshold above which a connection is expressed
         Real LeoThreshold;
 
-        // Use geometric seeding. Currently only along the X axis. 1
+        // Seed CPPN genomes with a dedicated UNSIGNED_STEP LEO output neuron
+        // (output index 1, fully connected like the other seed outputs), so
+        // evolution starts from an explicit expression gate. Requires at least
+        // two seed outputs; only meaningful together with Leo.
         bool LeoSeed;
+
+        // Seed CPPN genomes with a geometric bias along the source X axis:
+        // the link from the first CPPN input (source x) to the weight output
+        // starts at +1 (clamped to the weight range) instead of zero. The
+        // seed genome is substrate-agnostic, so only the source-x slot has a
+        // layout-independent identity. Takes effect when the seed population
+        // is created without weight randomization; ignored by layered seeds
+        // without direct input-to-output links.
         bool GeometrySeed;
 
         /////////////////////////////////////
