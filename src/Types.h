@@ -24,11 +24,10 @@
  * File:        Types.h
  * Description: Central scalar type alias for the whole library. Real is the floating-point type used for
  *              weights, activations, fitness values, compatibility distances, parameters, RNG draws, trait
- *              values and substrate coordinates. It is float (halved memory/bandwidth vs. double; single
- *              precision is ample for neuroevolution magnitudes) and can be flipped back to double in this
- *              one place for an exact-precision A/B comparison.
+ *              values and substrate coordinates. It is double for direct parity with the MultiNEAT2 reference
+ *              implementation; flip to float in this one place for a memory/bandwidth A/B comparison.
  *
- * References: IEEE 754 single-precision semantics; intra-repo users: every header under src/ that declares
+ * References: IEEE 754 double-precision semantics; intra-repo users: every header under src/ that declares
  *             a numeric field or signature (Genes, Genome, NeuralNetwork, Parameters, Population, Species,
  *             Substrate, Traits, Random, Utils, PhenotypeBehavior).
  */
@@ -38,6 +37,6 @@
 namespace NEAT {
 
     // Scalar type for all NEAT numerics (see file description above).
-    using Real = float;
+    using Real = double;
 
 }  // namespace NEAT

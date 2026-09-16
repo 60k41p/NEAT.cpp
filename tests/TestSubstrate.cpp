@@ -4,6 +4,7 @@
 
 #include "Genes.h"
 #include "Substrate.h"
+using NEAT::Real;
 
 namespace {
 
@@ -107,7 +108,7 @@ int TestSubstrate(int argc, char *argv[]) {
         try {
             std::vector<std::vector<int>> bad{{static_cast<int>(INPUT), 7, static_cast<int>(OUTPUT), 0}};
             s.SetCustomConnectivity(bad);
-        } catch (const std::invalid_argument &) {
+        } catch (const std::out_of_range &) {
             threw = true;
         }
         CHECK(threw);

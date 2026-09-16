@@ -148,6 +148,7 @@ namespace NEAT {
             m_EvalsNoImprovement = a_S.m_EvalsNoImprovement;
             m_AverageFitness = a_S.m_AverageFitness;
             m_AgeGenerations = a_S.m_AgeGenerations;
+            m_AgeEvaluations = a_S.m_AgeEvaluations;
             m_OffspringRqd = a_S.m_OffspringRqd;
             m_R = a_S.m_R;
             m_G = a_S.m_G;
@@ -184,8 +185,6 @@ namespace NEAT {
         }
         if (t_Evaluated.size() == 1) {
             return (m_Individuals[t_Evaluated[0].first]);
-        } else if (t_Evaluated.size() == 2) {
-            return (m_Individuals[t_Evaluated[Rounded(a_RNG.RandFloat())].first]);
         }
 
         // Warning!!!! The individuals must be sorted by best fitness for this to work
@@ -356,35 +355,19 @@ namespace NEAT {
             }
             NormalizeSelectionWeights(probs);
             t_chosen_one = t_picked[static_cast<std::size_t>(a_RNG.Roulette(probs))].first;
-        } else {
-            // sort them here just to make sure
-            std::sort(t_Evaluated.begin(), t_Evaluated.end(), idxfitnesspair_greater);
-
-            // Here might be introduced better selection scheme, but this works OK for now
-            if (!a_Parameters.RouletteWheelSelection) {
-                int t_num_parents = (int)(a_Parameters.SurvivalRate * (Real)(t_Evaluated.size()));
-
-                if (t_num_parents >= t_Evaluated.size()) {
-                    t_num_parents = t_Evaluated.size() - 1;
-                }
-                if (t_num_parents < 1) {
-                    t_num_parents = 1;
-                }
-                // The pool may have been truncated above: never draw past its end.
-                if (t_num_parents > static_cast<int>(t_Evaluated.size()) - 1) {
-                    t_num_parents = static_cast<int>(t_Evaluated.size()) - 1;
-                }
-
-                t_chosen_one = t_Evaluated[a_RNG.RandInt(0, t_num_parents)].first;
-            } else {
-                // roulette wheel selection
-                int t_num_parents = t_Evaluated.size();
-                std::vector<Real> t_probs;
-                for (unsigned int i = 0; i < t_num_parents; i++) {
-                    t_probs.push_back(t_Evaluated[i].second);
-                }
-                t_chosen_one = t_Evaluated[a_RNG.Roulette(t_probs)].first;
+        } else if ((a_Parameters.RouletteWheelSelection) && (!a_Parameters.TournamentSelection))  // only roulette
+        {
+            // Roulette wheel selection
+            std::vector<Real> t_probs;
+            t_probs.reserve(t_Evaluated.size());
+            for (const auto &evaluated : t_Evaluated) {
+                t_probs.push_back(evaluated.second);
             }
+            NormalizeSelectionWeights(t_probs);
+            t_chosen_one = t_Evaluated[static_cast<std::size_t>(a_RNG.Roulette(t_probs))].first;
+        } else {
+            // default is pure truncation or just random search if truncation is off - the array has been resized already
+            t_chosen_one = t_Evaluated[static_cast<std::size_t>(a_RNG.RandInt(0, static_cast<int>(t_Evaluated.size()) - 1))].first;
         }
 
         return (m_Individuals[t_chosen_one]);
@@ -625,20 +608,38 @@ namespace NEAT {
 
                             // There is a probability that the father may come from another species
                             if ((a_RNG.RandFloat() < a_Parameters.InterspeciesCrossoverRate) && (a_Pop.m_Species.size() > 1)) {
-                                // Find different species via roulette over leader adjusted
-                                // fitness (shifted non-negative, uniform fallback).
+                                /// Find different species via roulette over average fitness as probability
                                 std::vector<Real> probs;
-                                Real allp = 0;
-                                for (int i = 0; i < a_Pop.m_Species.size(); i++) {
+                                std::vector<bool> eligible;
+                                Real minimum = 0.0;
+                                bool have_eligible = false;
+                                for (std::size_t i = 0; i < a_Pop.m_Species.size(); ++i) {
                                     if (a_Pop.m_Species[i].m_ID == m_ID) {
                                         probs.push_back(0.0);
+                                        eligible.push_back(false);
                                     } else {
-                                        probs.push_back(a_Pop.m_Species[i].GetLeader().GetAdjFitness());
+                                        const Real fitness = a_Pop.m_Species[i].GetLeader().GetAdjFitness();
+                                        probs.push_back(fitness);
+                                        eligible.push_back(true);
+                                        minimum = have_eligible ? std::min(minimum, fitness) : fitness;
+                                        have_eligible = true;
                                     }
-                                    allp += probs[probs.size() - 1];
                                 }
-                                if (allp > 0) {
-                                    NormalizeSelectionWeights(probs);
+                                if (have_eligible) {
+                                    if (minimum < 0.0) {
+                                        for (std::size_t i = 0; i < probs.size(); ++i) {
+                                            if (eligible[i]) probs[i] -= minimum;
+                                        }
+                                    }
+                                    bool any_positive = false;
+                                    for (std::size_t i = 0; i < probs.size(); ++i) {
+                                        any_positive = any_positive || (eligible[i] && probs[i] > 0.0);
+                                    }
+                                    if (!any_positive) {
+                                        for (std::size_t i = 0; i < probs.size(); ++i) {
+                                            probs[i] = eligible[i] ? 1.0 : 0.0;
+                                        }
+                                    }
                                     int t_diffspec = a_RNG.Roulette(probs);
                                     t_mom = GetIndividual(a_Parameters, a_RNG);
                                     t_dad = a_Pop.m_Species[t_diffspec].GetIndividual(a_Parameters, a_RNG);
@@ -678,18 +679,21 @@ namespace NEAT {
                     // std::cout << "trying to mutate..";
 
                     // Mutate the baby
-                    bool dummy = false;
                     if ((!t_mated) || (a_RNG.RandFloat() < a_Parameters.OverallMutationRate)) {
-                        MutateGenome(dummy, a_Pop, t_baby, a_Parameters, a_RNG);
+                        MutateGenome(false, a_Pop, t_baby, a_Parameters, a_RNG);
                     }
 
-                    // std::cout << "mutated." << "\n";
+                    // Structural mutations can append an older innovation
+                    // reused from the database. Canonical ordering keeps
+                    // exact clone checks and archives independent of mutation
+                    // history.
+                    t_baby.SortGenes();
 
-                    // Check if this baby is already present somewhere in the offspring we don't want that
+                    // Check if this baby is already present somewhere in the offspring
+                    // we don't want that
                     t_baby_exists_in_pop = false;
                     // Unless of course, we want clones to exist
                     if (!a_Parameters.AllowClones) {
-                        t_baby.SortGenes();
                         for (unsigned int i = 0; i < a_Pop.m_TempSpecies.size(); i++) {
                             for (unsigned int j = 0; j < a_Pop.m_TempSpecies[i].m_Individuals.size(); j++) {
                                 if (GenomesAreClones(t_baby, a_Pop.m_TempSpecies[i].m_Individuals[j],
@@ -717,8 +721,9 @@ namespace NEAT {
                     // std::cout << "baby exists in pop:" << t_baby_exists_in_pop << "\n";
                 } while ((t_baby_exists_in_pop || (t_baby.FailsConstraints(a_Parameters))) && (t_constraint_trials--));  // end do
 
-                // std::cout << "done after " << a_Parameters.ConstraintTrials - t_constraint_trials << "\n";
-                // std::cout << "fails constraints:" << t_baby.FailsConstraints(a_Parameters) << "\n\n";
+                if (t_baby_exists_in_pop || t_baby.FailsConstraints(a_Parameters)) {
+                    throw std::runtime_error("Unable to reproduce a valid, non-cloning genome within ConstraintTrials");
+                }
             }
 
             // We have a new offspring now give the offspring a new ID
@@ -800,24 +805,31 @@ namespace NEAT {
     ////////////
     // Real-time code
     void Species::CalculateAverageFitness() {
-        Real t_total_fitness = 0;
-        int t_num_evaluated = 0;
+        long double scale = 0.0L;
+        int t_num_individuals = 0;
 
         // consider individuals that were evaluated only!
-        for (unsigned int i = 0; i < m_Individuals.size(); i++) {
-            if (m_Individuals[i].IsEvaluated()) {
-                Real tf = m_Individuals[i].GetFitness();
-                if (std::isinf(tf) || std::isnan(tf))  // nan/inf guard
-                {
-                    tf = 0.0;
+        for (const auto &individual : m_Individuals) {
+            if (individual.IsEvaluated()) {
+                const Real fitness = individual.GetFitness();
+                if (std::isfinite(fitness)) {
+                    scale = std::max(scale, std::abs(static_cast<long double>(fitness)));
                 }
-                t_total_fitness += tf;
-                t_num_evaluated++;
+                ++t_num_individuals;
             }
         }
 
-        if (t_num_evaluated > 0) {
-            m_AverageFitness = t_total_fitness / static_cast<Real>(t_num_evaluated);
+        if (t_num_individuals > 0) {
+            if (scale <= 0.0L) scale = 1.0L;
+            long double scaled_total = 0.0L;
+            for (const auto &individual : m_Individuals) {
+                if (individual.IsEvaluated() && std::isfinite(individual.GetFitness())) {
+                    scaled_total += static_cast<long double>(individual.GetFitness()) / scale;
+                }
+            }
+            const long double average = scale * scaled_total / static_cast<long double>(t_num_individuals);
+            m_AverageFitness = static_cast<Real>(
+                std::clamp(average, -static_cast<long double>(std::numeric_limits<Real>::max()), static_cast<long double>(std::numeric_limits<Real>::max())));
         } else {
             m_AverageFitness = 0;
         }
@@ -827,7 +839,6 @@ namespace NEAT {
         //////////////////////////
         // Reproduction
         bool t_baby_exists_in_pop = false;
-        bool t_baby_is_clone = false;
         int t_constraint_trials = a_Parameters.ConstraintTrials;
 
         // Spawn only one baby
@@ -860,20 +871,38 @@ namespace NEAT {
 
                     // There is a probability that the father may come from another species
                     if ((a_RNG.RandFloat() < a_Parameters.InterspeciesCrossoverRate) && (a_Pop.m_Species.size() > 1)) {
-                        // Find different species via roulette over leader adjusted
-                        // fitness (shifted non-negative, uniform fallback).
+                        // Find different species via roulette over average fitness as probability
                         std::vector<Real> probs;
-                        Real allp = 0;
-                        for (int i = 0; i < a_Pop.m_Species.size(); i++) {
+                        std::vector<bool> eligible;
+                        Real minimum = 0.0;
+                        bool have_eligible = false;
+                        for (std::size_t i = 0; i < a_Pop.m_Species.size(); ++i) {
                             if ((a_Pop.m_Species[i].m_ID == m_ID) || (a_Pop.m_Species[i].NumEvaluated() == 0)) {
                                 probs.push_back(0.0);
+                                eligible.push_back(false);
                             } else {
-                                probs.push_back(a_Pop.m_Species[i].GetLeader().GetAdjFitness());
+                                const Real fitness = std::isfinite(a_Pop.m_Species[i].m_AverageFitness) ? a_Pop.m_Species[i].m_AverageFitness : 0.0;
+                                probs.push_back(fitness);
+                                eligible.push_back(true);
+                                minimum = have_eligible ? std::min(minimum, fitness) : fitness;
+                                have_eligible = true;
                             }
-                            allp += probs[probs.size() - 1];
                         }
-                        if (allp > 0) {
-                            NormalizeSelectionWeights(probs);
+                        if (have_eligible) {
+                            if (minimum < 0.0) {
+                                for (std::size_t i = 0; i < probs.size(); ++i) {
+                                    if (eligible[i]) probs[i] -= minimum;
+                                }
+                            }
+                            bool any_positive = false;
+                            for (std::size_t i = 0; i < probs.size(); ++i) {
+                                any_positive = any_positive || (eligible[i] && probs[i] > 0.0);
+                            }
+                            if (!any_positive) {
+                                for (std::size_t i = 0; i < probs.size(); ++i) {
+                                    probs[i] = eligible[i] ? 1.0 : 0.0;
+                                }
+                            }
                             int t_diffspec = a_RNG.Roulette(probs);
                             t_mom = GetIndividual(a_Parameters, a_RNG);
                             t_dad = a_Pop.m_Species[t_diffspec].GetIndividual(a_Parameters, a_RNG);
@@ -912,20 +941,19 @@ namespace NEAT {
             }
 
             // Mutate the baby
-            t_baby_is_clone = false;
-            bool dummy = false;
             if ((!t_mated) || (a_RNG.RandFloat() < a_Parameters.OverallMutationRate)) {
-                MutateGenome(dummy, a_Pop, t_baby, a_Parameters, a_RNG);
+                MutateGenome(false, a_Pop, t_baby, a_Parameters, a_RNG);
 #ifdef VDEBUG
                 std::cout << "mutated baby\n";
 #endif
             }
+            // See the generational reproduction path above.
+            t_baby.SortGenes();
 
             // Check if this baby is already present somewhere in the offspring we don't want that
             t_baby_exists_in_pop = false;
             // Unless of course, we want clones to exist
             if (!a_Parameters.AllowClones) {
-                t_baby.SortGenes();
                 for (unsigned int i = 0; i < a_Pop.m_Species.size(); i++) {
                     for (unsigned int j = 0; j < a_Pop.m_Species[i].m_Individuals.size(); j++) {
                         if (GenomesAreClones(t_baby, a_Pop.m_Species[i].m_Individuals[j],
@@ -950,6 +978,10 @@ namespace NEAT {
                 }
             }
         } while ((t_baby_exists_in_pop || t_baby.FailsConstraints(a_Parameters)) && (t_constraint_trials--));  // end do
+
+        if (t_baby_exists_in_pop || t_baby.FailsConstraints(a_Parameters)) {
+            throw std::runtime_error("Unable to reproduce a valid, non-cloning genome within ConstraintTrials");
+        }
 
         // We have a new offspring now give the offspring a new ID
         t_baby.SetID(a_Pop.GetNextGenomeID());
@@ -1111,7 +1143,6 @@ namespace NEAT {
             MUTATE_LINK_TRAITS,
             MUTATE_GENOME_TRAITS
         };
-        std::vector<int> t_muts;
         std::vector<Real> t_mut_probs;
 
         // ADD_NODE;
@@ -1224,6 +1255,7 @@ namespace NEAT {
                         t_tries--;
                         if (t_tries <= 0) {
                             t_saved_baby = t_baby;
+                            t_mutation_success = false;
                             break;  // give up
                         }
 

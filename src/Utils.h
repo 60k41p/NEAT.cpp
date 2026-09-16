@@ -47,107 +47,124 @@
 #include "Random.h"
 #include "Types.h"
 
-using namespace std;
-using NEAT::Real;
+namespace NEAT {
 
-inline void GetMaxMin(const vector<Real> &a_Vals, Real &a_Min, Real &a_Max) {
-    if (a_Vals.empty()) {
-        a_Min = 0;
-        a_Max = 0;
-        return;
-    }
-    auto result = std::minmax_element(a_Vals.begin(), a_Vals.end());
-    a_Min = *result.first;
-    a_Max = *result.second;
-}
-
-// converts an integer to a string
-inline std::string itos(const int a_Arg) {
-    std::ostringstream t_Buffer;
-
-    // send the int to the ostringstream
-    t_Buffer << a_Arg;
-
-    // capture the string
-    return t_Buffer.str();
-}
-
-// converts a Real to a string with enough digits to parse back to the same value
-inline std::string ftos(const Real a_Arg) {
-    std::ostringstream t_Buffer;
-
-    // send the Real to the ostringstream
-    t_Buffer << std::setprecision(std::numeric_limits<Real>::max_digits10) << a_Arg;
-
-    // capture the string
-    return t_Buffer.str();
-}
-
-// clamps the first argument between the second two
-inline void Clamp(Real &a_Arg, const Real a_Min, const Real a_Max) {
-    ASSERT(a_Min <= a_Max);
-
-    if (a_Arg < a_Min) {
-        a_Arg = a_Min;
-        return;
+    inline void GetMaxMin(const std::vector<Real> &a_Vals, Real &a_Min, Real &a_Max) {
+        if (a_Vals.empty()) {
+            a_Min = 0;
+            a_Max = 0;
+            return;
+        }
+        auto result = std::minmax_element(a_Vals.begin(), a_Vals.end());
+        a_Min = *result.first;
+        a_Max = *result.second;
     }
 
-    if (a_Arg > a_Max) {
-        a_Arg = a_Max;
-        return;
-    }
-}
+    // converts an integer to a string
+    inline std::string itos(const int a_Arg) {
+        std::ostringstream t_Buffer;
 
-// clamps the first argument between the second two
-inline void Clamp(int &a_Arg, const int a_Min, const int a_Max) {
-    ASSERT(a_Min <= a_Max);
+        // send the int to the ostringstream
+        t_Buffer << a_Arg;
 
-    if (a_Arg < a_Min) {
-        a_Arg = a_Min;
-        return;
+        // capture the string
+        return t_Buffer.str();
     }
 
-    if (a_Arg > a_Max) {
-        a_Arg = a_Max;
-        return;
+    // converts a Real to a string with enough digits to parse back to the same value
+    inline std::string ftos(const Real a_Arg) {
+        std::ostringstream t_Buffer;
+
+        // send the Real to the ostringstream
+        t_Buffer << std::setprecision(std::numeric_limits<Real>::max_digits10) << a_Arg;
+
+        // capture the string
+        return t_Buffer.str();
     }
-}
 
-// rounds a Real to the nearest integer (lround: halves away from zero, correct for negatives)
-inline int Rounded(const Real a_Val) { return static_cast<int>(std::lround(a_Val)); }
+    // clamps the first argument between the second two
+    inline void Clamp(Real &a_Arg, const Real a_Min, const Real a_Max) {
+        ASSERT(a_Min <= a_Max);
 
-// rounds a Real up or down depending on whether its mantissa is higher or lower than offset
-inline int RoundUnderOffset(const Real a_Val, const Real a_Offset) {
-    // ASSERT(a_Offset < 1 && a_Offset > -1); ???!? Should this be a test for the offset
-    const int t_Integral = static_cast<int>(a_Val);
-    const Real t_Mantissa = a_Val - t_Integral;
+        if (a_Arg < a_Min) {
+            a_Arg = a_Min;
+            return;
+        }
 
-    return (t_Mantissa < a_Offset) ? t_Integral : t_Integral + 1;
-}
-
-// Scales the value "a", that is in range [a_min .. a_max] into its relative value in the range [tr_min .. tr_max] Example: A=2, in the range [0 .. 4] .. we
-// want to scale it to the range [-12 .. 12] .. we get 0..
-inline void Scale(Real &a, const Real a_min, const Real a_max, const Real a_tr_min, const Real a_tr_max) {
-    //        ASSERT((a >= a_min) && (a <= a_max));
-    //        ASSERT(a_min <= a_max);
-    //        ASSERT(a_tr_min <= a_tr_max);
-
-    if (a_tr_min == a_tr_max) {
-        a = a_tr_min;
-        return;
+        if (a_Arg > a_Max) {
+            a_Arg = a_Max;
+            return;
+        }
     }
-    if (std::fabs(a_max - a_min) < std::numeric_limits<Real>::epsilon()) {
-        a = (a_tr_min + a_tr_max) / 2.0;
-        return;
+
+    // float overload retained for reference parity (Real == double today, so a
+    // float lvalue cannot bind to Real& without it)
+    inline void Clamp(float &a_Arg, const float a_Min, const float a_Max) {
+        ASSERT(a_Min <= a_Max);
+
+        if (a_Arg < a_Min) {
+            a_Arg = a_Min;
+            return;
+        }
+
+        if (a_Arg > a_Max) {
+            a_Arg = a_Max;
+            return;
+        }
     }
-    const Real t_a_r = a_max - a_min;
-    const Real t_r = a_tr_max - a_tr_min;
-    const Real rel_a = (a - a_min) / t_a_r;
-    a = a_tr_min + t_r * rel_a;
-}
 
-inline Real Abs(Real x) { return (x < 0) ? -x : x; }
+    // clamps the first argument between the second two
+    inline void Clamp(int &a_Arg, const int a_Min, const int a_Max) {
+        ASSERT(a_Min <= a_Max);
 
-// Scales every entry of the vector from its current [min .. max] range into [a_tr_min .. a_tr_max].
-// Defined in Utils.cpp.
-void Scale(vector<Real> &a_Values, const Real a_tr_min, const Real a_tr_max);
+        if (a_Arg < a_Min) {
+            a_Arg = a_Min;
+            return;
+        }
+
+        if (a_Arg > a_Max) {
+            a_Arg = a_Max;
+            return;
+        }
+    }
+
+    // rounds a Real to the nearest integer (lround: halves away from zero, correct for negatives)
+    inline int Rounded(const Real a_Val) { return static_cast<int>(std::lround(a_Val)); }
+
+    // rounds a Real up or down depending on whether its mantissa is higher or lower than offset
+    inline int RoundUnderOffset(const Real a_Val, const Real a_Offset) {
+        // ASSERT(a_Offset < 1 && a_Offset > -1); ???!? Should this be a test for the offset
+        const int t_Integral = static_cast<int>(a_Val);
+        const Real t_Mantissa = a_Val - t_Integral;
+
+        return (t_Mantissa < a_Offset) ? t_Integral : t_Integral + 1;
+    }
+
+    // Scales the value "a", that is in range [a_min .. a_max] into its relative value in the range [tr_min .. tr_max] Example: A=2, in the range [0 .. 4] .. we
+    // want to scale it to the range [-12 .. 12] .. we get 0..
+    inline void Scale(Real &a, const Real a_min, const Real a_max, const Real a_tr_min, const Real a_tr_max) {
+        //        ASSERT((a >= a_min) && (a <= a_max));
+        //        ASSERT(a_min <= a_max);
+        //        ASSERT(a_tr_min <= a_tr_max);
+
+        if (a_tr_min == a_tr_max) {
+            a = a_tr_min;
+            return;
+        }
+        if (std::fabs(a_max - a_min) < std::numeric_limits<Real>::epsilon()) {
+            a = (a_tr_min + a_tr_max) / 2.0;
+            return;
+        }
+        const Real t_a_r = a_max - a_min;
+        const Real t_r = a_tr_max - a_tr_min;
+        const Real rel_a = (a - a_min) / t_a_r;
+        a = a_tr_min + t_r * rel_a;
+    }
+
+    inline Real Abs(Real x) { return (x < 0) ? -x : x; }
+
+    // Scales every entry of the vector from its current [min .. max] range into [a_tr_min .. a_tr_max].
+    // Defined in Utils.cpp.
+    void Scale(std::vector<Real> &a_Values, const Real a_tr_min = 0.0, const Real a_tr_max = 1.0);
+
+}  // namespace NEAT

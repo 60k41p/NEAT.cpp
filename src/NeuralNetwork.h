@@ -265,7 +265,7 @@ namespace NEAT {
         // assumes that neuron and connection data are already initialized
         void InitSparseRTRLMatrix();  // indexed sensitivities for sparse topologies.
 
-        void ActivateFast();             // assumes unsigned sigmoids everywhere.
+        void ActivateFast();             // fast path; dispatches per-neuron activations like Activate()
         void Activate();                 // any activation functions are supported
         void ActivateUseInternalBias();  // like Activate() but uses m_bias as well
         void ActivateLeaky(Real step);   // activates in leaky integrator mode
@@ -347,7 +347,7 @@ namespace NEAT {
 
         // Euclidean distance between two neurons in x/y/z space.
         Real GetConnectionLenght(Neuron source, Neuron target);
-        Real GetConnectionLength(const Neuron &source, const Neuron &target) { return GetConnectionLenght(source, target); }
+        Real GetConnectionLength(const Neuron &source, const Neuron &target);
 
         Real GetTotalConnectionLength();
 

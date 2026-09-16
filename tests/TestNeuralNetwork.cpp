@@ -10,6 +10,7 @@
 
 #include "NeuralNetwork.h"
 #include "Parameters.h"
+using NEAT::Real;
 
 namespace {
 

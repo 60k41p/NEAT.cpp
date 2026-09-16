@@ -66,25 +66,25 @@ namespace NEAT {
         InnovationDatabase m_InnovationDatabase;
 
         // next genome ID
-        unsigned int m_NextGenomeID;
+        unsigned int m_NextGenomeID = 0;
 
         // next species ID
-        unsigned int m_NextSpeciesID;
+        unsigned int m_NextSpeciesID = 0;
 
         ////////////////////////////
         // Phased searching members
 
         // The current mode of search
-        SearchMode m_SearchMode;
+        SearchMode m_SearchMode = BLENDED;
 
         // The current Mean Population Complexity
-        Real m_CurrentMPC;
+        Real m_CurrentMPC = 0.0;
 
         // The MPC from the previous generation (for comparison)
-        Real m_OldMPC;
+        Real m_OldMPC = 0.0;
 
         // The base MPC (for switching between complexifying/simplifying phase)
-        Real m_BaseMPC;
+        Real m_BaseMPC = 0.0;
 
         // Separates the population into species based on compatibility distance
         void Speciate();
@@ -105,20 +105,20 @@ namespace NEAT {
         void CalculateMPC();
 
         // best fitness ever achieved
-        Real m_BestFitnessEver;
+        Real m_BestFitnessEver = std::numeric_limits<Real>::lowest();
 
         // Keep a local copy of the best ever genome found in the run
         Genome m_BestGenome;
         Genome m_BestGenomeEver;
 
         // Number of generations since the best fitness changed
-        unsigned int m_GensSinceBestFitnessLastChanged;
+        unsigned int m_GensSinceBestFitnessLastChanged = 0;
 
         // Number of evaluations since the best fitness changed
-        unsigned int m_EvalsSinceBestFitnessLastChanged;
+        unsigned int m_EvalsSinceBestFitnessLastChanged = 0;
 
         // How many generations passed until the last change of MPC
-        unsigned int m_GensSinceMPCLastChanged;
+        unsigned int m_GensSinceMPCLastChanged = 0;
 
         // The initial list of genomes
         std::vector<Genome> m_Genomes;
@@ -134,12 +134,12 @@ namespace NEAT {
         Parameters m_Parameters;
 
         // Current generation
-        unsigned int m_Generation;
+        unsigned int m_Generation = 0;
 
         // The list of species
         std::vector<Species> m_Species;
 
-        int m_ID;
+        int m_ID = 0;
 
         ////////////////////////////
         // Constructors
@@ -182,38 +182,33 @@ namespace NEAT {
         unsigned int GetGeneration() const { return m_Generation; }
         Real GetBestFitnessEver() const { return m_BestFitnessEver; }
         Genome GetBestGenome() const {
-            if (m_Species.empty()) throw std::runtime_error("Cannot get the best genome of an empty population");
+            if (m_Species.empty()) throw std::runtime_error("Population::GetBestGenome: population is empty.");
+
             Real best = std::numeric_limits<Real>::lowest();
-            int idx_species = -1;
-            int idx_genome = -1;
+            int idx_species = 0;
+            int idx_genome = 0;
+            bool found = false;
             for (unsigned int i = 0; i < m_Species.size(); i++) {
                 for (unsigned int j = 0; j < m_Species[i].m_Individuals.size(); j++) {
-                    if (!m_Species[i].m_Individuals[j].IsEvaluated()) continue;
-                    const Real fitness = m_Species[i].m_Individuals[j].GetFitness();
-                    if (!std::isfinite(fitness)) continue;
-                    if (idx_species < 0 || fitness > best) {
-                        best = fitness;
+                    const Genome &genome = m_Species[i].m_Individuals[j];
+                    if (!genome.IsEvaluated() || !std::isfinite(genome.GetFitness())) {
+                        continue;
+                    }
+                    if (!found || genome.GetFitness() > best) {
+                        best = genome.GetFitness();
                         idx_species = i;
                         idx_genome = j;
+                        found = true;
                     }
                 }
             }
-            // No evaluated member: fall back to raw fitness over all members.
-            if (idx_species < 0) {
-                for (unsigned int i = 0; i < m_Species.size(); i++) {
-                    for (unsigned int j = 0; j < m_Species[i].m_Individuals.size(); j++) {
-                        const Real fitness = m_Species[i].m_Individuals[j].GetFitness();
-                        if (!std::isfinite(fitness)) continue;
-                        if (idx_species < 0 || fitness > best) {
-                            best = fitness;
-                            idx_species = i;
-                            idx_genome = j;
-                        }
-                    }
-                }
-            }
-            if (idx_species < 0) throw std::runtime_error("Cannot get the best genome of an empty population");
 
+            if (!found) {
+                for (const auto &species : m_Species) {
+                    if (!species.m_Individuals.empty()) return species.m_Individuals.front();
+                }
+                throw std::runtime_error("Population::GetBestGenome: population has no genomes.");
+            }
             return m_Species[idx_species].m_Individuals[idx_genome];
         }
 
@@ -309,13 +304,16 @@ namespace NEAT {
         // Takes an individual and puts it in its apropriate species Useful in realtime when the compatibility treshold changes
         void ReassignSpecies(int a_genome_idx);
 
-        unsigned int m_NumEvaluations;
+        unsigned int m_NumEvaluations = 0;
 
         ///////////////////////////////
         // Novelty search
 
         // A pointer to the archive of PhenotypeBehaviors Necessary to contain derived custom classes.
-        std::vector<PhenotypeBehavior> *m_BehaviorArchive;
+        // Null unless InitPhenotypeBehaviorData() was called. The raw-pointer
+        // overload is the supported C++ API (no Bindings.cpp by design); the
+        // reference shared_ptr/GetBehaviorArchive convenience is intentionally omitted.
+        std::vector<PhenotypeBehavior> *m_BehaviorArchive = nullptr;
 
         // Call this function to allocate memory for your custom behaviors. This initializes everything.
         void InitPhenotypeBehaviorData(std::vector<PhenotypeBehavior> *a_population, std::vector<PhenotypeBehavior> *a_archive);
@@ -328,8 +326,8 @@ namespace NEAT {
         Real ComputeSparseness(Genome &genome);
 
         // counters for archive stagnation
-        unsigned int m_GensSinceLastArchiving;
-        unsigned int m_QuickAddCounter;
+        unsigned int m_GensSinceLastArchiving = 0;
+        unsigned int m_QuickAddCounter = 0;
     };
 
 }  // namespace NEAT

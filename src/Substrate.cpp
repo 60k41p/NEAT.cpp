@@ -105,24 +105,22 @@ namespace NEAT {
             }
         };
 
-        for (unsigned int i = 0; i < a_conns.size(); i++) {
-            if (a_conns[i].size() != 4) throw std::invalid_argument("Substrate::SetCustomConnectivity: connection entry must have 4 elements.");
-            NeuronType src_type = (NeuronType)a_conns[i][0];
-            int src_idx = a_conns[i][1];
-            NeuronType dst_type = (NeuronType)a_conns[i][2];
-            int dst_idx = a_conns[i][3];
-            if (src_idx < 0 || dst_idx < 0 || static_cast<std::size_t>(src_idx) >= coordinate_count(src_type) ||
-                static_cast<std::size_t>(dst_idx) >= coordinate_count(dst_type))
-                throw std::invalid_argument("Substrate::SetCustomConnectivity: connection index out of range.");
+        for (const auto &connection : a_conns) {
+            if (connection.size() != 4)
+                throw std::invalid_argument(
+                    "Substrate::SetCustomConnectivity: every connection must contain [source_type, source_index, target_type, target_index].");
 
-            std::vector<int> c;
-            c.emplace_back(src_type);
-            c.emplace_back(src_idx);
-            c.emplace_back(dst_type);
-            c.emplace_back(dst_idx);
-
-            m_custom_connectivity.emplace_back(c);
+            const auto src_type = static_cast<NeuronType>(connection[0]);
+            const int src_idx = connection[1];
+            const auto dst_type = static_cast<NeuronType>(connection[2]);
+            const int dst_idx = connection[3];
+            if (src_idx < 0 || static_cast<std::size_t>(src_idx) >= coordinate_count(src_type) || dst_idx < 0 ||
+                static_cast<std::size_t>(dst_idx) >= coordinate_count(dst_type)) {
+                throw std::out_of_range("Substrate::SetCustomConnectivity: neuron index is out of range.");
+            }
         }
+
+        m_custom_connectivity = a_conns;
     }
 
     void Substrate::ClearCustomConnectivity() { m_custom_connectivity.clear(); }

@@ -13,6 +13,7 @@
 #include "NeuralNetwork.h"
 #include "Parameters.h"
 #include "SpikingLearning.h"
+using NEAT::Real;
 
 namespace {
 

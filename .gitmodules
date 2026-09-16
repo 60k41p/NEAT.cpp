@@ -1,0 +1,3 @@
+[submodule "references/MultiNEAT2"]
+	path = references/MultiNEAT2
+	url = https://github.com/peter-ch/MultiNEAT2.git
