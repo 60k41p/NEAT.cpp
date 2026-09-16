@@ -49,13 +49,14 @@ int TestInnovation(int argc, char *argv[]) {
     }
 
     // Link innovations: add/find, last-wins semantics.
+    // Init takes the last-used IDs; the next free ID is one past that.
     {
         InnovationDatabase db;
         db.Init(1, 1);
         const int id1 = db.AddLinkInnovation(1, 2);
-        CHECK(id1 == 1);
+        CHECK(id1 == 2);
         const int id2 = db.AddLinkInnovation(2, 3);
-        CHECK(id2 == 2);
+        CHECK(id2 == 3);
         CHECK(db.CheckInnovation(1, 2, NEW_LINK) == id1);
         CHECK(db.CheckLastInnovation(1, 2, NEW_LINK) == id1);
         CHECK(db.CheckInnovation(1, 2, NEW_NEURON) == -1);  // type matters
@@ -68,15 +69,15 @@ int TestInnovation(int argc, char *argv[]) {
         InnovationDatabase db;
         db.Init(10, 20);
         const int nid = db.AddNeuronInnovation(1, 2, HIDDEN);
-        CHECK(nid == 20);
+        CHECK(nid == 21);
         CHECK(db.FindNeuronID(1, 2) == nid);
         CHECK(db.FindLastNeuronID(1, 2) == nid);
-        CHECK(db.CheckInnovation(1, 2, NEW_NEURON) == 10);
+        CHECK(db.CheckInnovation(1, 2, NEW_NEURON) == 11);
         const int nid2 = db.AddNeuronInnovation(1, 2, HIDDEN);
-        CHECK(nid2 == 21);
+        CHECK(nid2 == 22);
         // First match vs last match differ once duplicated.
-        CHECK(db.CheckInnovation(1, 2, NEW_NEURON) == 10);
-        CHECK(db.CheckLastInnovation(1, 2, NEW_NEURON) == 11);
+        CHECK(db.CheckInnovation(1, 2, NEW_NEURON) == 11);
+        CHECK(db.CheckLastInnovation(1, 2, NEW_NEURON) == 12);
         CHECK(db.FindLastNeuronID(1, 2) == nid2);
         CHECK(db.CheckAllInnovations(1, 2, NEW_NEURON).size() == 2);
     }
@@ -117,10 +118,10 @@ int TestInnovation(int argc, char *argv[]) {
             CHECK(in.is_open());
             db2.Init(in);
             CHECK(db2.m_Innovations.size() == 2);
-            CHECK(db2.CheckInnovation(1, 2, NEW_LINK) == 100);
+            CHECK(db2.CheckInnovation(1, 2, NEW_LINK) == 101);
             CHECK(db2.FindNeuronID(2, 3) != -1);
             // Counters advanced past the added entries.
-            CHECK(db2.AddLinkInnovation(7, 8) == 102);
+            CHECK(db2.AddLinkInnovation(7, 8) == 103);
         }
         std::error_code ec;
         std::filesystem::remove(tmp, ec);
@@ -173,7 +174,7 @@ int TestInnovation(int argc, char *argv[]) {
         CHECK(threw);
         // Counters overflow-guard at INT_MAX.
         InnovationDatabase full;
-        full.Init(std::numeric_limits<int>::max() - 1, 1);
+        full.Init(std::numeric_limits<int>::max() - 2, 1);
         (void)full.AddLinkInnovation(1, 2);
         threw = false;
         try {

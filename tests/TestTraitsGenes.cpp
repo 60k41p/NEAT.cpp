@@ -10,6 +10,7 @@
 #include "Random.h"
 #include "Serialization.h"
 #include "Traits.h"
+using NEAT::Real;
 
 namespace {
 

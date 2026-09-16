@@ -16,6 +16,8 @@
 #include "Parameters.h"
 #include "Random.h"
 #include "Substrate.h"
+#include "Traits.h"
+using NEAT::Real;
 
 namespace {
 
@@ -559,6 +561,127 @@ int TestGenome(int argc, char *argv[]) {
             threw = true;
         }
         CHECK(threw);
+    }
+
+    // Parametric mutators report whether any value actually changed.
+    {
+        Parameters p = DefaultParams();
+        RNG rng;
+        rng.Seed(41);
+        Genome g = MakeSeed(2, 1);
+        // Default A/B/time-constant/bias powers and ranges are degenerate, so nothing can change.
+        CHECK(!g.Mutate_NeuronActivations_A(p, rng));
+        CHECK(!g.Mutate_NeuronActivations_B(p, rng));
+        CHECK(!g.Mutate_NeuronTimeConstants(p, rng));
+        CHECK(!g.Mutate_NeuronBiases(p, rng));
+
+        p.ActivationAMutationMaxPower = 1.0;
+        p.ActivationBMutationMaxPower = 1.0;
+        p.TimeConstantMutationMaxPower = 1.0;
+        p.BiasMutationMaxPower = 1.0;
+        p.MinActivationA = 0.0;
+        p.MaxActivationA = 10.0;
+        p.MinActivationB = -5.0;
+        p.MaxActivationB = 5.0;
+        p.MinNeuronTimeConstant = 0.0;
+        p.MaxNeuronTimeConstant = 2.0;
+        p.MinNeuronBias = -2.0;
+        p.MaxNeuronBias = 2.0;
+        CHECK(g.Mutate_NeuronActivations_A(p, rng));
+        CHECK(g.Mutate_NeuronActivations_B(p, rng));
+        CHECK(g.Mutate_NeuronTimeConstants(p, rng));
+        CHECK(g.Mutate_NeuronBiases(p, rng));
+        CHECK(g.Validate());
+    }
+
+    // IsIdenticalTo is sensitive to the MCP inhibitory veto flag.
+    {
+        Genome g = MakeSeed(2, 1);
+        Genome h = g;
+        CHECK(g.IsIdenticalTo(h));
+        for (auto &n : h.m_NeuronGenes) {
+            if (n.Type() == OUTPUT) n.m_MCPInhibitoryVeto = !n.m_MCPInhibitoryVeto;
+        }
+        CHECK(!g.IsIdenticalTo(h));
+    }
+
+    // LinkGene ==/!= form a consistent pair over topology and weights.
+    {
+        LinkGene a(1, 2, 7, 0.5, false);
+        LinkGene b(1, 2, 9, 0.5, false);
+        CHECK(a == b);     // historical innovation IDs are ignored...
+        CHECK(!(a != b));  // ...and != agrees with ==.
+        LinkGene c(1, 2, 7, 0.6, false);
+        CHECK(!(a == c));
+        CHECK(a != c);
+    }
+
+    // Seed genomes initialize traits on inputs and bias as well.
+    {
+        Parameters p = DefaultParams();
+        TraitParameters tp;
+        tp.type = "float";
+        tp.m_MutationProb = 1.0;
+        tp.m_ImportanceCoeff = 1.0;
+        FloatTraitParameters d;
+        d.min = 0.0;
+        d.max = 1.0;
+        d.mut_power = 0.5;
+        d.mut_replace_prob = 0.5;
+        tp.m_Details = d;
+        p.NeuronTraits["seed_trait"] = tp;
+        GenomeInitStruct init;
+        init.NumInputs = 3;
+        init.NumOutputs = 1;
+        init.SeedType = PERCEPTRON;
+        Genome g(p, init);
+        CHECK(!g.m_NeuronGenes.empty());
+        for (const auto &n : g.m_NeuronGenes) {
+            CHECK(n.m_Traits.count("seed_trait") == 1);
+        }
+    }
+
+    // Plain HyperNEAT finalizes spatial connections (lengths, delays, pruning).
+    {
+        Parameters p = DefaultParams();
+        GenomeInitStruct cppn_init;
+        cppn_init.NumInputs = 5;
+        cppn_init.NumOutputs = 1;
+        cppn_init.SeedType = PERCEPTRON;
+        Genome cppn(p, cppn_init);
+
+        std::vector<std::vector<Real>> inputs{{0.0, 0.0}};
+        std::vector<std::vector<Real>> hidden;
+        std::vector<std::vector<Real>> outputs{{0.5, 1.0}};
+        Substrate subst(inputs, hidden, outputs);
+        subst.m_query_weights_only = true;
+        // The coordinate-list ctor disables direct input->output links; opt back in.
+        subst.m_allow_input_output_links = true;
+
+        NeuralNetwork plain;
+        cppn.BuildHyperNEATPhenotype(plain, subst);
+        CHECK(plain.m_connections.size() == 1);
+        if (plain.m_connections.size() == 1) {
+            CHECK(plain.m_connections[0].m_length > 0.0);
+        }
+
+        // A zero max length prunes every non-degenerate axon.
+        Substrate pruned = subst;
+        pruned.m_max_connection_length = 0.0;
+        NeuralNetwork pruned_net;
+        cppn.BuildHyperNEATPhenotype(pruned_net, pruned);
+        CHECK(pruned_net.m_connections.empty());
+
+        // Spatial delays mirror axon length over the conduction velocity.
+        Substrate delayed = subst;
+        delayed.m_use_spatial_distance_for_delays = true;
+        delayed.m_conduction_velocity = 1.0;
+        NeuralNetwork delayed_net;
+        cppn.BuildHyperNEATPhenotype(delayed_net, delayed);
+        CHECK(delayed_net.m_connections.size() == 1);
+        if (delayed_net.m_connections.size() == 1) {
+            CHECK(delayed_net.m_connections[0].m_synaptic_delay > 0.0);
+        }
     }
 
     if (g_failures != 0) {

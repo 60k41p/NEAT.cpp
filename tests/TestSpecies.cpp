@@ -10,6 +10,7 @@
 #include "Parameters.h"
 #include "Random.h"
 #include "Species.h"
+using NEAT::Real;
 
 namespace {
 

@@ -8,6 +8,7 @@
 #include "Random.h"
 
 using NEAT::Real;
+using namespace NEAT;
 
 namespace {
 

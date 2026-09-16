@@ -7,6 +7,8 @@
 #include <vector>
 
 #include "Utils.h"
+using NEAT::Real;
+using namespace NEAT;
 
 namespace {
 
@@ -78,7 +80,7 @@ int TestUtils(int argc, char *argv[]) {
         CHECK(Near(std::stod(ftos(x)), x, 1e-9));
     }
 
-    // Clamp Real / float / int
+    // Clamp Real / int
     {
         Real d = -5.0;
         Clamp(d, -1.0, 1.0);
@@ -90,12 +92,12 @@ int TestUtils(int argc, char *argv[]) {
         Clamp(d, -1.0, 1.0);
         CHECK(Near(d, 0.25));
 
-        float f = -2.0f;
-        Clamp(f, 0.0f, 1.0f);
-        CHECK(f == 0.0f);
-        f = 0.5f;
-        Clamp(f, 0.0f, 1.0f);
-        CHECK(f == 0.5f);
+        Real f = -2.0;
+        Clamp(f, 0.0, 1.0);
+        CHECK(f == 0.0);
+        f = 0.5;
+        Clamp(f, 0.0, 1.0);
+        CHECK(f == 0.5);
 
         int i = -3;
         Clamp(i, 0, 10);
@@ -121,7 +123,7 @@ int TestUtils(int argc, char *argv[]) {
         CHECK(RoundUnderOffset(1.2, 0.1) == 2);
     }
 
-    // Scale Real / float: [0..4] -> [-12..12], 2 maps to 0
+    // Scale Real: [0..4] -> [-12..12], 2 maps to 0
     {
         Real a = 2.0;
         Scale(a, 0.0, 4.0, -12.0, 12.0);
@@ -133,9 +135,9 @@ int TestUtils(int argc, char *argv[]) {
         Scale(a, 0.0, 4.0, -12.0, 12.0);
         CHECK(Near(a, 12.0));
 
-        float b = 2.0f;
+        Real b = 2.0;
         Scale(b, 0.0, 4.0, -12.0, 12.0);
-        CHECK(std::fabs(b - 0.0f) < 1e-5f);
+        CHECK(std::fabs(b - 0.0) < 1e-9);
     }
 
     // Scale with a degenerate source range snaps to the target midpoint

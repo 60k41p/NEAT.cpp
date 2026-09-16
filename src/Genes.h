@@ -119,7 +119,7 @@ namespace NEAT {
                     Real x = a_RNG.RandFloat();
                     Scale(x, 0, 1, itp.min, itp.max);
                     t = x;
-                } else if (it->second.type == "str") {
+                } else if (it->second.type == "str" || it->second.type == "string") {
                     StringTraitParameters itp = std::get<StringTraitParameters>(it->second.m_Details);
                     std::vector<Real> probs = itp.probs;
                     if (itp.set.empty()) {
@@ -310,7 +310,7 @@ namespace NEAT {
                                 did_mutate = true;
                             }
 
-                        } else if (ty == "str") {
+                        } else if (ty == "str" || ty == "string") {
                             StringTraitParameters itp = std::get<StringTraitParameters>(it->second.m_Details);
                             const std::string original = std::get<std::string>(traitIt->second.value);
                             std::vector<std::string> alternatives;
@@ -530,21 +530,23 @@ namespace NEAT {
         bool IsLoopedRecurrent() const { return m_FromNeuronID == m_ToNeuronID; }
 
         // overload '<', '>', '!=' and '==' used for sorting and comparison.
-        // Ordering uses the innovation ID; equality compares the full field set.
+        // Ordering uses the innovation ID; equality compares topology and weights,
+        // ignoring the historical innovation ID (reference topology semantics).
+        // '!=' is the negation of '==' so the pair stays consistent.
         friend bool operator<(const LinkGene &a_lhs, const LinkGene &a_rhs) { return (a_lhs.m_InnovationID < a_rhs.m_InnovationID); }
 
         friend bool operator>(const LinkGene &a_lhs, const LinkGene &a_rhs) { return (a_lhs.m_InnovationID > a_rhs.m_InnovationID); }
 
-        friend bool operator!=(const LinkGene &a_lhs, const LinkGene &a_rhs) { return !(a_lhs == a_rhs); }
-
         friend bool operator==(const LinkGene &a_lhs, const LinkGene &a_rhs) {
             return (a_lhs.m_FromNeuronID == a_rhs.m_FromNeuronID && a_lhs.m_ToNeuronID == a_rhs.m_ToNeuronID && a_lhs.m_Weight == a_rhs.m_Weight &&
-                    a_lhs.m_IsRecurrent == a_rhs.m_IsRecurrent && a_lhs.m_InnovationID == a_rhs.m_InnovationID &&
-                    a_lhs.m_SynapticDelay == a_rhs.m_SynapticDelay && a_lhs.m_SynapticTimeConstant == a_rhs.m_SynapticTimeConstant &&
-                    a_lhs.m_STDPEnabled == a_rhs.m_STDPEnabled && a_lhs.m_STDPPlus == a_rhs.m_STDPPlus && a_lhs.m_STDPMinus == a_rhs.m_STDPMinus &&
-                    a_lhs.m_STDPTauPlus == a_rhs.m_STDPTauPlus && a_lhs.m_STDPTauMinus == a_rhs.m_STDPTauMinus &&
-                    a_lhs.m_STDPMinWeight == a_rhs.m_STDPMinWeight && a_lhs.m_STDPMaxWeight == a_rhs.m_STDPMaxWeight);
+                    a_lhs.m_IsRecurrent == a_rhs.m_IsRecurrent && a_lhs.m_SynapticDelay == a_rhs.m_SynapticDelay &&
+                    a_lhs.m_SynapticTimeConstant == a_rhs.m_SynapticTimeConstant && a_lhs.m_STDPEnabled == a_rhs.m_STDPEnabled &&
+                    a_lhs.m_STDPPlus == a_rhs.m_STDPPlus && a_lhs.m_STDPMinus == a_rhs.m_STDPMinus && a_lhs.m_STDPTauPlus == a_rhs.m_STDPTauPlus &&
+                    a_lhs.m_STDPTauMinus == a_rhs.m_STDPTauMinus && a_lhs.m_STDPMinWeight == a_rhs.m_STDPMinWeight &&
+                    a_lhs.m_STDPMaxWeight == a_rhs.m_STDPMaxWeight);
         }
+
+        friend bool operator!=(const LinkGene &a_lhs, const LinkGene &a_rhs) { return !(a_lhs == a_rhs); }
     };
 
     ////////////////////////////////////

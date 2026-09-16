@@ -102,14 +102,16 @@ namespace NEAT {
             m_OffspringRqd = 0;
             m_AgeGenerations = 0;
             m_AgeEvaluations = 0;
-            m_BestFitness = 0;
+            m_BestFitness = std::numeric_limits<Real>::lowest();
             m_GensNoImprovement = 0;
             m_EvalsNoImprovement = 0;
             m_R = m_G = m_B = 0;
+            m_AverageFitness = 0;
         };
 
         // initializes a species with a leader genome and an ID number
         Species(const Genome &a_Seed, const Parameters &a_Parameters, int a_id);
+        Species(const Species &) = default;
 
         // assignment operator
         Species &operator=(const Species &a_g);
@@ -129,9 +131,9 @@ namespace NEAT {
         // Access
         Real GetBestFitness() const { return m_BestFitness; }
         Real GetActualBestFitness() const {
-            Real f = std::numeric_limits<Real>::min();
+            Real f = std::numeric_limits<Real>::lowest();
             for (int i = 0; i < m_Individuals.size(); i++) {
-                if (m_Individuals[i].IsEvaluated()) {
+                if (m_Individuals[i].IsEvaluated() && std::isfinite(m_Individuals[i].GetFitness())) {
                     if (m_Individuals[i].GetFitness() > f) {
                         f = m_Individuals[i].GetFitness();
                     }
@@ -155,24 +157,23 @@ namespace NEAT {
         void IncreaseEvalsNoImprovement() { m_EvalsNoImprovement++; }
         void SetOffspringRqd(Real a_ofs) { m_OffspringRqd = a_ofs; }
         Real GetOffspringRqd() const { return m_OffspringRqd; }
-        unsigned int NumIndividuals() const { return m_Individuals.size(); }
+        unsigned int NumIndividuals() { return static_cast<const Species &>(*this).NumIndividuals(); }
+        unsigned int NumIndividuals() const { return static_cast<unsigned int>(m_Individuals.size()); }
         void ClearIndividuals() { m_Individuals.clear(); }
+        int ID() { return static_cast<const Species &>(*this).ID(); }
         int ID() const { return m_ID; }
         int GensNoImprovement() { return m_GensNoImprovement; }
         int EvalsNoImprovement() { return m_EvalsNoImprovement; }
         int AgeGens() { return m_AgeGenerations; }
         int AgeEvals() { return m_AgeEvaluations; }
-        Genome GetIndividualByIdx(int a_idx) const { return (m_Individuals.at(a_idx)); };
+        Genome GetIndividualByIdx(int a_idx) const {
+            if (a_idx < 0) throw std::out_of_range("Species individual index cannot be negative");
+            return (m_Individuals.at(static_cast<std::size_t>(a_idx)));
+        };
         bool IsBestSpecies() const { return m_BestSpecies; }
         bool IsWorstSpecies() const { return m_WorstSpecies; }
         // void SetRepresentative(Genome& a_G) { m_Representative = a_G; }
-        int NumEvaluated() {
-            int x = 0;
-            for (unsigned int i = 0; i < m_Individuals.size(); i++) {
-                if (m_Individuals[i].IsEvaluated()) x++;
-            }
-            return x;
-        }
+        int NumEvaluated() { return static_cast<const Species &>(*this).NumEvaluated(); }
         int NumEvaluated() const {
             int x = 0;
             for (unsigned int i = 0; i < m_Individuals.size(); i++) {

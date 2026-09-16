@@ -46,6 +46,7 @@
 #include <stdexcept>
 
 #include "AssertMacros.h"
+#include "FileIO.h"
 #include "Genome.h"
 #include "Parameters.h"
 #include "PhenotypeBehavior.h"
@@ -179,6 +180,14 @@ namespace NEAT {
         }
         if (maximum <= 0.0) {
             for (const std::size_t index : finite_indices) transformed[index] = 1.0;
+        } else {
+            for (const std::size_t index : finite_indices) {
+                const Real value = transformed[index];
+                transformed[index] = std::isfinite(value) ? std::max(static_cast<Real>(epsilon), value / maximum) : 1.0;
+            }
+        }
+        for (std::size_t i = 0; i < raw_fitness.size(); ++i) {
+            if (!std::isfinite(raw_fitness[i])) transformed[i] = static_cast<Real>(epsilon);
         }
         return transformed;
     }
@@ -269,13 +278,13 @@ namespace NEAT {
                     m_Genomes[i].Randomize_LinkWeights(initialization_parameters, m_RNG);
                     // randomize the traits as well
                     m_Genomes[i].Randomize_Traits(a_Parameters, m_RNG);
-                    m_Genomes[i].Randomize_SpikingParameters(a_Parameters, m_RNG);
                     // and mutate nodes one initial time
                     m_Genomes[i].Mutate_NeuronActivations_A(a_Parameters, m_RNG);
                     m_Genomes[i].Mutate_NeuronActivations_B(a_Parameters, m_RNG);
                     m_Genomes[i].Mutate_NeuronActivation_Type(a_Parameters, m_RNG);
                     m_Genomes[i].Mutate_NeuronTimeConstants(a_Parameters, m_RNG);
                     m_Genomes[i].Mutate_NeuronBiases(a_Parameters, m_RNG);
+                    m_Genomes[i].Randomize_SpikingParameters(a_Parameters, m_RNG);
 
                     // check in the population if there is a clone of that genome
                     is_invalid = false;
@@ -356,12 +365,26 @@ namespace NEAT {
         m_GensSinceBestFitnessLastChanged = 0;
         m_GensSinceMPCLastChanged = 0;
 
-        std::ifstream t_DataFile(a_FileName);
-        if (!t_DataFile.is_open()) throw std::exception();
+        std::ifstream t_DataFile(a_FileName, std::ios::binary);
+        if (!t_DataFile.is_open()) throw std::runtime_error("Cannot open population file");
+
+        std::string first_token;
+        t_DataFile >> first_token;
+        t_DataFile.clear();
+        t_DataFile.seekg(0);
+        if (first_token == "PopulationStart") {
+            std::ostringstream checkpoint;
+            checkpoint << t_DataFile.rdbuf();
+            *this = Deserialize(checkpoint.str());
+            return;
+        }
+
         std::string t_str;
 
         // Load the parameters
-        m_Parameters.Load(t_DataFile);
+        if (m_Parameters.Load(t_DataFile) != 0 || m_Parameters.PopulationSize == 0) {
+            throw std::runtime_error("Population file contains invalid parameters");
+        }
 
         // Load the innovation database
         m_InnovationDatabase.Init(t_DataFile);
@@ -375,8 +398,8 @@ namespace NEAT {
 
         m_NextGenomeID = 0;
         for (unsigned int i = 0; i < m_Genomes.size(); i++) {
-            if (m_Genomes[i].GetID() > m_NextGenomeID) {
-                m_NextGenomeID = m_Genomes[i].GetID();
+            if (m_Genomes[i].GetID() >= 0 && static_cast<unsigned int>(m_Genomes[i].GetID()) > m_NextGenomeID) {
+                m_NextGenomeID = static_cast<unsigned int>(m_Genomes[i].GetID());
             }
         }
         m_NextGenomeID++;
@@ -384,6 +407,8 @@ namespace NEAT {
         // Initialize
         Speciate();
         m_BestGenome = m_Species[0].GetLeader();
+        m_BestGenomeEver = m_BestGenome;
+        m_BestFitnessEver = m_BestGenome.GetFitness();
 
         // Sort();
 
@@ -400,40 +425,59 @@ namespace NEAT {
 
     // Save a whole population to a file
     void Population::Save(const char *a_FileName) {
-        FILE *t_file = fopen(a_FileName, "w");
-
-        // Save the parameters
-        m_Parameters.Save(t_file);
-
-        // Save the innovation database
-        m_InnovationDatabase.Save(t_file);
-
-        // Save each genome
-        for (unsigned i = 0; i < m_Species.size(); i++) {
-            for (unsigned j = 0; j < m_Species[i].m_Individuals.size(); j++) {
-                m_Species[i].m_Individuals[j].Save(t_file);
-            }
+        if (a_FileName == nullptr) {
+            throw std::invalid_argument("Population filename is null");
+        }
+        FILE *t_file = detail::OpenFile(a_FileName, "w");
+        if (t_file == nullptr) {
+            throw std::runtime_error("Cannot open population file for writing");
         }
 
-        // bye
-        fclose(t_file);
+        try {
+            // Save the parameters
+            m_Parameters.Save(t_file);
+
+            // Save the innovation database
+            m_InnovationDatabase.Save(t_file);
+
+            // Save each genome
+            for (unsigned i = 0; i < m_Species.size(); i++) {
+                for (unsigned j = 0; j < m_Species[i].m_Individuals.size(); j++) {
+                    m_Species[i].m_Individuals[j].Save(t_file);
+                }
+            }
+        } catch (...) {
+            fclose(t_file);
+            throw;
+        }
+
+        if (fclose(t_file) != 0) {
+            throw std::runtime_error("Failed to close population file");
+        }
     }
 
     // Calculates the current mean population complexity
     void Population::CalculateMPC() {
-        m_CurrentMPC = 0;
-
-        for (unsigned int i = 0; i < m_Genomes.size(); i++) {
-            m_CurrentMPC += AccessGenomeByIndex(i).NumLinks();
+        Real total_links = 0.0;
+        unsigned int genome_count = 0;
+        for (const auto &species : m_Species) {
+            for (const auto &genome : species.m_Individuals) {
+                total_links += static_cast<Real>(genome.NumLinks());
+                ++genome_count;
+            }
         }
-
-        m_CurrentMPC /= m_Genomes.size();
+        if (genome_count == 0) {
+            m_CurrentMPC = 0.0;
+            return;
+        }
+        m_CurrentMPC = total_links / static_cast<Real>(genome_count);
     }
 
     // Separates the population into species also adjusts the compatibility treshold if this feature is enabled
     void Population::Speciate() {
         // iterate through the genome list and speciate at least 1 genome must be present
         ASSERT(m_Genomes.size() > 0);
+        if (m_Genomes.empty()) throw std::runtime_error("Cannot speciate an empty population");
 
         // first clear out the species
         m_Species.clear();
@@ -510,11 +554,11 @@ namespace NEAT {
                 }
             }
         }
-        if (maximum_adjusted > 0.0 && std::isfinite(maximum_adjusted)) {
-            for (auto &species : m_Species) {
-                for (auto &genome : species.m_Individuals) {
-                    genome.SetAdjFitness(genome.GetAdjFitness() / maximum_adjusted);
-                }
+        if (maximum_adjusted <= 0.0) maximum_adjusted = 1.0;
+        for (auto &species : m_Species) {
+            for (auto &genome : species.m_Individuals) {
+                const Real adjusted = genome.GetAdjFitness();
+                genome.SetAdjFitness(std::isfinite(adjusted) && adjusted > 0.0 ? adjusted / maximum_adjusted : 1.0e-12);
             }
         }
     }
@@ -534,7 +578,6 @@ namespace NEAT {
 
         Real t_total_adjusted_fitness = 0.0;
         Real t_average_adjusted_fitness = 0.0;
-        Genome t_t;
 
         // get the total adjusted fitness for all individuals
         for (unsigned int i = 0; i < m_Species.size(); i++) {
@@ -569,7 +612,15 @@ namespace NEAT {
     }
 
     // This little tool function helps ordering the genomes by fitness
-    bool species_greater(Species &ls, Species &rs) { return ((ls.GetBestFitness()) > (rs.GetBestFitness())); }
+    bool species_greater(Species &ls, Species &rs) { return ((ls.GetActualBestFitness()) > (rs.GetActualBestFitness())); }
+
+    void Population::ResetSpecies() {
+        for (auto &species : m_Species) {
+            species.ClearIndividuals();
+            species.SetOffspringRqd(0.0);
+        }
+    }
+
     void Population::Sort() {
         ASSERT(m_Species.size() > 0);
 
@@ -675,6 +726,19 @@ namespace NEAT {
 
         // Count the offspring of each individual and species
         CountOffspring();
+
+        for (auto &species : m_Species) species.SetWorstSpecies(false);
+        if (m_Parameters.DetectCompetetiveCoevolutionStagnation && m_Parameters.KillWorstSpeciesEach > 0 &&
+            ((m_Generation + 1U) % static_cast<unsigned int>(m_Parameters.KillWorstSpeciesEach)) == 0U && m_Species.size() > 1) {
+            for (std::size_t i = m_Species.size(); i > 0; --i) {
+                Species &candidate = m_Species[i - 1];
+                if (!candidate.IsBestSpecies() && candidate.AgeGens() > m_Parameters.KillWorstAge) {
+                    candidate.SetWorstSpecies(true);
+                    candidate.SetOffspringRqd(0.0);
+                    break;
+                }
+            }
+        }
 
         // Incrementing the global stagnation counter, we can check later for global stagnation
         m_GensSinceBestFitnessLastChanged++;
@@ -985,7 +1049,6 @@ namespace NEAT {
         }
     }
 
-    Genome g_dummy;  // empty genome
     Genome &Population::AccessGenomeByIndex(int const a_idx) {
         // The genomes live in the species; m_Genomes is only the initial seed list
         // and goes stale after the first Epoch, so bounds-check against the
@@ -1090,6 +1153,8 @@ namespace NEAT {
     }
 
     Genome *Population::Tick(Genome &a_deleted_genome) {
+        std::string parameter_error;
+        if (!m_Parameters.Validate(&parameter_error)) throw std::invalid_argument("Invalid evolution parameters: " + parameter_error);
         // Make sure at least one individual is evaluated
         int ne = 0;
         for (int i = 0; i < m_Species.size(); i++) {
@@ -1097,6 +1162,15 @@ namespace NEAT {
         }
         if (ne == 0) {
             throw std::runtime_error("Called Tick() on population with no evaluated individuals.\n");
+        }
+        if (m_Parameters.RejectNonFiniteFitness) {
+            for (const auto &species : m_Species) {
+                for (const auto &genome : species.m_Individuals) {
+                    if (genome.IsEvaluated() && !std::isfinite(genome.GetFitness())) {
+                        throw std::runtime_error("Tick requires evaluated fitness values to be finite");
+                    }
+                }
+            }
         }
 
 #ifdef VDEBUG
@@ -1134,16 +1208,19 @@ namespace NEAT {
             }
         }
 
-        Real t_f = std::numeric_limits<Real>::min();
+        Real t_f = std::numeric_limits<Real>::lowest();
         for (int i = 0; i < m_Species.size(); i++) {
             for (int j = 0; j < m_Species[i].m_Individuals.size(); j++) {
-                if (m_Species[i].m_Individuals[j].GetFitness() > t_f) {
-                    t_f = m_Species[i].m_Individuals[j].GetFitness();
+                if (!m_Species[i].m_Individuals[j].IsEvaluated()) continue;
+                const Real fitness = m_Species[i].m_Individuals[j].GetFitness();
+                if (!std::isfinite(fitness)) continue;
+                if (fitness > t_f) {
+                    t_f = fitness;
                     m_BestGenome = m_Species[i].m_Individuals[j];
                 }
 
-                if (m_Species[i].m_Individuals[j].GetFitness() > m_Species[i].GetBestFitness()) {
-                    m_Species[i].m_BestFitness = m_Species[i].m_Individuals[j].GetFitness();
+                if (fitness > m_Species[i].GetBestFitness()) {
+                    m_Species[i].m_BestFitness = fitness;
                     m_Species[i].m_EvalsNoImprovement = 0;
                 }
             }
@@ -1153,14 +1230,22 @@ namespace NEAT {
         bool t_changed = false;
         if (m_Parameters.DynamicCompatibility == true) {
             Real t_oldcompat = m_Parameters.CompatTreshold;
-            if ((m_NumEvaluations % m_Parameters.CompatTreshChangeInterval_Evaluations) == 0) {
-                if (m_Species.size() > m_Parameters.MaxSpecies) {
-                    m_Parameters.CompatTreshold += m_Parameters.CompatTresholdModifier;
-                } else if (m_Species.size() < m_Parameters.MinSpecies) {
-                    m_Parameters.CompatTreshold -= m_Parameters.CompatTresholdModifier;
+            if (m_Parameters.CompatTreshChangeInterval_Evaluations > 0 && (m_NumEvaluations % m_Parameters.CompatTreshChangeInterval_Evaluations) == 0) {
+                if (m_Parameters.CompatibilityThresholdControl == PROPORTIONAL_COMPATIBILITY_THRESHOLD) {
+                    const unsigned int target = m_Parameters.TargetSpecies > 0
+                                                    ? m_Parameters.TargetSpecies
+                                                    : m_Parameters.MinSpecies + (m_Parameters.MaxSpecies - m_Parameters.MinSpecies) / 2U;
+                    const Real normalized_error = (static_cast<Real>(m_Species.size()) - static_cast<Real>(target)) / static_cast<Real>(target);
+                    m_Parameters.CompatTreshold *= std::exp(m_Parameters.CompatibilityThresholdGain * normalized_error);
+                } else {
+                    if (m_Species.size() > m_Parameters.MaxSpecies) {
+                        m_Parameters.CompatTreshold += m_Parameters.CompatTresholdModifier;
+                    } else if (m_Species.size() < m_Parameters.MinSpecies) {
+                        m_Parameters.CompatTreshold -= m_Parameters.CompatTresholdModifier;
+                    }
                 }
 
-                if (m_Parameters.CompatTreshold < m_Parameters.MinCompatTreshold) m_Parameters.CompatTreshold = m_Parameters.MinCompatTreshold;
+                m_Parameters.CompatTreshold = std::clamp(m_Parameters.CompatTreshold, m_Parameters.MinCompatTreshold, m_Parameters.MaxCompatTreshold);
 
                 if (m_Parameters.CompatTreshold != t_oldcompat) {
                     t_changed = true;
@@ -1286,6 +1371,9 @@ namespace NEAT {
 #endif
         // Remove the worst individual
         a_deleted_genome = RemoveWorstIndividual();
+        if (a_deleted_genome.GetID() < 0) {
+            throw std::runtime_error("Tick requires at least two evaluated individuals so one can be replaced");
+        }
 
 #ifdef VDEBUG
         std::cout << "calc avg fitness\n";
@@ -1307,7 +1395,7 @@ namespace NEAT {
                                                                        m_RNG);
         ASSERT(t_baby.NumInputs() > 0);
         ASSERT(t_baby.NumOutputs() > 0);
-        Genome *t_to_return = NULL;
+        Genome *t_to_return = nullptr;
 
 #ifdef VDEBUG
         std::cout << "placing baby in species\n";
@@ -1391,7 +1479,7 @@ namespace NEAT {
         std::cout << "\n";
 #endif
 
-        ASSERT(t_to_return != NULL);
+        ASSERT(t_to_return != nullptr);
 
         return t_to_return;
     }
@@ -1417,11 +1505,10 @@ namespace NEAT {
         bool have_finite_fitness = false;
         for (unsigned int i = 0; i < m_Species.size(); i++) {
             for (unsigned int j = 0; j < m_Species[i].m_Individuals.size(); j++) {
-                if (m_Species[i].m_Individuals[j].IsEvaluated() && std::isfinite(m_Species[i].m_Individuals[j].GetFitness())) {
-                    const Real fitness = m_Species[i].m_Individuals[j].GetFitness();
-                    minimum_fitness = have_finite_fitness ? std::min(minimum_fitness, fitness) : fitness;
-                    have_finite_fitness = true;
-                }
+                if (!m_Species[i].m_Individuals[j].IsEvaluated()) continue;
+                const Real fitness = std::isfinite(m_Species[i].m_Individuals[j].GetFitness()) ? m_Species[i].m_Individuals[j].GetFitness() : 0.0;
+                minimum_fitness = have_finite_fitness ? std::min(minimum_fitness, fitness) : fitness;
+                have_finite_fitness = true;
             }
         }
         const Real fitness_offset = have_finite_fitness && minimum_fitness <= 0.0 ? -minimum_fitness + 1.0e-7 : 0.0;
@@ -1453,6 +1540,7 @@ namespace NEAT {
 
             // make sure this isn't the only evaluated individual
             if (numev <= 1) {
+                t_genome.SetID(-1);
                 return t_genome;
             }
 
@@ -1482,59 +1570,75 @@ namespace NEAT {
     // behaviors. This initializes everything.
     // Warning! All derived classes MUST NOT have any member variables! Change the algorithms only!
     void Population::InitPhenotypeBehaviorData(std::vector<PhenotypeBehavior> *a_population, std::vector<PhenotypeBehavior> *a_archive) {
-        // Now make each genome point to its behavior
+        if (a_population == nullptr || a_archive == nullptr) {
+            throw std::invalid_argument("Novelty search behavior containers cannot be null");
+        }
+
+        a_population->clear();
         a_population->resize(NumGenomes());
         m_BehaviorArchive = a_archive;
         m_BehaviorArchive->clear();
 
-        ASSERT(a_population->size() == NumGenomes());
-        int counter = 0;
-        for (unsigned int i = 0; i < m_Species.size(); i++) {
-            for (unsigned int j = 0; j < m_Species[i].m_Individuals.size(); j++, counter++) {
-                m_Species[i].m_Individuals[j].m_PhenotypeBehavior = &((*a_population)[counter]);
-                m_Species[i].m_Individuals[j].SetFitness(0);
+        std::size_t counter = 0;
+        for (auto &species : m_Species) {
+            for (auto &genome : species.m_Individuals) {
+                genome.m_PhenotypeBehavior = &a_population->at(counter++);
+                genome.SetFitness(0.0);
             }
         }
     }
 
     Real Population::ComputeSparseness(Genome &genome) {
-        // this will hold the distances from our new behavior
-        std::vector<Real> t_distances_list;
-        t_distances_list.clear();
+        if (genome.m_PhenotypeBehavior == nullptr) {
+            throw std::invalid_argument("Cannot compute novelty sparseness without behavior data");
+        }
 
-        // first add all distances from the population
+        std::vector<Real> t_distances;
+        const auto t_add_distance = [&genome, &t_distances](PhenotypeBehavior *other) {
+            if (other == nullptr) {
+                throw std::runtime_error("Novelty search encountered an uninitialized behavior");
+            }
+            if (other == genome.m_PhenotypeBehavior) return;
+            const Real distance = genome.m_PhenotypeBehavior->Distance_To(other);
+            if (!std::isfinite(distance) || distance < 0.0) {
+                throw std::domain_error("Novelty behavior distances must be finite and non-negative");
+            }
+            t_distances.push_back(distance);
+        };
         for (unsigned int i = 0; i < m_Species.size(); i++) {
             for (unsigned int j = 0; j < m_Species[i].m_Individuals.size(); j++) {
-                Real distance = genome.m_PhenotypeBehavior->Distance_To(m_Species[i].m_Individuals[j].m_PhenotypeBehavior);
-                t_distances_list.emplace_back(distance);
+                t_add_distance(m_Species[i].m_Individuals[j].m_PhenotypeBehavior);
+            }
+        }
+        if (m_BehaviorArchive) {
+            for (unsigned int i = 0; i < m_BehaviorArchive->size(); i++) {
+                t_add_distance(&((*m_BehaviorArchive)[i]));
             }
         }
 
-        // then add all distances from the archive
-        for (unsigned int i = 0; i < m_BehaviorArchive->size(); i++) {
-            t_distances_list.emplace_back(genome.m_PhenotypeBehavior->Distance_To(&((*m_BehaviorArchive)[i])));
+        if (t_distances.empty()) return 0.0;
+
+        std::size_t k = std::min<std::size_t>(t_distances.size(), m_Parameters.NoveltySearch_K);
+        if (k == 0) return 0.0;
+        if (k < t_distances.size()) std::nth_element(t_distances.begin(), t_distances.begin() + k, t_distances.end());
+        Real sum = 0.0;
+        for (std::size_t i = 0; i < k; i++) {
+            sum += t_distances[i];
         }
-
-        // sort the list, smaller first
-        std::sort(t_distances_list.begin(), t_distances_list.end());
-
-        // now compute the sparseness
-        Real t_sparseness = 0;
-        for (unsigned int i = 1; i < (m_Parameters.NoveltySearch_K + 1); i++) {
-            t_sparseness += t_distances_list[i];
-        }
-        t_sparseness /= m_Parameters.NoveltySearch_K;
-
-        return t_sparseness;
+        return sum / static_cast<Real>(k);
     }
 
     // This is the main method performing novelty search. Performs one reproduction and assigns novelty scores based on the current population and the archive.
     // If a successful behavior was encountered, returns true and the genome a_SuccessfulGenome is overwritten with the genome generating the successful
     // behavior
     bool Population::NoveltySearchTick(Genome &a_SuccessfulGenome) {
+        if (m_BehaviorArchive == nullptr) {
+            throw std::runtime_error("Novelty search behavior data has not been initialized");
+        }
+
         // Recompute the sparseness/fitness for all individuals in the population
         // This will introduce the constant pressure to do something new
-        if ((m_NumEvaluations % m_Parameters.NoveltySearch_Recompute_Sparseness_Each) == 0) {
+        if (m_Parameters.NoveltySearch_Recompute_Sparseness_Each > 0 && (m_NumEvaluations % m_Parameters.NoveltySearch_Recompute_Sparseness_Each) == 0) {
             for (unsigned int i = 0; i < m_Species.size(); i++) {
                 for (unsigned int j = 0; j < m_Species[i].m_Individuals.size(); j++) {
                     m_Species[i].m_Individuals[j].SetFitness(ComputeSparseness(m_Species[i].m_Individuals[j]));
@@ -1548,6 +1652,9 @@ namespace NEAT {
 
         // replace the new individual's behavior to point to the dead one's
         t_new_baby->m_PhenotypeBehavior = t_temp_genome.m_PhenotypeBehavior;
+        if (t_new_baby->m_PhenotypeBehavior == nullptr) {
+            throw std::runtime_error("Novelty search encountered an uninitialized behavior");
+        }
 
         // Now it is time to acquire the new behavior from the baby
         bool t_success = t_new_baby->m_PhenotypeBehavior->Acquire(t_new_baby);
@@ -1564,21 +1671,10 @@ namespace NEAT {
         // OK now we have the sparseness for this behavior if the sparseness is above Pmin, add this behavior to the archive
         m_GensSinceLastArchiving++;
         if (t_sparseness > m_Parameters.NoveltySearch_P_min) {
-            // check to see if this behavior is already present in the archive if it is already present, abort addition
-            bool present = false;
-
-            // you can actually skip this code if the behavior comparison gets too slow maybe they don't repeat?
-            /*for(unsigned int i=0; i<(*m_BehaviorArchive).size(); i++)
-            {
-                if ( (*(t_new_baby->m_PhenotypeBehavior)).m_Data == (*m_BehaviorArchive)[i].m_Data )
-                {
-                    present = true;
-                    break;
-                }
-            }*/
-
-            if (!present) {
-                m_BehaviorArchive->emplace_back(*(t_new_baby->m_PhenotypeBehavior));
+            // Do not archive the same behavior characterization repeatedly.
+            const auto present = std::find(m_BehaviorArchive->begin(), m_BehaviorArchive->end(), *t_new_baby->m_PhenotypeBehavior);
+            if (present == m_BehaviorArchive->end()) {
+                m_BehaviorArchive->push_back(*(t_new_baby->m_PhenotypeBehavior));
                 m_GensSinceLastArchiving = 0;
                 m_QuickAddCounter++;
             }
@@ -1595,11 +1691,13 @@ namespace NEAT {
                 if (m_Parameters.NoveltySearch_P_min < m_Parameters.NoveltySearch_Pmin_min) {
                     m_Parameters.NoveltySearch_P_min = m_Parameters.NoveltySearch_Pmin_min;
                 }
+                m_GensSinceLastArchiving = 0;
             }
 
             // too much additions to the archive (one after another)?
             if (m_QuickAddCounter > m_Parameters.NoveltySearch_Quick_Archiving_Min_Evaluations) {
                 m_Parameters.NoveltySearch_P_min *= m_Parameters.NoveltySearch_Pmin_raising_multiplier;
+                m_QuickAddCounter = 0;
             }
         }
 
@@ -1705,65 +1803,83 @@ namespace NEAT {
 
         Population population;
         input >> token;
-        if (token != "PopulationFormat") throw std::runtime_error("Population::Deserialize: expected PopulationFormat.");
-        int version = 0;
-        input >> version;
-        if (version != 2) throw std::runtime_error("Population::Deserialize: unsupported format.");
-        input >> token;
-        if (token != "PopulationState") throw std::runtime_error("Population::Deserialize: missing PopulationState marker.");
-
-        int search_mode = 0;
-        input >> population.m_Generation >> population.m_NumEvaluations >> population.m_NextGenomeID >> population.m_NextSpeciesID >>
-            population.m_BestFitnessEver >> population.m_ID >> population.m_GensSinceBestFitnessLastChanged >> population.m_EvalsSinceBestFitnessLastChanged >>
-            population.m_GensSinceMPCLastChanged >> search_mode >> population.m_CurrentMPC >> population.m_OldMPC >> population.m_BaseMPC >>
-            population.m_GensSinceLastArchiving >> population.m_QuickAddCounter;
-        if (search_mode < COMPLEXIFYING || search_mode > BLENDED) throw std::runtime_error("Population::Deserialize: invalid search mode.");
-        population.m_SearchMode = static_cast<SearchMode>(search_mode);
-
-        std::string rng_state;
-        input >> token >> std::quoted(rng_state);
-        if (token != "RNG") throw std::runtime_error("Population::Deserialize: missing RNG marker.");
-        population.m_RNG.Deserialize(rng_state);
-
-        input >> token;
-        if (token != "Parameters") throw std::runtime_error("Population::Deserialize: missing Parameters marker.");
-        {
-            std::ostringstream params_text;
-            params_text << token << '\n';
-            std::string line;
-            while (std::getline(input, line)) {
-                params_text << line << '\n';
-                if (line == "NEAT_ParametersEnd") break;
+        if (token != "PopulationFormat") {
+            // Legacy format: the token is the generation number, followed by
+            // evaluation/counter state and a species list (no Parameters,
+            // innovation DB, RNG, or archive blocks).
+            try {
+                population.m_Generation = static_cast<unsigned int>(std::stoul(token));
+            } catch (const std::exception &) {
+                throw std::runtime_error("Population::Deserialize: malformed population header.");
             }
-            std::istringstream params_input(params_text.str());
-            if (population.m_Parameters.Load(params_input) != 0) throw std::runtime_error("Population::Deserialize: malformed parameters.");
-        }
+            input >> population.m_NumEvaluations >> population.m_NextGenomeID >> population.m_NextSpeciesID >> population.m_BestFitnessEver;
+            std::size_t legacy_species_count = 0;
+            input >> legacy_species_count;
+            if (!input) throw std::runtime_error("Population::Deserialize: malformed legacy population header.");
+            population.m_Species.clear();
+            for (std::size_t i = 0; i < legacy_species_count; ++i) {
+                population.m_Species.push_back(Species::Deserialize(ReadDelimitedBlock(input, "SpeciesStart", "SpeciesEnd")));
+            }
+        } else {
+            int version = 0;
+            input >> version;
+            if (version != 2) throw std::runtime_error("Population::Deserialize: unsupported format.");
+            input >> token;
+            if (token != "PopulationState") throw std::runtime_error("Population::Deserialize: missing PopulationState marker.");
 
-        input >> token;
-        if (token != "InnovationDatabase") throw std::runtime_error("Population::Deserialize: missing InnovationDatabase marker.");
-        population.m_InnovationDatabase = InnovationDatabase::Deserialize(ReadDelimitedBlock(input, "InnovationDatabaseStart", "InnovationDatabaseEnd"));
+            int search_mode = 0;
+            input >> population.m_Generation >> population.m_NumEvaluations >> population.m_NextGenomeID >> population.m_NextSpeciesID >>
+                population.m_BestFitnessEver >> population.m_ID >> population.m_GensSinceBestFitnessLastChanged >>
+                population.m_EvalsSinceBestFitnessLastChanged >> population.m_GensSinceMPCLastChanged >> search_mode >> population.m_CurrentMPC >>
+                population.m_OldMPC >> population.m_BaseMPC >> population.m_GensSinceLastArchiving >> population.m_QuickAddCounter;
+            if (search_mode < COMPLEXIFYING || search_mode > BLENDED) throw std::runtime_error("Population::Deserialize: invalid search mode.");
+            population.m_SearchMode = static_cast<SearchMode>(search_mode);
 
-        input >> token;
-        if (token != "BestGenome") throw std::runtime_error("Population::Deserialize: missing BestGenome marker.");
-        population.m_BestGenome = Genome(input);
-        input >> token;
-        if (token != "BestGenomeEver") throw std::runtime_error("Population::Deserialize: missing BestGenomeEver marker.");
-        population.m_BestGenomeEver = Genome(input);
+            std::string rng_state;
+            input >> token >> std::quoted(rng_state);
+            if (token != "RNG") throw std::runtime_error("Population::Deserialize: missing RNG marker.");
+            population.m_RNG.Deserialize(rng_state);
 
-        std::size_t archive_count = 0;
-        input >> token >> archive_count;
-        if (token != "GenomeArchive") throw std::runtime_error("Population::Deserialize: missing GenomeArchive marker.");
-        population.m_GenomeArchive.clear();
-        population.m_GenomeArchive.reserve(archive_count);
-        for (std::size_t i = 0; i < archive_count; ++i) population.m_GenomeArchive.emplace_back(input);
+            input >> token;
+            if (token != "Parameters") throw std::runtime_error("Population::Deserialize: missing Parameters marker.");
+            {
+                std::ostringstream params_text;
+                params_text << token << '\n';
+                std::string line;
+                while (std::getline(input, line)) {
+                    params_text << line << '\n';
+                    if (line == "NEAT_ParametersEnd") break;
+                }
+                std::istringstream params_input(params_text.str());
+                if (population.m_Parameters.Load(params_input) != 0) throw std::runtime_error("Population::Deserialize: malformed parameters.");
+            }
 
-        std::size_t species_count = 0;
-        input >> token >> species_count;
-        if (token != "Species") throw std::runtime_error("Population::Deserialize: missing Species marker.");
-        population.m_Species.clear();
-        population.m_Species.reserve(species_count);
-        for (std::size_t i = 0; i < species_count; ++i) {
-            population.m_Species.push_back(Species::Deserialize(ReadDelimitedBlock(input, "SpeciesStart", "SpeciesEnd")));
+            input >> token;
+            if (token != "InnovationDatabase") throw std::runtime_error("Population::Deserialize: missing InnovationDatabase marker.");
+            population.m_InnovationDatabase = InnovationDatabase::Deserialize(ReadDelimitedBlock(input, "InnovationDatabaseStart", "InnovationDatabaseEnd"));
+
+            input >> token;
+            if (token != "BestGenome") throw std::runtime_error("Population::Deserialize: missing BestGenome marker.");
+            population.m_BestGenome = Genome(input);
+            input >> token;
+            if (token != "BestGenomeEver") throw std::runtime_error("Population::Deserialize: missing BestGenomeEver marker.");
+            population.m_BestGenomeEver = Genome(input);
+
+            std::size_t archive_count = 0;
+            input >> token >> archive_count;
+            if (token != "GenomeArchive") throw std::runtime_error("Population::Deserialize: missing GenomeArchive marker.");
+            population.m_GenomeArchive.clear();
+            population.m_GenomeArchive.reserve(archive_count);
+            for (std::size_t i = 0; i < archive_count; ++i) population.m_GenomeArchive.emplace_back(input);
+
+            std::size_t species_count = 0;
+            input >> token >> species_count;
+            if (token != "Species") throw std::runtime_error("Population::Deserialize: missing Species marker.");
+            population.m_Species.clear();
+            population.m_Species.reserve(species_count);
+            for (std::size_t i = 0; i < species_count; ++i) {
+                population.m_Species.push_back(Species::Deserialize(ReadDelimitedBlock(input, "SpeciesStart", "SpeciesEnd")));
+            }
         }
 
         input >> token;
@@ -1775,6 +1891,11 @@ namespace NEAT {
         }
         population.m_TempSpecies.clear();
         population.m_BehaviorArchive = nullptr;
+        if (!population.m_Species.empty() && population.m_BestGenome.NumNeurons() == 0) {
+            population.m_BestGenome = population.GetBestGenome();
+        }
+        std::string validation_error;
+        if (!population.Validate(&validation_error)) throw std::runtime_error("Population::Deserialize: " + validation_error);
         return population;
     }
 

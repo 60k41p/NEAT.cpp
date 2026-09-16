@@ -141,7 +141,16 @@ namespace NEAT {
         validate_group(substrate.m_input_coords, "input");
         validate_group(substrate.m_output_coords, "output");
         validate_group(substrate.m_hidden_coords, "hidden");
+        if (!std::isfinite(substrate.m_max_connection_length) || (substrate.m_max_connection_length < 0.0 && substrate.m_max_connection_length != -1.0)) {
+            throw std::invalid_argument(std::string(algorithm) + " maximum connection length must be -1 or finite and non-negative");
+        }
+        if (substrate.m_use_spatial_distance_for_delays && (!std::isfinite(substrate.m_conduction_velocity) || substrate.m_conduction_velocity <= 0.0)) {
+            throw std::invalid_argument(std::string(algorithm) + " axonal conduction velocity must be finite and positive");
+        }
     }
+
+    // Prunes over-long axons and optionally converts lengths into delays.
+    inline void FinalizeSpatialConnections(NeuralNetwork &network, const Substrate &substrate);
 
     // Create an empty genome
     Genome::Genome() {
@@ -155,7 +164,7 @@ namespace NEAT {
         m_AdjustedFitness = 0;
         m_OffspringAmount = 0;
         m_Evaluated = false;
-        m_PhenotypeBehavior = NULL;
+        m_PhenotypeBehavior = nullptr;
         m_initial_num_neurons = 0;
         m_initial_num_links = 0;
     }
@@ -259,10 +268,10 @@ namespace NEAT {
         {
             NeuronGene t_ngene(OUTPUT, t_nnum, 1.0);
             // Initialize the neuron gene's properties
-            t_ngene.Init((a_Parameters.MinActivationA + a_Parameters.MaxActivationA) / 2.0f,
-                         (a_Parameters.MinActivationB + a_Parameters.MaxActivationB) / 2.0f,
-                         (a_Parameters.MinNeuronTimeConstant + a_Parameters.MaxNeuronTimeConstant) / 2.0f,
-                         (a_Parameters.MinNeuronBias + a_Parameters.MaxNeuronBias) / 2.0f,
+            t_ngene.Init((a_Parameters.MinActivationA + a_Parameters.MaxActivationA) / 2.0,
+                         (a_Parameters.MinActivationB + a_Parameters.MaxActivationB) / 2.0,
+                         (a_Parameters.MinNeuronTimeConstant + a_Parameters.MaxNeuronTimeConstant) / 2.0,
+                         (a_Parameters.MinNeuronBias + a_Parameters.MaxNeuronBias) / 2.0,
                          a_OutputActType);
             // Initialize the traits
             t_ngene.InitTraits(a_Parameters.NeuronTraits, t_RNG);
@@ -275,10 +284,10 @@ namespace NEAT {
         {
             NeuronGene t_ngene(HIDDEN, t_nnum, 1.0);
             // Initialize the neuron gene's properties
-            t_ngene.Init((a_Parameters.MinActivationA + a_Parameters.MaxActivationA) / 2.0f,
-                         (a_Parameters.MinActivationB + a_Parameters.MaxActivationB) / 2.0f,
-                         (a_Parameters.MinNeuronTimeConstant + a_Parameters.MaxNeuronTimeConstant) / 2.0f,
-                         (a_Parameters.MinNeuronBias + a_Parameters.MaxNeuronBias) / 2.0f,
+            t_ngene.Init((a_Parameters.MinActivationA + a_Parameters.MaxActivationA) / 2.0,
+                         (a_Parameters.MinActivationB + a_Parameters.MaxActivationB) / 2.0,
+                         (a_Parameters.MinNeuronTimeConstant + a_Parameters.MaxNeuronTimeConstant) / 2.0,
+                         (a_Parameters.MinNeuronBias + a_Parameters.MaxNeuronBias) / 2.0,
                          a_HiddenActType);
             // Initialize the traits
             t_ngene.InitTraits(a_Parameters.NeuronTraits, t_RNG);
@@ -311,7 +320,7 @@ namespace NEAT {
         m_AdjustedFitness = 0.0;
         m_OffspringAmount = 0.0;
         m_Depth = 0;
-        m_PhenotypeBehavior = NULL;
+        m_PhenotypeBehavior = nullptr;
 
         m_initial_num_neurons = NumNeurons();
         m_initial_num_links = NumLinks();
@@ -346,14 +355,14 @@ namespace NEAT {
             for (unsigned int i = 0; i < (in.NumInputs - 1); i++) {
                 NeuronGene n = NeuronGene(INPUT, t_nnum, 0.0);
                 // Initialize the traits
-                // n.InitTraits(a_Parameters.NeuronTraits, t_RNG); // no need to init traits for inputs
+                n.InitTraits(a_Parameters.NeuronTraits, t_RNG);
                 m_NeuronGenes.emplace_back(n);
                 t_nnum++;
             }
             // add the bias
             NeuronGene n = NeuronGene(BIAS, t_nnum, 0.0);
             // Initialize the traits
-            // n.InitTraits(a_Parameters.NeuronTraits, t_RNG); // no need to init traits for inputs
+            n.InitTraits(a_Parameters.NeuronTraits, t_RNG);
 
             m_NeuronGenes.emplace_back(n);
             t_nnum++;
@@ -363,7 +372,7 @@ namespace NEAT {
             for (unsigned int i = 0; i < in.NumInputs; i++) {
                 NeuronGene n = NeuronGene(INPUT, t_nnum, 0.0);
                 // Initialize the traits
-                // n.InitTraits(a_Parameters.NeuronTraits, t_RNG); // no need to init traits for inputs
+                n.InitTraits(a_Parameters.NeuronTraits, t_RNG);
 
                 m_NeuronGenes.emplace_back(n);
                 t_nnum++;
@@ -374,9 +383,9 @@ namespace NEAT {
         for (unsigned int i = 0; i < (in.NumOutputs); i++) {
             NeuronGene t_ngene(OUTPUT, t_nnum, 1.0);
             // Initialize the neuron gene's properties
-            t_ngene.Init((a_Parameters.MinActivationA + a_Parameters.MaxActivationA) / 2.0f, (a_Parameters.MinActivationB + a_Parameters.MaxActivationB) / 2.0f,
-                         (a_Parameters.MinNeuronTimeConstant + a_Parameters.MaxNeuronTimeConstant) / 2.0f,
-                         (a_Parameters.MinNeuronBias + a_Parameters.MaxNeuronBias) / 2.0f, in.OutputActType);
+            t_ngene.Init((a_Parameters.MinActivationA + a_Parameters.MaxActivationA) / 2.0, (a_Parameters.MinActivationB + a_Parameters.MaxActivationB) / 2.0,
+                         (a_Parameters.MinNeuronTimeConstant + a_Parameters.MaxNeuronTimeConstant) / 2.0,
+                         (a_Parameters.MinNeuronBias + a_Parameters.MaxNeuronBias) / 2.0, in.OutputActType);
             InitializeNeuronSpiking(t_ngene, a_Parameters);
             // Initialize the traits
             t_ngene.InitTraits(a_Parameters.NeuronTraits, t_RNG);
@@ -390,10 +399,10 @@ namespace NEAT {
         {
             NeuronGene t_ngene(OUTPUT, t_nnum, 1.0);
             // Initialize the neuron gene's properties
-            t_ngene.Init((a_Parameters.MinActivationA + a_Parameters.MaxActivationA) / 2.0f,
-                         (a_Parameters.MinActivationB + a_Parameters.MaxActivationB) / 2.0f,
-                         (a_Parameters.MinNeuronTimeConstant + a_Parameters.MaxNeuronTimeConstant) / 2.0f,
-                         (a_Parameters.MinNeuronBias + a_Parameters.MaxNeuronBias) / 2.0f,
+            t_ngene.Init((a_Parameters.MinActivationA + a_Parameters.MaxActivationA) / 2.0,
+                         (a_Parameters.MinActivationB + a_Parameters.MaxActivationB) / 2.0,
+                         (a_Parameters.MinNeuronTimeConstant + a_Parameters.MaxNeuronTimeConstant) / 2.0,
+                         (a_Parameters.MinNeuronBias + a_Parameters.MaxNeuronBias) / 2.0,
                          UNSIGNED_STEP);
             // Initialize the traits
             t_ngene.InitTraits(a_Parameters.NeuronTraits, t_RNG);
@@ -411,10 +420,10 @@ namespace NEAT {
                 for (unsigned int i = 0; i < in.NumHidden; i++) {
                     NeuronGene t_ngene(HIDDEN, t_nnum, 1.0);
                     // Initialize the neuron gene's properties
-                    t_ngene.Init((a_Parameters.MinActivationA + a_Parameters.MaxActivationA) / 2.0f,
-                                 (a_Parameters.MinActivationB + a_Parameters.MaxActivationB) / 2.0f,
-                                 (a_Parameters.MinNeuronTimeConstant + a_Parameters.MaxNeuronTimeConstant) / 2.0f,
-                                 (a_Parameters.MinNeuronBias + a_Parameters.MaxNeuronBias) / 2.0f, in.HiddenActType);
+                    t_ngene.Init((a_Parameters.MinActivationA + a_Parameters.MaxActivationA) / 2.0,
+                                 (a_Parameters.MinActivationB + a_Parameters.MaxActivationB) / 2.0,
+                                 (a_Parameters.MinNeuronTimeConstant + a_Parameters.MaxNeuronTimeConstant) / 2.0,
+                                 (a_Parameters.MinNeuronBias + a_Parameters.MaxNeuronBias) / 2.0, in.HiddenActType);
                     InitializeNeuronSpiking(t_ngene, a_Parameters);
                     // Initialize the traits
                     t_ngene.InitTraits(a_Parameters.NeuronTraits, t_RNG);
@@ -554,7 +563,7 @@ namespace NEAT {
         m_AdjustedFitness = 0.0;
         m_OffspringAmount = 0.0;
         m_Depth = 0;
-        m_PhenotypeBehavior = NULL;
+        m_PhenotypeBehavior = nullptr;
 
         m_initial_num_neurons = NumNeurons();
         m_initial_num_links = NumLinks();
@@ -589,27 +598,31 @@ namespace NEAT {
     }
 
     LinkGene Genome::GetLinkByIndex(int a_idx) const {
-        ASSERT(a_idx < m_LinkGenes.size());
-        return m_LinkGenes[a_idx];
+        if (a_idx < 0) {
+            throw std::out_of_range("Link index cannot be negative");
+        }
+        return m_LinkGenes.at(static_cast<std::size_t>(a_idx));
     }
 
     LinkGene Genome::GetLinkByInnovID(int a_ID) const {
-        for (unsigned int i = 0; i < m_LinkGenes.size(); i++)
-            if (m_LinkGenes[i].InnovationID() == a_ID) return m_LinkGenes[i];
+        for (const auto &l : m_LinkGenes)
+            if (l.InnovationID() == a_ID) return l;
 
         // should never reach this code
-        throw std::out_of_range("Genome::GetLinkByInnovID: unknown innovation ID");
+        throw std::runtime_error("No link found by that innovID");
     }
 
     NeuronGene Genome::GetNeuronByIndex(int a_idx) const {
-        ASSERT(a_idx < m_NeuronGenes.size());
-        return m_NeuronGenes[a_idx];
+        if (a_idx < 0) {
+            throw std::out_of_range("Neuron index cannot be negative");
+        }
+        return m_NeuronGenes.at(static_cast<std::size_t>(a_idx));
     }
 
     NeuronGene Genome::GetNeuronByID(int a_ID) const {
-        int t_idx = GetNeuronIndex(a_ID);
-        if (t_idx < 0) throw std::out_of_range("Genome::GetNeuronByID: unknown neuron ID");
-        return m_NeuronGenes[t_idx];
+        const int t_idx = GetNeuronIndex(a_ID);
+        if (t_idx < 0) throw std::out_of_range("No neuron with ID " + std::to_string(a_ID) + " exists in the genome");
+        return m_NeuronGenes[static_cast<std::size_t>(t_idx)];
     }
 
     Real Genome::GetOffspringAmount() const { return m_OffspringAmount; }
@@ -701,63 +714,35 @@ namespace NEAT {
     }
 
     bool Genome::HasLoops() {
-        NeuralNetwork net;
-        BuildPhenotype(net);
+        std::map<int, std::size_t> neuron_indices;
+        for (std::size_t i = 0; i < m_NeuronGenes.size(); ++i) neuron_indices.emplace(m_NeuronGenes[i].ID(), i);
 
-        // Detect directed cycles using Kahn's algorithm (indegree-based
-        // topological sort). If every node cannot be processed, a cycle exists.
-        const int n = static_cast<int>(net.m_neurons.size());
-        const int e = static_cast<int>(net.m_connections.size());
-        std::vector<int> indegree(n, 0);
-        // Flat out-adjacency (head/next chains) so each edge is visited once
-        // overall instead of once per popped node (was O(nodes x edges)); two
-        // vector allocations regardless of graph size.
-        std::vector<int> t_head(n, -1);
-        std::vector<int> t_next(e, -1);
-
-        for (int i = 0; i < e; i++) {
-            int src = net.m_connections[i].m_source_neuron_idx;
-            int tgt = net.m_connections[i].m_target_neuron_idx;
-            if ((tgt >= 0) && (tgt < n)) {
-                indegree[tgt]++;
-                if ((src >= 0) && (src < n)) {
-                    t_next[i] = t_head[src];
-                    t_head[src] = i;
-                }
+        std::vector<std::vector<std::size_t>> adjacency(m_NeuronGenes.size());
+        std::vector<std::size_t> indegree(m_NeuronGenes.size(), 0);
+        for (const LinkGene &link : m_LinkGenes) {
+            const auto source = neuron_indices.find(link.FromNeuronID());
+            const auto target = neuron_indices.find(link.ToNeuronID());
+            if (source == neuron_indices.end() || target == neuron_indices.end()) {
+                return true;
             }
+            adjacency[source->second].push_back(target->second);
+            ++indegree[target->second];
         }
 
-        std::vector<int> stack;
-        for (int i = 0; i < n; i++) {
-            if (indegree[i] == 0) {
-                stack.push_back(i);
+        std::queue<std::size_t> ready;
+        for (std::size_t i = 0; i < indegree.size(); ++i) {
+            if (indegree[i] == 0) ready.push(i);
+        }
+        std::size_t visited = 0;
+        while (!ready.empty()) {
+            const std::size_t source = ready.front();
+            ready.pop();
+            ++visited;
+            for (std::size_t target : adjacency[source]) {
+                if (--indegree[target] == 0) ready.push(target);
             }
         }
-
-        int visited = 0;
-        while (!stack.empty()) {
-            int node = stack.back();
-            stack.pop_back();
-            visited++;
-            for (int k = t_head[node]; k != -1; k = t_next[k]) {
-                int tgt = net.m_connections[k].m_target_neuron_idx;
-                indegree[tgt]--;
-                if (indegree[tgt] == 0) {
-                    stack.push_back(tgt);
-                }
-            }
-        }
-
-        // A self-loop on a single node (src == tgt) is also a cycle
-        bool self_loop = false;
-        for (int i = 0; i < net.m_connections.size(); i++) {
-            if (net.m_connections[i].m_source_neuron_idx == net.m_connections[i].m_target_neuron_idx) {
-                self_loop = true;
-                break;
-            }
-        }
-
-        return (visited < n) || self_loop;
+        return visited != m_NeuronGenes.size();
     }
 
     // Returns true if the specified link is present in the genome
@@ -779,22 +764,14 @@ namespace NEAT {
         a_Net.Clear();
         a_Net.SetInputOutputDimentions(m_NumInputs, m_NumOutputs);
 
-        // Build an ID->index table once so the connection loop below resolves
-        // endpoints in O(1); the previous GetNeuronIndex() rescans made this
-        // O(links x neurons).
-        int t_max_id = 0;
-        for (unsigned int i = 0; i < NumNeurons(); i++) {
-            if (m_NeuronGenes[i].ID() > t_max_id) {
-                t_max_id = m_NeuronGenes[i].ID();
-            }
-        }
-        std::vector<int> t_id_to_index(static_cast<size_t>(t_max_id) + 1, -1);
+        std::unordered_map<int, int> t_id_to_index;
+        t_id_to_index.reserve(m_NeuronGenes.size());
+        a_Net.m_neurons.reserve(m_NeuronGenes.size());
+        a_Net.m_connections.reserve(m_LinkGenes.size());
 
         // Fill the net with the neurons
         for (unsigned int i = 0; i < NumNeurons(); i++) {
             Neuron t_n;
-
-            t_id_to_index[static_cast<size_t>(m_NeuronGenes[i].ID())] = static_cast<int>(i);
 
             t_n.m_a = m_NeuronGenes[i].m_A;
             t_n.m_b = m_NeuronGenes[i].m_B;
@@ -820,21 +797,20 @@ namespace NEAT {
             t_n.m_y = static_cast<Real>(m_NeuronGenes[i].y);
 
             a_Net.AddNeuron(t_n);
+            t_id_to_index.emplace(m_NeuronGenes[i].ID(), static_cast<int>(a_Net.m_neurons.size()) - 1);
         }
 
         // Fill the net with the connections
         for (unsigned int i = 0; i < NumLinks(); i++) {
             Connection t_c;
 
-            const int t_from = m_LinkGenes[i].FromNeuronID();
-            const int t_to = m_LinkGenes[i].ToNeuronID();
-            const int t_from_idx = (t_from >= 0 && t_from <= t_max_id) ? t_id_to_index[static_cast<size_t>(t_from)] : -1;
-            const int t_to_idx = (t_to >= 0 && t_to <= t_max_id) ? t_id_to_index[static_cast<size_t>(t_to)] : -1;
-            if (t_from_idx < 0 || t_to_idx < 0) {
+            const auto t_from = t_id_to_index.find(m_LinkGenes[i].FromNeuronID());
+            const auto t_to = t_id_to_index.find(m_LinkGenes[i].ToNeuronID());
+            if (t_from == t_id_to_index.end() || t_to == t_id_to_index.end()) {
                 throw std::runtime_error("Genome contains a link whose endpoint neuron does not exist");
             }
-            t_c.m_source_neuron_idx = t_from_idx;
-            t_c.m_target_neuron_idx = t_to_idx;
+            t_c.m_source_neuron_idx = t_from->second;
+            t_c.m_target_neuron_idx = t_to->second;
             t_c.m_weight = m_LinkGenes[i].GetWeight();
             t_c.m_recur_flag = m_LinkGenes[i].IsRecurrent();
             t_c.m_synaptic_delay = m_LinkGenes[i].m_SynapticDelay;
@@ -1182,6 +1158,7 @@ namespace NEAT {
                 net.AddConnection(t_c);
             }
         }
+        FinalizeSpatialConnections(net, subst);
     }
 
     // Projects the weight changes of a phenotype back to the genome.
@@ -1221,40 +1198,33 @@ namespace NEAT {
 
         // New - if there is a behavior in the genomes, return their distance
 
-        // iterators for moving through the genomes' genes
-        std::vector<LinkGene>::const_iterator t_g1;
-        std::vector<LinkGene>::const_iterator t_g2;
-
-        // this variable is the total distance between the genomes if it passes beyond the compatibility treshold, the function returns false
         Real t_total_distance = 0.0;
-
         Real t_total_weight_difference = 0.0;
-        Real t_total_timeconstant_difference = 0.0;
-        Real t_total_bias_difference = 0.0;
         Real t_total_A_difference = 0.0;
         Real t_total_B_difference = 0.0;
+        Real t_total_timeconstant_difference = 0.0;
+        Real t_total_bias_difference = 0.0;
         Real t_total_num_activation_difference = 0.0;
         Real t_total_spiking_neuron_difference = 0.0;
         Real t_total_spiking_link_difference = 0.0;
-        std::map<std::string, Real> t_total_neuron_trait_difference;
         std::map<std::string, Real> t_total_link_trait_difference;
-        std::map<std::string, Real> t_genome_link_trait_difference;
-
-        // count of matching genes
+        std::map<std::string, Real> t_total_neuron_trait_difference;
         Real t_num_excess = 0;
         Real t_num_disjoint = 0;
         Real t_num_matching_links = 0;
         Real t_num_matching_neurons = 0;
 
-        // calculate genome trait difference here
-        t_genome_link_trait_difference = m_GenomeGene.GetTraitDistances(a_G.m_GenomeGene.m_Traits);
-
-        // used for percentage of excess/disjoint genes calculation
-        int t_max_genome_size = static_cast<int>(NumLinks() < a_G.NumLinks()) ? (a_G.NumLinks()) : (NumLinks());
-        int t_max_neurons = static_cast<int>(NumNeurons() < a_G.NumNeurons()) ? (a_G.NumNeurons()) : (NumNeurons());
-
-        t_g1 = m_LinkGenes.begin();
-        t_g2 = a_G.m_LinkGenes.begin();
+        // calculate genome trait difference here (guarded: skip work when no schema)
+        if (!a_Parameters.GenomeTraits.empty()) {
+            const std::map<std::string, Real> t_genome_trait_difference = m_GenomeGene.GetTraitDistances(a_G.m_GenomeGene.m_Traits);
+            for (const auto &kv : t_genome_trait_difference) {
+                const auto schema = a_Parameters.GenomeTraits.find(kv.first);
+                if (schema == a_Parameters.GenomeTraits.end()) continue;
+                Real n = kv.second * schema->second.m_ImportanceCoeff;
+                if (!std::isfinite(n)) n = 0.0;
+                t_total_distance += n;
+            }
+        }
 
         auto by_innovation = [](const LinkGene &lhs, const LinkGene &rhs) { return lhs.InnovationID() < rhs.InnovationID(); };
         // Sort copies when a genome is unsorted so the merge below classifies
@@ -1272,39 +1242,38 @@ namespace NEAT {
             std::sort(t_sorted_2.begin(), t_sorted_2.end(), by_innovation);
             t_links_2 = &t_sorted_2;
         }
-        t_g1 = t_links_1->begin();
-        t_g2 = t_links_2->begin();
-        // Step through the genes until both genomes end
-        while (!((t_g1 == t_links_1->end()) && ((t_g2 == t_links_2->end())))) {
+        // Step through the genes until both genomes end (merge by innovation number)
+        std::size_t t_i1 = 0, t_i2 = 0;
+        while (!((t_i1 >= t_links_1->size()) && ((t_i2 >= t_links_2->size())))) {
             // end of first genome?
-            if (t_g1 == t_links_1->end()) {
+            if (t_i1 == t_links_1->size()) {
                 // add to the total distance
                 t_num_excess++;
-                t_g2++;
-            } else if (t_g2 == t_links_2->end())
+                t_i2++;
+            } else if (t_i2 == t_links_2->size())
             // end of second genome?
             {
                 // add to the total distance
                 t_num_excess++;
-                t_g1++;
+                t_i1++;
             } else {
                 // extract the innovation numbers
-                int t_g1innov = t_g1->InnovationID();
-                int t_g2innov = t_g2->InnovationID();
+                int t_g1innov = (*t_links_1)[t_i1].InnovationID();
+                int t_g2innov = (*t_links_2)[t_i2].InnovationID();
 
                 // matching genes?
                 if (t_g1innov == t_g2innov) {
                     t_num_matching_links++;
 
                     if (a_Parameters.WeightDiffCoeff > 0.0) {
-                        Real t_wdiff = (t_g1->GetWeight() - t_g2->GetWeight());
+                        Real t_wdiff = ((*t_links_1)[t_i1].GetWeight() - (*t_links_2)[t_i2].GetWeight());
                         if (t_wdiff < 0) t_wdiff = -t_wdiff;  // make sure it is positive
                         t_total_weight_difference += t_wdiff;
                     }
 
                     if (a_Parameters.SpikingLinkDiffCoeff > 0.0) {
-                        const LinkGene &t_first = *t_g1;
-                        const LinkGene &t_second = *t_g2;
+                        const LinkGene &t_first = (*t_links_1)[t_i1];
+                        const LinkGene &t_second = (*t_links_2)[t_i2];
                         auto normalized = [](Real lhs, Real rhs, Real minimum, Real maximum) {
                             const Real span = maximum - minimum;
                             return span > 0.0 ? std::abs(lhs - rhs) / span : (lhs == rhs ? 0.0 : 1.0);
@@ -1322,145 +1291,161 @@ namespace NEAT {
                         t_total_spiking_link_difference += difference / 7.0;
                     }
 
-                    // calculate link trait difference here
-                    std::map<std::string, Real> link_trait_difference = t_g1->GetTraitDistances(t_g2->m_Traits);
-                    // add to the totals
-                    for (auto it = link_trait_difference.begin(); it != link_trait_difference.end(); it++) {
-                        if (t_total_link_trait_difference.count(it->first) == 0) {
-                            t_total_link_trait_difference[it->first] = it->second;
-                        } else {
-                            t_total_link_trait_difference[it->first] += it->second;
+                    // calculate link trait difference here (guarded)
+                    if (!a_Parameters.LinkTraits.empty()) {
+                        std::map<std::string, Real> link_trait_difference = (*t_links_1)[t_i1].GetTraitDistances((*t_links_2)[t_i2].m_Traits);
+                        // add to the totals
+                        for (auto it = link_trait_difference.begin(); it != link_trait_difference.end(); it++) {
+                            if (a_Parameters.LinkTraits.count(it->first) == 0) continue;
+                            Real n = it->second;
+                            if (!std::isfinite(n)) n = 0.0;
+                            t_total_link_trait_difference[it->first] += n;
                         }
                     }
 
-                    t_g1++;
-                    t_g2++;
+                    t_i1++;
+                    t_i2++;
                 } else if (t_g1innov < t_g2innov)  // disjoint
                 {
                     t_num_disjoint++;
-                    t_g1++;
+                    t_i1++;
                 } else if (t_g1innov > t_g2innov)  // disjoint
                 {
                     t_num_disjoint++;
-                    t_g2++;
-                }
-            }
-        }
-
-        // find matching neuron IDs
-        // One ID->index table for the other genome (instead of HasNeuronID +
-        // repeated GetNeuronByID linear rescans per matched neuron, which made
-        // this loop quadratic).
-        int t_other_max_id = 0;
-        for (unsigned int i = 0; i < a_G.NumNeurons(); i++) {
-            if (a_G.m_NeuronGenes[i].ID() > t_other_max_id) {
-                t_other_max_id = a_G.m_NeuronGenes[i].ID();
-            }
-        }
-        std::vector<int> t_other_index(static_cast<size_t>(t_other_max_id) + 1, -1);
-        for (unsigned int i = 0; i < a_G.NumNeurons(); i++) {
-            t_other_index[static_cast<size_t>(a_G.m_NeuronGenes[i].ID())] = static_cast<int>(i);
-        }
-
-        for (unsigned int i = NumInputs(); i < NumNeurons(); i++) {
-            // no inputs considered for comparison
-            if ((m_NeuronGenes[i].Type() != INPUT) && (m_NeuronGenes[i].Type() != BIAS)) {
-                const int t_id = m_NeuronGenes[i].ID();
-                const int t_oi = (t_id >= 0 && t_id <= t_other_max_id) ? t_other_index[static_cast<size_t>(t_id)] : -1;
-                // a match
-                if (t_oi != -1) {
-                    const NeuronGene &t_other_gene = a_G.m_NeuronGenes[static_cast<size_t>(t_oi)];
-                    t_num_matching_neurons++;
-
-                    if (a_Parameters.ActivationADiffCoeff > 0.0) {
-                        Real t_A_difference = m_NeuronGenes[i].m_A - t_other_gene.m_A;
-                        if (t_A_difference < 0.0f) t_A_difference = -t_A_difference;
-                        t_total_A_difference += t_A_difference;
-                    }
-
-                    if (a_Parameters.ActivationBDiffCoeff > 0.0) {
-                        Real t_B_difference = m_NeuronGenes[i].m_B - t_other_gene.m_B;
-                        if (t_B_difference < 0.0f) t_B_difference = -t_B_difference;
-                        t_total_B_difference += t_B_difference;
-                    }
-
-                    if (a_Parameters.TimeConstantDiffCoeff > 0.0) {
-                        Real t_time_constant_difference = m_NeuronGenes[i].m_TimeConstant - t_other_gene.m_TimeConstant;
-                        if (t_time_constant_difference < 0.0f) t_time_constant_difference = -t_time_constant_difference;
-                        t_total_timeconstant_difference += t_time_constant_difference;
-                    }
-
-                    if (a_Parameters.BiasDiffCoeff > 0.0) {
-                        Real t_bias_difference = m_NeuronGenes[i].m_Bias - t_other_gene.m_Bias;
-                        if (t_bias_difference < 0.0f) t_bias_difference = -t_bias_difference;
-                        t_total_bias_difference += t_bias_difference;
-                    }
-
-                    // Activation function type difference is found
-                    if (a_Parameters.ActivationFunctionDiffCoeff > 0.0) {
-                        if (m_NeuronGenes[i].m_ActFunction != t_other_gene.m_ActFunction) {
-                            t_total_num_activation_difference++;
-                        }
-                    }
-
-                    if (a_Parameters.SpikingNeuronDiffCoeff > 0.0 &&
-                        (IsSpikingActivation(m_NeuronGenes[i].m_ActFunction) || IsSpikingActivation(t_other_gene.m_ActFunction))) {
-                        const NeuronGene &t_mine = m_NeuronGenes[i];
-                        auto normalized = [](Real lhs, Real rhs, Real minimum, Real maximum) {
-                            const Real span = maximum - minimum;
-                            return span > 0.0 ? std::abs(lhs - rhs) / span : (lhs == rhs ? 0.0 : 1.0);
-                        };
-                        Real difference = 0.0;
-                        difference +=
-                            normalized(t_mine.m_SpikeThreshold, t_other_gene.m_SpikeThreshold, a_Parameters.MinSpikeThreshold, a_Parameters.MaxSpikeThreshold);
-                        difference +=
-                            normalized(t_mine.m_ResetPotential, t_other_gene.m_ResetPotential, a_Parameters.MinResetPotential, a_Parameters.MaxResetPotential);
-                        difference += normalized(t_mine.m_RestingPotential, t_other_gene.m_RestingPotential, a_Parameters.MinRestingPotential,
-                                                 a_Parameters.MaxRestingPotential);
-                        difference += normalized(t_mine.m_RefractoryPeriod, t_other_gene.m_RefractoryPeriod, a_Parameters.MinRefractoryPeriod,
-                                                 a_Parameters.MaxRefractoryPeriod);
-                        difference += normalized(t_mine.m_MembraneResistance, t_other_gene.m_MembraneResistance, a_Parameters.MinMembraneResistance,
-                                                 a_Parameters.MaxMembraneResistance);
-                        difference += (t_mine.m_MCPInhibitoryVeto == t_other_gene.m_MCPInhibitoryVeto) ? 0.0 : 1.0;
-                        t_total_spiking_neuron_difference += difference / 6.0;
-                    }
-
-                    // calculate and add node trait difference here
-                    std::map<std::string, Real> neuron_trait_difference = m_NeuronGenes[i].GetTraitDistances(t_other_gene.m_Traits);
-                    // add to the totals
-                    for (auto it = neuron_trait_difference.begin(); it != neuron_trait_difference.end(); it++) {
-                        if (t_total_neuron_trait_difference.count(it->first) == 0) {
-                            t_total_neuron_trait_difference[it->first] = it->second;
-                        } else {
-                            t_total_neuron_trait_difference[it->first] += it->second;
-                        }
-                    }
+                    t_i2++;
                 }
             }
         }
 
         // choose between normalizing for genome size or not
-        Real t_normalizer = 1.0;
-        if (a_Parameters.NormalizeGenomeSize) {
-            t_normalizer = static_cast<Real>(t_max_genome_size);
+        Real t_max_genome_size = static_cast<Real>(std::max(t_links_1->size(), t_links_2->size()));
+        if (t_max_genome_size < 1.0) t_max_genome_size = 1.0;
+        Real t_normalizer = a_Parameters.NormalizeGenomeSize ? t_max_genome_size : 1.0;
+
+        // if there are no matching links, make it 1.0 to avoid divide error
+        if (t_num_matching_links < 1.0) t_num_matching_links = 1.0;
+        t_total_distance += a_Parameters.ExcessCoeff * (t_num_excess / t_normalizer) + a_Parameters.DisjointCoeff * (t_num_disjoint / t_normalizer) +
+                            a_Parameters.WeightDiffCoeff * (t_total_weight_difference / t_num_matching_links) +
+                            a_Parameters.SpikingLinkDiffCoeff * (t_total_spiking_link_difference / t_num_matching_links);
+
+        const bool t_compare_neurons = a_Parameters.ActivationADiffCoeff > 0.0 || a_Parameters.ActivationBDiffCoeff > 0.0 ||
+                                       a_Parameters.TimeConstantDiffCoeff > 0.0 || a_Parameters.BiasDiffCoeff > 0.0 ||
+                                       a_Parameters.ActivationFunctionDiffCoeff > 0.0 || a_Parameters.SpikingNeuronDiffCoeff > 0.0 ||
+                                       !a_Parameters.NeuronTraits.empty();
+        if (t_compare_neurons) {
+            const auto t_accumulate_neuron = [&](const NeuronGene &t_mine, const NeuronGene &t_other_gene) {
+                t_num_matching_neurons++;
+
+                if (a_Parameters.ActivationADiffCoeff > 0.0) {
+                    Real t_A_difference = t_mine.m_A - t_other_gene.m_A;
+                    if (t_A_difference < 0.0) t_A_difference = -t_A_difference;
+                    t_total_A_difference += t_A_difference;
+                }
+
+                if (a_Parameters.ActivationBDiffCoeff > 0.0) {
+                    Real t_B_difference = t_mine.m_B - t_other_gene.m_B;
+                    if (t_B_difference < 0.0) t_B_difference = -t_B_difference;
+                    t_total_B_difference += t_B_difference;
+                }
+
+                if (a_Parameters.TimeConstantDiffCoeff > 0.0) {
+                    Real t_time_constant_difference = t_mine.m_TimeConstant - t_other_gene.m_TimeConstant;
+                    if (t_time_constant_difference < 0.0) t_time_constant_difference = -t_time_constant_difference;
+                    t_total_timeconstant_difference += t_time_constant_difference;
+                }
+
+                if (a_Parameters.BiasDiffCoeff > 0.0) {
+                    Real t_bias_difference = t_mine.m_Bias - t_other_gene.m_Bias;
+                    if (t_bias_difference < 0.0) t_bias_difference = -t_bias_difference;
+                    t_total_bias_difference += t_bias_difference;
+                }
+
+                // Activation function type difference is found
+                if (a_Parameters.ActivationFunctionDiffCoeff > 0.0) {
+                    if (t_mine.m_ActFunction != t_other_gene.m_ActFunction) {
+                        t_total_num_activation_difference++;
+                    }
+                }
+
+                if (a_Parameters.SpikingNeuronDiffCoeff > 0.0 &&
+                    (IsSpikingActivation(t_mine.m_ActFunction) || IsSpikingActivation(t_other_gene.m_ActFunction))) {
+                    auto normalized = [](Real lhs, Real rhs, Real minimum, Real maximum) {
+                        const Real span = maximum - minimum;
+                        return span > 0.0 ? std::abs(lhs - rhs) / span : (lhs == rhs ? 0.0 : 1.0);
+                    };
+                    const bool t_izhikevich = (t_mine.m_ActFunction == SPIKING_IZHIKEVICH || t_other_gene.m_ActFunction == SPIKING_IZHIKEVICH);
+                    Real difference = 0.0;
+                    difference += normalized(t_mine.m_TimeConstant, t_other_gene.m_TimeConstant, a_Parameters.MinSpikingTimeConstant,
+                                             a_Parameters.MaxSpikingTimeConstant);
+                    difference += normalized(t_mine.m_SpikeThreshold, t_other_gene.m_SpikeThreshold,
+                                             t_izhikevich ? a_Parameters.MinIzhikevichThreshold : a_Parameters.MinSpikeThreshold,
+                                             t_izhikevich ? a_Parameters.MaxIzhikevichThreshold : a_Parameters.MaxSpikeThreshold);
+                    difference +=
+                        normalized(t_mine.m_ResetPotential, t_other_gene.m_ResetPotential, a_Parameters.MinResetPotential, a_Parameters.MaxResetPotential);
+                    difference += normalized(t_mine.m_RestingPotential, t_other_gene.m_RestingPotential, a_Parameters.MinRestingPotential,
+                                             a_Parameters.MaxRestingPotential);
+                    difference += normalized(t_mine.m_RefractoryPeriod, t_other_gene.m_RefractoryPeriod, a_Parameters.MinRefractoryPeriod,
+                                             a_Parameters.MaxRefractoryPeriod);
+                    difference += normalized(t_mine.m_MembraneResistance, t_other_gene.m_MembraneResistance, a_Parameters.MinMembraneResistance,
+                                             a_Parameters.MaxMembraneResistance);
+                    difference += normalized(t_mine.m_AdaptationTimeConstant, t_other_gene.m_AdaptationTimeConstant, a_Parameters.MinAdaptationTimeConstant,
+                                             a_Parameters.MaxAdaptationTimeConstant);
+                    difference += normalized(t_mine.m_AdaptationIncrement, t_other_gene.m_AdaptationIncrement, a_Parameters.MinAdaptationIncrement,
+                                             a_Parameters.MaxAdaptationIncrement);
+                    difference += normalized(t_mine.m_RateTimeConstant, t_other_gene.m_RateTimeConstant, a_Parameters.MinSpikeRateTimeConstant,
+                                             a_Parameters.MaxSpikeRateTimeConstant);
+                    difference += normalized(t_mine.m_IzhikevichA, t_other_gene.m_IzhikevichA, a_Parameters.MinIzhikevichA, a_Parameters.MaxIzhikevichA);
+                    difference += normalized(t_mine.m_IzhikevichB, t_other_gene.m_IzhikevichB, a_Parameters.MinIzhikevichB, a_Parameters.MaxIzhikevichB);
+                    difference += normalized(t_mine.m_IzhikevichC, t_other_gene.m_IzhikevichC, a_Parameters.MinIzhikevichC, a_Parameters.MaxIzhikevichC);
+                    difference += normalized(t_mine.m_IzhikevichD, t_other_gene.m_IzhikevichD, a_Parameters.MinIzhikevichD, a_Parameters.MaxIzhikevichD);
+                    difference += (t_mine.m_MCPInhibitoryVeto == t_other_gene.m_MCPInhibitoryVeto) ? 0.0 : 1.0;
+                    t_total_spiking_neuron_difference += difference / 14.0;
+                }
+
+                if (!a_Parameters.NeuronTraits.empty()) {
+                    // calculate and add node trait difference here
+                    std::map<std::string, Real> neuron_trait_difference = t_mine.GetTraitDistances(t_other_gene.m_Traits);
+                    // add to the totals
+                    for (auto it = neuron_trait_difference.begin(); it != neuron_trait_difference.end(); it++) {
+                        if (a_Parameters.NeuronTraits.count(it->first) == 0) continue;
+                        Real n = it->second;
+                        if (!std::isfinite(n)) n = 0.0;
+                        t_total_neuron_trait_difference[it->first] += n;
+                    }
+                }
+            };
+
+            const auto by_neuron_id = [](const NeuronGene &lhs, const NeuronGene &rhs) { return lhs.ID() < rhs.ID(); };
+            if (std::is_sorted(m_NeuronGenes.begin(), m_NeuronGenes.end(), by_neuron_id) &&
+                std::is_sorted(a_G.m_NeuronGenes.begin(), a_G.m_NeuronGenes.end(), by_neuron_id)) {
+                std::size_t t_other_index = 0;
+                for (const NeuronGene &t_neuron : m_NeuronGenes) {
+                    if (t_neuron.Type() == INPUT || t_neuron.Type() == BIAS) continue;
+                    while (t_other_index < a_G.m_NeuronGenes.size() && a_G.m_NeuronGenes[t_other_index].ID() < t_neuron.ID()) {
+                        ++t_other_index;
+                    }
+                    if (t_other_index < a_G.m_NeuronGenes.size() && a_G.m_NeuronGenes[t_other_index].ID() == t_neuron.ID()) {
+                        t_accumulate_neuron(t_neuron, a_G.m_NeuronGenes[t_other_index]);
+                    }
+                }
+            } else {
+                std::unordered_map<int, const NeuronGene *> t_other_neurons;
+                t_other_neurons.reserve(a_G.m_NeuronGenes.size());
+                for (const NeuronGene &t_neuron : a_G.m_NeuronGenes) t_other_neurons.emplace(t_neuron.ID(), &t_neuron);
+                for (const NeuronGene &t_neuron : m_NeuronGenes) {
+                    if (t_neuron.Type() == INPUT || t_neuron.Type() == BIAS) continue;
+                    const auto t_other = t_other_neurons.find(t_neuron.ID());
+                    if (t_other != t_other_neurons.end()) t_accumulate_neuron(t_neuron, *t_other->second);
+                }
+            }
         }
-
-        // if there are no matching links or neurons, make it 1.0 to avoid divide error
-        if (t_num_matching_links <= 0) t_num_matching_links = 1;
-        if (t_num_matching_neurons <= 0) t_num_matching_neurons = 1;
-        if (t_normalizer <= 0.0) t_normalizer = 1.0;
-        Real tnrm = 1.0 / t_normalizer;
-        Real tnml = 1.0 / t_num_matching_links;
-        Real tnmn = 1.0 / t_num_matching_neurons;
-
-        t_total_distance =
-            (a_Parameters.ExcessCoeff * (t_num_excess * tnrm)) + (a_Parameters.DisjointCoeff * (t_num_disjoint * tnrm)) +
-            (a_Parameters.WeightDiffCoeff * (t_total_weight_difference * tnml)) + (a_Parameters.ActivationADiffCoeff * (t_total_A_difference * tnmn)) +
-            (a_Parameters.ActivationBDiffCoeff * (t_total_B_difference * tnmn)) +
-            (a_Parameters.TimeConstantDiffCoeff * (t_total_timeconstant_difference * tnmn)) + (a_Parameters.BiasDiffCoeff * (t_total_bias_difference * tnmn)) +
-            (a_Parameters.ActivationFunctionDiffCoeff * (t_total_num_activation_difference * tnmn)) +
-            (a_Parameters.SpikingNeuronDiffCoeff * (t_total_spiking_neuron_difference * tnmn)) +
-            (a_Parameters.SpikingLinkDiffCoeff * (t_total_spiking_link_difference * tnml));
+        if (t_num_matching_neurons < 1.0) t_num_matching_neurons = 1.0;
+        t_total_distance += a_Parameters.ActivationADiffCoeff * (t_total_A_difference / t_num_matching_neurons) +
+                            a_Parameters.ActivationBDiffCoeff * (t_total_B_difference / t_num_matching_neurons) +
+                            a_Parameters.TimeConstantDiffCoeff * (t_total_timeconstant_difference / t_num_matching_neurons) +
+                            a_Parameters.BiasDiffCoeff * (t_total_bias_difference / t_num_matching_neurons) +
+                            a_Parameters.ActivationFunctionDiffCoeff * (t_total_num_activation_difference / t_num_matching_neurons) +
+                            a_Parameters.SpikingNeuronDiffCoeff * (t_total_spiking_neuron_difference / t_num_matching_neurons);
 
         // add trait differences according to each one's coeff (find-guarded:
         // genomes may carry traits absent from the schema)
@@ -1468,21 +1453,14 @@ namespace NEAT {
         for (auto it = t_total_link_trait_difference.begin(); it != t_total_link_trait_difference.end(); it++) {
             const auto schema = a_Parameters.LinkTraits.find(it->first);
             if (schema == a_Parameters.LinkTraits.end()) continue;
-            Real n = (schema->second.m_ImportanceCoeff * it->second) * tnml;
+            Real n = (schema->second.m_ImportanceCoeff * it->second) / t_num_matching_links;
             if (std::isnan(n) || std::isinf(n)) n = 0.0;
             t_total_distance += n;
         }
         for (auto it = t_total_neuron_trait_difference.begin(); it != t_total_neuron_trait_difference.end(); it++) {
             const auto schema = a_Parameters.NeuronTraits.find(it->first);
             if (schema == a_Parameters.NeuronTraits.end()) continue;
-            Real n = (schema->second.m_ImportanceCoeff * it->second) * tnmn;
-            if (std::isnan(n) || std::isinf(n)) n = 0.0;
-            t_total_distance += n;
-        }
-        for (auto it = t_genome_link_trait_difference.begin(); it != t_genome_link_trait_difference.end(); it++) {
-            const auto schema = a_Parameters.GenomeTraits.find(it->first);
-            if (schema == a_Parameters.GenomeTraits.end()) continue;
-            Real n = (schema->second.m_ImportanceCoeff * it->second);
+            Real n = (schema->second.m_ImportanceCoeff * it->second) / t_num_matching_neurons;
             if (std::isnan(n) || std::isinf(n)) n = 0.0;
             t_total_distance += n;
         }
@@ -1540,7 +1518,7 @@ namespace NEAT {
         }
         if (!std::isfinite(total) || total <= 0.0) throw std::invalid_argument("At least one activation function must have positive probability");
 
-        return (NEAT::ActivationFunction)a_RNG.Roulette(t_probs);
+        return static_cast<NEAT::ActivationFunction>(a_RNG.Roulette(t_probs));
     }
 
     // Adds a new neuron to the genome returns true if succesful
@@ -1596,15 +1574,6 @@ namespace NEAT {
             t_out = m_LinkGenes[t_link_num].ToNeuronID();
 
             ASSERT((t_in > 0) && (t_out > 0));
-
-            // In case there is only one link, coming from a bias - just quit
-
-            // unless the parameter is set
-            if (a_Parameters.DontUseBiasNeuron == false) {
-                if ((m_NeuronGenes[GetNeuronIndex(t_in)].Type() == BIAS) && (NumLinks() == 1)) {
-                    return false;
-                }
-            }
         }
         // Now the link has been selected
 
@@ -2045,32 +2014,8 @@ namespace NEAT {
         return true;
     }
 
-    ///////////
-    // Helper functions for the pruning procedure
-
-    // Removes the link with the specified innovation ID
-    /*void Genome::RemoveLinkGene(int a_InnovID)
-    {
-        // for iterating through the genes
-        std::vector<LinkGene>::iterator t_curlink = m_LinkGenes.begin();
-
-        while (t_curlink != m_LinkGenes.end())
-        {
-            if (t_curlink->InnovationID() == a_InnovID)
-            {
-                // found it - erase & quit
-                t_curlink = m_LinkGenes.erase(t_curlink);
-                break;
-            }
-
-            t_curlink++;
-        }
-    }*/
-
     // Removes the link with the given innovation ID (the semantics the header declares
-    // and that Mutate_RemoveLink/Cleanup rely on). The previous "simple index" version
-    // erased by position — wiping the whole link list whenever a_idx was 0, and
-    // erasing out-of-range positions when callers (correctly) passed innovation IDs.
+    // and that Mutate_RemoveLink/Cleanup rely on).
     void Genome::RemoveLinkGene(int a_innovid) {
         for (auto t_curlink = m_LinkGenes.begin(); t_curlink != m_LinkGenes.end(); ++t_curlink) {
             if (t_curlink->InnovationID() == a_innovid) {
@@ -2082,29 +2027,10 @@ namespace NEAT {
 
     // Remove node Links connected to this node are also removed
     void Genome::RemoveNeuronGene(int a_ID) {
-        // the list of links connected to this neuron
-        std::vector<int> t_link_removal_queue;
-
-        bool removed = false;
-
-        do {
-            removed = false;
-            // Remove all links connected to this neuron ID
-            for (int i = 0; i < NumLinks(); i++) {
-                if ((m_LinkGenes[i].FromNeuronID() == a_ID) || (m_LinkGenes[i].ToNeuronID() == a_ID)) {
-                    // found one, remove it (by innovation ID, the sole RemoveLinkGene contract)
-                    RemoveLinkGene(m_LinkGenes[i].InnovationID());
-                    removed = true;
-                    break;
-                }
-            }
-        } while (removed);
-
-        // Now remove them
-        /*for (unsigned int i = 0; i < t_link_removal_queue.size(); i++)
-        {
-            RemoveLinkGene(t_link_removal_queue[i]);
-        }*/
+        // Remove all links connected to this neuron ID in a single pass
+        m_LinkGenes.erase(std::remove_if(m_LinkGenes.begin(), m_LinkGenes.end(),
+                                         [a_ID](const LinkGene &link) { return link.FromNeuronID() == a_ID || link.ToNeuronID() == a_ID; }),
+                          m_LinkGenes.end());
 
         // Now is safe to remove the neuron find it first
         std::vector<NeuronGene>::iterator t_curneuron = m_NeuronGenes.begin();
@@ -2483,36 +2409,42 @@ namespace NEAT {
 
     // Perturbs the A parameters of the neuron activation functions
     bool Genome::Mutate_NeuronActivations_A(const Parameters &a_Parameters, RNG &a_RNG) {
+        bool did_mutate = false;
         // for all neurons..
         for (unsigned int i = 0; i < NumNeurons(); i++) {
             // skip inputs and bias
             if ((m_NeuronGenes[i].Type() != INPUT) && (m_NeuronGenes[i].Type() != BIAS)) {
+                const Real original = m_NeuronGenes[i].m_A;
                 Real t_randnum = a_RNG.RandFloatSigned() * a_Parameters.ActivationAMutationMaxPower;
 
                 m_NeuronGenes[i].m_A += t_randnum;
 
                 Clamp(m_NeuronGenes[i].m_A, a_Parameters.MinActivationA, a_Parameters.MaxActivationA);
+                did_mutate = did_mutate || (m_NeuronGenes[i].m_A != original);
             }
         }
 
-        return true;
+        return did_mutate;
     }
 
     // Perturbs the B parameters of the neuron activation functions
     bool Genome::Mutate_NeuronActivations_B(const Parameters &a_Parameters, RNG &a_RNG) {
+        bool did_mutate = false;
         // for all neurons..
         for (unsigned int i = 0; i < NumNeurons(); i++) {
             // skip inputs and bias
             if ((m_NeuronGenes[i].Type() != INPUT) && (m_NeuronGenes[i].Type() != BIAS)) {
+                const Real original = m_NeuronGenes[i].m_B;
                 Real t_randnum = a_RNG.RandFloatSigned() * a_Parameters.ActivationBMutationMaxPower;
 
                 m_NeuronGenes[i].m_B += t_randnum;
 
                 Clamp(m_NeuronGenes[i].m_B, a_Parameters.MinActivationB, a_Parameters.MaxActivationB);
+                did_mutate = did_mutate || (m_NeuronGenes[i].m_B != original);
             }
         }
 
-        return true;
+        return did_mutate;
     }
 
     // Changes the activation function type for a random neuron
@@ -2537,10 +2469,12 @@ namespace NEAT {
 
     // Perturbs the neuron time constants
     bool Genome::Mutate_NeuronTimeConstants(const Parameters &a_Parameters, RNG &a_RNG) {
+        bool did_mutate = false;
         // for all neurons..
         for (unsigned int i = 0; i < NumNeurons(); i++) {
             // skip inputs and bias
             if ((m_NeuronGenes[i].Type() != INPUT) && (m_NeuronGenes[i].Type() != BIAS)) {
+                const Real original = m_NeuronGenes[i].m_TimeConstant;
                 Real t_randnum = a_RNG.RandFloatSigned() * a_Parameters.TimeConstantMutationMaxPower;
 
                 m_NeuronGenes[i].m_TimeConstant += t_randnum;
@@ -2549,27 +2483,31 @@ namespace NEAT {
                     Clamp(m_NeuronGenes[i].m_TimeConstant, a_Parameters.MinSpikingTimeConstant, a_Parameters.MaxSpikingTimeConstant);
                 else
                     Clamp(m_NeuronGenes[i].m_TimeConstant, a_Parameters.MinNeuronTimeConstant, a_Parameters.MaxNeuronTimeConstant);
+                did_mutate = did_mutate || (m_NeuronGenes[i].m_TimeConstant != original);
             }
         }
 
-        return true;
+        return did_mutate;
     }
 
     // Perturbs the neuron biases
     bool Genome::Mutate_NeuronBiases(const Parameters &a_Parameters, RNG &a_RNG) {
+        bool did_mutate = false;
         // for all neurons..
         for (unsigned int i = 0; i < NumNeurons(); i++) {
             // skip inputs and bias
             if ((m_NeuronGenes[i].Type() != INPUT) && (m_NeuronGenes[i].Type() != BIAS)) {
+                const Real original = m_NeuronGenes[i].m_Bias;
                 Real t_randnum = a_RNG.RandFloatSigned() * a_Parameters.BiasMutationMaxPower;
 
                 m_NeuronGenes[i].m_Bias += t_randnum;
 
                 Clamp(m_NeuronGenes[i].m_Bias, a_Parameters.MinNeuronBias, a_Parameters.MaxNeuronBias);
+                did_mutate = did_mutate || (m_NeuronGenes[i].m_Bias != original);
             }
         }
 
-        return true;
+        return did_mutate;
     }
 
     bool Genome::Mutate_NeuronTraits(const Parameters &a_Parameters, RNG &a_RNG) {
@@ -2744,7 +2682,7 @@ namespace NEAT {
             } else {
                 child = (a_RNG.RandFloat() < 0.5) ? mom : dad;
             }
-            t_baby.m_NeuronGenes.push_back(child);
+            t_baby.m_NeuronGenes.push_back(std::move(child));
         }
 
         // SINGLE_POINT setup: count matching links, then draw the cut point and side.
@@ -2946,13 +2884,9 @@ namespace NEAT {
     }
 
     // Sorts the genes of the genome The neurons by IDs and the links by innovation numbers.
-    bool neuron_compare(NeuronGene &a_ls, NeuronGene &a_rs) { return a_ls.ID() < a_rs.ID(); }
-
-    bool link_compare(LinkGene &a_ls, LinkGene &a_rs) { return a_ls.InnovationID() < a_rs.InnovationID(); }
-
     void Genome::SortGenes() {
-        std::sort(m_NeuronGenes.begin(), m_NeuronGenes.end(), neuron_compare);
-        std::sort(m_LinkGenes.begin(), m_LinkGenes.end(), link_compare);
+        std::sort(m_NeuronGenes.begin(), m_NeuronGenes.end(), [](const NeuronGene &lhs, const NeuronGene &rhs) { return lhs.ID() < rhs.ID(); });
+        std::sort(m_LinkGenes.begin(), m_LinkGenes.end(), [](const LinkGene &lhs, const LinkGene &rhs) { return lhs.InnovationID() < rhs.InnovationID(); });
     }
 
     unsigned int Genome::NeuronDepth(int a_NeuronID, unsigned int a_Depth) {
@@ -3039,116 +2973,19 @@ namespace NEAT {
 
     // Builds this genome from a file
     Genome::Genome(const char *a_FileName) {
+        if (a_FileName == nullptr) {
+            throw std::invalid_argument("Genome file name cannot be null");
+        }
         std::ifstream t_DataFile(a_FileName);
+        if (!t_DataFile.is_open()) {
+            throw std::runtime_error("Cannot open genome file.");
+        }
         *this = Genome(t_DataFile);
         t_DataFile.close();
     }
 
     // Builds the genome from an *opened* file
-    Genome::Genome(std::ifstream &a_DataFile) {
-        std::string t_Str;
-
-        if (!a_DataFile) {
-            ostringstream tStream;
-            tStream << "Genome file error!" << std::endl;
-            throw std::runtime_error("Genome file error!");
-        }
-
-        // search for GenomeStart (guard against EOF: a stream extraction failure
-        // leaves t_Str unchanged, so without the eof check this loop never ends)
-        do {
-            a_DataFile >> t_Str;
-            if (a_DataFile.eof()) {
-                throw std::runtime_error("Genome file error: GenomeStart not found!");
-            }
-        } while (t_Str != "GenomeStart");
-
-        // read the genome ID
-        unsigned int t_gid;
-        a_DataFile >> t_gid;
-        m_ID = t_gid;
-
-        // read the genome until GenomeEnd is encountered
-        do {
-            a_DataFile >> t_Str;
-            if (a_DataFile.eof()) {
-                throw std::runtime_error("Genome file error: GenomeEnd not found!");
-            }
-
-            if (t_Str == "Neuron") {
-                int t_id, t_type, t_activationfunc;
-                Real t_splity, t_a, t_b, t_timeconst, t_bias;
-
-                a_DataFile >> t_id;
-                a_DataFile >> t_type;
-                a_DataFile >> t_splity;
-
-                a_DataFile >> t_activationfunc;
-                a_DataFile >> t_a;
-                a_DataFile >> t_b;
-                a_DataFile >> t_timeconst;
-                a_DataFile >> t_bias;
-
-                // TODO read neuron traits
-
-                NeuronGene t_neuron(static_cast<NeuronType>(t_type), t_id, t_splity);
-                t_neuron.Init(t_a, t_b, t_timeconst, t_bias, static_cast<ActivationFunction>(t_activationfunc));
-
-                m_NeuronGenes.emplace_back(t_neuron);
-            }
-            if (t_Str == "NeuronSpiking") {
-                if (m_NeuronGenes.empty()) throw std::runtime_error("Genome file error: NeuronSpiking appears before a neuron.");
-                NeuronGene &t_neuron = m_NeuronGenes.back();
-                a_DataFile >> t_neuron.m_SpikeThreshold >> t_neuron.m_ResetPotential >> t_neuron.m_RestingPotential >> t_neuron.m_RefractoryPeriod >>
-                    t_neuron.m_MembraneResistance >> t_neuron.m_AdaptationTimeConstant >> t_neuron.m_AdaptationIncrement >> t_neuron.m_RateTimeConstant >>
-                    t_neuron.m_IzhikevichA >> t_neuron.m_IzhikevichB >> t_neuron.m_IzhikevichC >> t_neuron.m_IzhikevichD;
-            }
-            if (t_Str == "Link") {
-                int t_from, t_to, t_innov, t_isrecur;
-                Real t_weight;
-
-                a_DataFile >> t_from;
-                a_DataFile >> t_to;
-                a_DataFile >> t_innov;
-                a_DataFile >> t_isrecur;
-                a_DataFile >> t_weight;
-
-                // TODO read link traits
-
-                m_LinkGenes.emplace_back(LinkGene(t_from, t_to, t_innov, t_weight, static_cast<bool>(t_isrecur)));
-            }
-
-            if (t_Str == "LinkSpiking") {
-                if (m_LinkGenes.empty()) throw std::runtime_error("Genome file error: LinkSpiking appears before a link.");
-                LinkGene &t_link = m_LinkGenes.back();
-                int t_stdp_enabled = 0;
-                a_DataFile >> t_link.m_SynapticDelay >> t_link.m_SynapticTimeConstant >> t_stdp_enabled >> t_link.m_STDPPlus >> t_link.m_STDPMinus >>
-                    t_link.m_STDPTauPlus >> t_link.m_STDPTauMinus >> t_link.m_STDPMinWeight >> t_link.m_STDPMaxWeight;
-                t_link.m_STDPEnabled = (t_stdp_enabled != 0);
-            }
-        } while (t_Str != "GenomeEnd");
-
-        // Init additional stuff
-        // count inputs/outputs
-        m_NumInputs = 0;
-        m_NumOutputs = 0;
-        for (unsigned int i = 0; i < NumNeurons(); i++) {
-            if ((m_NeuronGenes[i].Type() == INPUT) || (m_NeuronGenes[i].Type() == BIAS)) {
-                m_NumInputs++;
-            }
-
-            if (m_NeuronGenes[i].Type() == OUTPUT) {
-                m_NumOutputs++;
-            }
-        }
-
-        m_Fitness = 0.0;
-        m_AdjustedFitness = 0.0;
-        m_OffspringAmount = 0.0;
-        m_Depth = 0;
-        m_PhenotypeBehavior = NULL;
-        m_Evaluated = false;
-    }
+    Genome::Genome(std::ifstream &a_DataFile) : Genome(static_cast<std::istream &>(a_DataFile)) {}
 
     // Saves this genome to a file
     void Genome::Save(const char *a_FileName) {
@@ -3301,7 +3138,7 @@ namespace NEAT {
             m_initial_num_neurons = static_cast<int>(m_NeuronGenes.size());
             m_initial_num_links = static_cast<int>(m_LinkGenes.size());
         }
-        m_PhenotypeBehavior = NULL;
+        m_PhenotypeBehavior = nullptr;
         std::string validation_error;
         if (!Validate(&validation_error)) throw std::runtime_error("Genome: invalid serialized data: " + validation_error);
     }
@@ -3396,30 +3233,58 @@ namespace NEAT {
             if (!link_endpoints.emplace(link.FromNeuronID(), link.ToNeuronID()).second) return fail("Genome link endpoints must be unique");
             if (neuron_ids.count(link.FromNeuronID()) == 0 || neuron_ids.count(link.ToNeuronID()) == 0) return fail("Genome link endpoint does not exist");
             if (!std::isfinite(link.GetWeight())) return fail("Genome link weights must be finite");
-            if (!std::isfinite(link.m_SynapticDelay) || !std::isfinite(link.m_SynapticTimeConstant) || !std::isfinite(link.m_STDPPlus) ||
-                !std::isfinite(link.m_STDPMinus) || !std::isfinite(link.m_STDPTauPlus) || !std::isfinite(link.m_STDPTauMinus) ||
-                !std::isfinite(link.m_STDPMinWeight) || !std::isfinite(link.m_STDPMaxWeight))
-                return fail("Genome synapse parameters must be finite");
-            if (link.m_SynapticDelay < 0.0 || link.m_SynapticTimeConstant <= 0.0 || link.m_STDPTauPlus <= 0.0 || link.m_STDPTauMinus <= 0.0)
-                return fail("Genome synapse delays must be non-negative and time constants positive");
+            if (!std::isfinite(link.m_SynapticDelay) || link.m_SynapticDelay < 0.0 || !std::isfinite(link.m_SynapticTimeConstant) ||
+                link.m_SynapticTimeConstant <= 0.0 || !std::isfinite(link.m_STDPPlus) || link.m_STDPPlus < 0.0 || !std::isfinite(link.m_STDPMinus) ||
+                link.m_STDPMinus < 0.0 || !std::isfinite(link.m_STDPTauPlus) || link.m_STDPTauPlus <= 0.0 || !std::isfinite(link.m_STDPTauMinus) ||
+                link.m_STDPTauMinus <= 0.0 || !std::isfinite(link.m_STDPMinWeight) || !std::isfinite(link.m_STDPMaxWeight) ||
+                link.m_STDPMinWeight > link.m_STDPMaxWeight) {
+                return fail("Genome contains invalid spiking synapse parameters");
+            }
         }
         return true;
     }
 
     bool Genome::IsIdenticalTo(const Genome &other) const {
+        // First compare basic structural properties
         if (m_NumInputs != other.m_NumInputs || m_NumOutputs != other.m_NumOutputs || m_NeuronGenes.size() != other.m_NeuronGenes.size() ||
             m_LinkGenes.size() != other.m_LinkGenes.size()) {
             return false;
         }
-        if (m_GenomeGene.m_Traits != other.m_GenomeGene.m_Traits) return false;
-        for (std::size_t i = 0; i < m_NeuronGenes.size(); ++i) {
-            if (!(m_NeuronGenes[i] == other.m_NeuronGenes[i])) return false;
-            if (m_NeuronGenes[i].m_Traits != other.m_NeuronGenes[i].m_Traits) return false;
+        if (m_GenomeGene.m_Traits != other.m_GenomeGene.m_Traits) {
+            return false;
         }
-        for (std::size_t i = 0; i < m_LinkGenes.size(); ++i) {
-            if (!(m_LinkGenes[i] == other.m_LinkGenes[i])) return false;
-            if (m_LinkGenes[i].m_Traits != other.m_LinkGenes[i].m_Traits) return false;
+
+        // Compare neuron genes (ignore IDs, focus on topology and parameters)
+        for (size_t i = 0; i < m_NeuronGenes.size(); ++i) {
+            const NeuronGene &n1 = m_NeuronGenes[i];
+            const NeuronGene &n2 = other.m_NeuronGenes[i];
+
+            if (n1.m_Type != n2.m_Type || n1.x != n2.x || n1.y != n2.y || n1.m_SplitY != n2.m_SplitY || n1.m_A != n2.m_A || n1.m_B != n2.m_B ||
+                n1.m_TimeConstant != n2.m_TimeConstant || n1.m_Bias != n2.m_Bias || n1.m_ActFunction != n2.m_ActFunction ||
+                n1.m_SpikeThreshold != n2.m_SpikeThreshold || n1.m_ResetPotential != n2.m_ResetPotential || n1.m_RestingPotential != n2.m_RestingPotential ||
+                n1.m_RefractoryPeriod != n2.m_RefractoryPeriod || n1.m_MembraneResistance != n2.m_MembraneResistance ||
+                n1.m_AdaptationTimeConstant != n2.m_AdaptationTimeConstant || n1.m_AdaptationIncrement != n2.m_AdaptationIncrement ||
+                n1.m_RateTimeConstant != n2.m_RateTimeConstant || n1.m_IzhikevichA != n2.m_IzhikevichA || n1.m_IzhikevichB != n2.m_IzhikevichB ||
+                n1.m_IzhikevichC != n2.m_IzhikevichC || n1.m_IzhikevichD != n2.m_IzhikevichD || n1.m_MCPInhibitoryVeto != n2.m_MCPInhibitoryVeto ||
+                n1.m_Traits != n2.m_Traits) {
+                return false;
+            }
         }
+
+        // Compare link genes (ignore innovation IDs, focus on topology and weights)
+        for (size_t i = 0; i < m_LinkGenes.size(); ++i) {
+            const LinkGene &l1 = m_LinkGenes[i];
+            const LinkGene &l2 = other.m_LinkGenes[i];
+
+            if (l1.m_FromNeuronID != l2.m_FromNeuronID || l1.m_ToNeuronID != l2.m_ToNeuronID || l1.m_Weight != l2.m_Weight ||
+                l1.m_IsRecurrent != l2.m_IsRecurrent || l1.m_SynapticDelay != l2.m_SynapticDelay || l1.m_SynapticTimeConstant != l2.m_SynapticTimeConstant ||
+                l1.m_STDPEnabled != l2.m_STDPEnabled || l1.m_STDPPlus != l2.m_STDPPlus || l1.m_STDPMinus != l2.m_STDPMinus ||
+                l1.m_STDPTauPlus != l2.m_STDPTauPlus || l1.m_STDPTauMinus != l2.m_STDPTauMinus || l1.m_STDPMinWeight != l2.m_STDPMinWeight ||
+                l1.m_STDPMaxWeight != l2.m_STDPMaxWeight || l1.m_Traits != l2.m_Traits) {
+                return false;
+            }
+        }
+
         return true;
     }
 

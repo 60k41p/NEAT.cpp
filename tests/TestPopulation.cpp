@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <iostream>
 #include <limits>
+#include <sstream>
 #include <stdexcept>
 #include <vector>
 
@@ -15,6 +16,7 @@
 #include "Parameters.h"
 #include "Population.h"
 #include "Random.h"
+using NEAT::Real;
 
 namespace {
 
@@ -382,6 +384,26 @@ int TestPopulation(int argc, char *argv[]) {
             threw = true;
         }
         CHECK(threw);
+    }
+
+    // Legacy Population::Deserialize path (generation header + species blocks).
+    {
+        NEAT::Parameters defaults;
+        defaults.Reset();
+        NEAT::Population pop(MakeSeed(), defaults, false, 1.0, 77);
+        CHECK(pop.NumGenomes() == defaults.PopulationSize);
+        std::ostringstream legacy;
+        legacy << std::setprecision(std::numeric_limits<Real>::max_digits10);
+        legacy << "PopulationStart\n";
+        legacy << pop.GetGeneration() << ' ' << 0 << ' ' << pop.GetNextGenomeID() << ' ' << pop.GetNextSpeciesID() << ' ' << pop.GetBestFitnessEver() << '\n';
+        legacy << pop.m_Species.size() << '\n';
+        for (const auto &species : pop.m_Species) legacy << species.Serialize();
+        legacy << "PopulationEnd\n";
+        NEAT::Population restored = NEAT::Population::Deserialize(legacy.str());
+        CHECK(restored.NumGenomes() == pop.NumGenomes());
+        CHECK(restored.GetGeneration() == pop.GetGeneration());
+        CHECK(restored.GetNextGenomeID() == pop.GetNextGenomeID());
+        CHECK(restored.GetNextSpeciesID() == pop.GetNextSpeciesID());
     }
 
     if (g_failures != 0) {

@@ -40,8 +40,8 @@
 #include <stdexcept>
 
 namespace {
-    Real FiniteTimeStep(const NEAT::NeuralNetwork &network, Real requested) {
-        const Real result = requested < 0.0 ? network.SpikingTimeStep() : requested;
+    NEAT::Real FiniteTimeStep(const NEAT::NeuralNetwork &network, NEAT::Real requested) {
+        const NEAT::Real result = requested < 0.0 ? network.SpikingTimeStep() : requested;
         if (!std::isfinite(result) || result <= 0.0) {
             throw std::invalid_argument("e-prop time step must be finite and positive");
         }

@@ -59,7 +59,7 @@ namespace NEAT {
 
     class PhenotypeBehavior;
 
-    extern ActivationFunction GetRandomActivation(Parameters &a_Parameters, RNG &a_RNG);
+    extern ActivationFunction GetRandomActivation(const Parameters &a_Parameters, RNG &a_RNG);
 
     enum GenomeSeedType { PERCEPTRON = 0, LAYERED = 1 };
 
@@ -263,8 +263,6 @@ namespace NEAT {
         bool HasLoops();
 
         bool FailsConstraints(const Parameters &a_Parameters) {
-            bool fails = false;
-
             if (HasDeadEnds() || (NumLinks() == 0)) {
                 return true;  // no reason to continue
             }

@@ -16,6 +16,7 @@
 
 #include "Genome.h"
 #include "Parameters.h"
+using NEAT::Real;
 
 namespace {
 
@@ -128,12 +129,12 @@ int TestParameters(int argc, char *argv[]) {
         CHECK(Near(p.CompatTreshold, 4.25));
     }
 
-    // Missing file is a silent no-op returning 0 (documented behavior).
+    // Missing file returns non-zero (reference parity: open failure is an error).
     {
         Parameters p;
         p.Reset();
         p.PopulationSize = 77;
-        CHECK(p.Load("/nonexistent/path/that/should/not/exist.NEAT") == 0);
+        CHECK(p.Load("/nonexistent/path/that/should/not/exist.NEAT") != 0);
         CHECK(p.PopulationSize == 77);  // untouched
     }
 

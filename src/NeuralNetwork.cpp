@@ -268,6 +268,14 @@ namespace NEAT {
     }
 
     void NeuralNetwork::ActivateFast() {
+        if (IsSpiking()) {
+            ValidateNetworkTopology(*this);
+            std::vector<Real> inputs;
+            inputs.reserve(m_num_inputs);
+            for (unsigned int i = 0; i < m_num_inputs; ++i) inputs.push_back(m_neurons[i].m_activation);
+            StepSpiking(inputs);
+            return;
+        }
         // The phenotype builder guarantees valid endpoint indexes. This is the
         // intentionally unchecked hot path; Activate() remains the validating
         // entry point for networks assembled through public vectors.
@@ -475,18 +483,20 @@ namespace NEAT {
         return t_output;
     }
 
-    Real NeuralNetwork::GetConnectionLenght(Neuron source, Neuron target) {
+    Real NeuralNetwork::GetConnectionLength(const Neuron &source, const Neuron &target) {
         const Real dx = target.m_x - source.m_x;
         const Real dy = target.m_y - source.m_y;
         const Real dz = target.m_z - source.m_z;
         return std::sqrt(dx * dx + dy * dy + dz * dz);
     }
 
+    Real NeuralNetwork::GetConnectionLenght(Neuron source, Neuron target) { return GetConnectionLength(source, target); }
+
     Real NeuralNetwork::GetTotalConnectionLength() {
         ValidateNetworkTopology(*this);
         Real total = 0.0;
         for (const auto &connection : m_connections) {
-            total += GetConnectionLenght(m_neurons[static_cast<std::size_t>(connection.m_source_neuron_idx)],
+            total += GetConnectionLength(m_neurons[static_cast<std::size_t>(connection.m_source_neuron_idx)],
                                          m_neurons[static_cast<std::size_t>(connection.m_target_neuron_idx)]);
         }
         return total;
@@ -903,7 +913,7 @@ namespace NEAT {
             throw std::invalid_argument("Axonal conduction velocity must be finite and positive");
         }
         for (auto &connection : m_connections) {
-            connection.m_length = GetConnectionLenght(m_neurons[static_cast<std::size_t>(connection.m_source_neuron_idx)],
+            connection.m_length = GetConnectionLength(m_neurons[static_cast<std::size_t>(connection.m_source_neuron_idx)],
                                                       m_neurons[static_cast<std::size_t>(connection.m_target_neuron_idx)]);
             if (update_delays) {
                 connection.m_synaptic_delay = connection.m_length / conduction_velocity;

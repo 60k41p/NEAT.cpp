@@ -1,5 +1,5 @@
-// Tests for NEAT::Real (src/Types.h): the single-precision scalar used for all
-// library numerics (weights, activations, fitness, distances, parameters).
+// Tests for NEAT::Real (src/Types.h): the double-precision scalar used for direct
+// parity with the MultiNEAT2 reference (weights, activations, fitness, distances, parameters).
 #include <cmath>
 #include <iostream>
 #include <limits>
@@ -36,23 +36,23 @@ int TestTypes(int argc, char *argv[]) {
     (void)argv;
     using namespace NEAT;
 
-    static_assert(std::is_same<Real, float>::value, "Real must be single precision");
+    static_assert(std::is_same<Real, double>::value, "Real must be double precision for reference parity");
 
-    // Memory contract: 4-byte scalars halve genome/population bandwidth vs double.
+    // Memory contract: 8-byte scalars match the reference implementation.
     {
-        CHECK(sizeof(Real) == 4);
-        CHECK(sizeof(float) == 4);
-        const std::vector<Real> v(1000, 0.5f);
-        CHECK(v.size() * sizeof(Real) == 4000);
-        CHECK(std::numeric_limits<Real>::max_digits10 == 9);
+        CHECK(sizeof(Real) == 8);
+        CHECK(sizeof(double) == 8);
+        const std::vector<Real> v(1000, 0.5);
+        CHECK(v.size() * sizeof(Real) == 8000);
+        CHECK(std::numeric_limits<Real>::max_digits10 == 17);
     }
 
     // ftos round-trips exactly, including values distinguishing float
     // from double precision (0.1 and 1/3 are not exact in binary).
     {
-        const Real values[] = {0.1f, 1.0f / 3.0f, -8.0f, 1e-6f, 1e6f, 3.25f, 0.0f};
+        const Real values[] = {0.1, 1.0 / 3.0, -8.0, 1e-6, 1e6, 3.25, 0.0};
         for (Real x : values) {
-            CHECK(std::stof(ftos(x)) == x);
+            CHECK(std::stod(ftos(x)) == x);
         }
     }
 
@@ -62,21 +62,21 @@ int TestTypes(int argc, char *argv[]) {
         rng.Seed(42);
         for (int i = 0; i < 64; ++i) {
             const Real u = rng.RandFloat();
-            CHECK(u >= 0.0f && u <= 1.0f);
+            CHECK(u >= 0.0 && u <= 1.0);
             const Real s = rng.RandFloatSigned();
-            CHECK(s >= -1.0f && s <= 1.0f);
+            CHECK(s >= -1.0 && s <= 1.0);
             const Real g = rng.RandGaussSigned();
-            CHECK(g >= -1.0f && g <= 1.0f);
+            CHECK(g >= -1.0 && g <= 1.0);
         }
     }
 
-    // Float trait values stay in the Real variant alternative and average in
-    // single precision (MateTraits must not promote back to double).
+    // Double trait values stay in the Real variant alternative and average in
+    // double precision (MateTraits must not narrow to float).
     {
         Gene a, b;
         Trait ta, tb;
-        ta.value = Real(1.0f);
-        tb.value = Real(3.0f);
+        ta.value = Real(1.0);
+        tb.value = Real(3.0);
         a.m_Traits["v"] = ta;
         b.m_Traits["v"] = tb;
         CHECK(std::holds_alternative<Real>(a.m_Traits["v"].value));
@@ -87,8 +87,8 @@ int TestTypes(int argc, char *argv[]) {
             Gene c = a;
             c.MateTraits(b.m_Traits, rng);
             const Real v = std::get<Real>(c.m_Traits["v"].value);
-            CHECK(v == Real(1.0f) || v == Real(3.0f) || near(v, Real(2.0f)));
-            sawAverage = sawAverage || near(v, Real(2.0f));
+            CHECK(v == Real(1.0) || v == Real(3.0) || near(v, Real(2.0)));
+            sawAverage = sawAverage || near(v, Real(2.0));
         }
         CHECK(sawAverage);  // averaging branch was exercised, not just pick-one
     }
@@ -97,9 +97,9 @@ int TestTypes(int argc, char *argv[]) {
     // (%3.20f / %3.18f / %3.8f) still parse into Real fields.
     {
         std::istringstream in("0.12345678901234567890123");
-        Real x = 0.0f;
+        Real x = 0.0;
         in >> x;
-        CHECK(near(x, Real(0.12345678901234567890123), 1e-7f));
+        CHECK(near(x, Real(0.12345678901234567890123), 1e-12));
         CHECK(x == static_cast<Real>(0.12345678901234567890123));
     }
 

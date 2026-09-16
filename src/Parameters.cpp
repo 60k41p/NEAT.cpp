@@ -553,6 +553,16 @@ namespace NEAT {
         // v2 defaults; only commit on success (v2 ReadParameters semantics).
         Parameters loaded;
         std::string s, tf;
+        const auto parse_bool = [&a_DataFile, &tf](bool &out) {
+            a_DataFile >> tf;
+            if (!a_DataFile) throw std::runtime_error("Parameters::Load: invalid bool value.");
+            if (tf == "true" || tf == "1" || tf == "1.0")
+                out = true;
+            else if (tf == "false" || tf == "0" || tf == "0.0")
+                out = false;
+            else
+                throw std::runtime_error("Parameters::Load: invalid bool value '" + tf + "'.");
+        };
         // EOF guard: extraction failure leaves s unchanged, so without this a
         // file missing the marker would spin forever.
         do {
@@ -570,49 +580,19 @@ namespace NEAT {
 
             if (s == "PopulationSize") a_DataFile >> loaded.PopulationSize;
 
-            if (s == "Speciation") {
-                a_DataFile >> tf;
-                if (tf == "true" || tf == "1" || tf == "1.0")
-                    loaded.Speciation = true;
-                else
-                    loaded.Speciation = false;
-            }
+            if (s == "Speciation") parse_bool(loaded.Speciation);
 
-            if (s == "DynamicCompatibility") {
-                a_DataFile >> tf;
-                if (tf == "true" || tf == "1" || tf == "1.0")
-                    loaded.DynamicCompatibility = true;
-                else
-                    loaded.DynamicCompatibility = false;
-            }
+            if (s == "DynamicCompatibility") parse_bool(loaded.DynamicCompatibility);
 
             if (s == "MinSpecies") a_DataFile >> loaded.MinSpecies;
 
             if (s == "MaxSpecies") a_DataFile >> loaded.MaxSpecies;
 
-            if (s == "InnovationsForever") {
-                a_DataFile >> tf;
-                if (tf == "true" || tf == "1" || tf == "1.0")
-                    loaded.InnovationsForever = true;
-                else
-                    loaded.InnovationsForever = false;
-            }
+            if (s == "InnovationsForever") parse_bool(loaded.InnovationsForever);
 
-            if (s == "AllowClones") {
-                a_DataFile >> tf;
-                if (tf == "true" || tf == "1" || tf == "1.0")
-                    loaded.AllowClones = true;
-                else
-                    loaded.AllowClones = false;
-            }
+            if (s == "AllowClones") parse_bool(loaded.AllowClones);
 
-            if (s == "NormalizeGenomeSize") {
-                a_DataFile >> tf;
-                if (tf == "true" || tf == "1" || tf == "1.0")
-                    loaded.NormalizeGenomeSize = true;
-                else
-                    loaded.NormalizeGenomeSize = false;
-            }
+            if (s == "NormalizeGenomeSize") parse_bool(loaded.NormalizeGenomeSize);
 
             if (s == "ConstraintTrials") a_DataFile >> loaded.ConstraintTrials;
 
@@ -628,13 +608,7 @@ namespace NEAT {
 
             if (s == "OldAgePenalty") a_DataFile >> loaded.OldAgePenalty;
 
-            if (s == "DetectCompetetiveCoevolutionStagnation") {
-                a_DataFile >> tf;
-                if (tf == "true" || tf == "1" || tf == "1.0")
-                    loaded.DetectCompetetiveCoevolutionStagnation = true;
-                else
-                    loaded.DetectCompetetiveCoevolutionStagnation = false;
-            }
+            if (s == "DetectCompetetiveCoevolutionStagnation") parse_bool(loaded.DetectCompetetiveCoevolutionStagnation);
 
             if (s == "KillWorstSpeciesEach") a_DataFile >> loaded.KillWorstSpeciesEach;
 
@@ -652,37 +626,13 @@ namespace NEAT {
 
             if (s == "PreferFitterParentRate") a_DataFile >> loaded.PreferFitterParentRate;
 
-            if (s == "RouletteWheelSelection") {
-                a_DataFile >> tf;
-                if (tf == "true" || tf == "1" || tf == "1.0")
-                    loaded.RouletteWheelSelection = true;
-                else
-                    loaded.RouletteWheelSelection = false;
-            }
+            if (s == "RouletteWheelSelection") parse_bool(loaded.RouletteWheelSelection);
 
-            if (s == "TournamentSelection") {
-                a_DataFile >> tf;
-                if (tf == "true" || tf == "1" || tf == "1.0")
-                    loaded.TournamentSelection = true;
-                else
-                    loaded.TournamentSelection = false;
-            }
+            if (s == "TournamentSelection") parse_bool(loaded.TournamentSelection);
 
-            if (s == "PhasedSearching") {
-                a_DataFile >> tf;
-                if (tf == "true" || tf == "1" || tf == "1.0")
-                    loaded.PhasedSearching = true;
-                else
-                    loaded.PhasedSearching = false;
-            }
+            if (s == "PhasedSearching") parse_bool(loaded.PhasedSearching);
 
-            if (s == "DeltaCoding") {
-                a_DataFile >> tf;
-                if (tf == "true" || tf == "1" || tf == "1.0")
-                    loaded.DeltaCoding = true;
-                else
-                    loaded.DeltaCoding = false;
-            }
+            if (s == "DeltaCoding") parse_bool(loaded.DeltaCoding);
 
             if (s == "SimplifyingPhaseMPCTreshold") a_DataFile >> loaded.SimplifyingPhaseMPCTreshold;
 
@@ -694,13 +644,7 @@ namespace NEAT {
 
             if (s == "NoveltySearch_P_min") a_DataFile >> loaded.NoveltySearch_P_min;
 
-            if (s == "NoveltySearch_Dynamic_Pmin") {
-                a_DataFile >> tf;
-                if (tf == "true" || tf == "1" || tf == "1.0")
-                    loaded.NoveltySearch_Dynamic_Pmin = true;
-                else
-                    loaded.NoveltySearch_Dynamic_Pmin = false;
-            }
+            if (s == "NoveltySearch_Dynamic_Pmin") parse_bool(loaded.NoveltySearch_Dynamic_Pmin);
 
             if (s == "NoveltySearch_No_Archiving_Stagnation_Treshold") a_DataFile >> loaded.NoveltySearch_No_Archiving_Stagnation_Treshold;
 
@@ -716,21 +660,11 @@ namespace NEAT {
 
             if (s == "MutateAddNeuronProb") a_DataFile >> loaded.MutateAddNeuronProb;
 
-            if (s == "SplitRecurrent") {
-                a_DataFile >> tf;
-                if (tf == "true" || tf == "1" || tf == "1.0")
-                    loaded.SplitRecurrent = true;
-                else
-                    loaded.SplitRecurrent = false;
-            }
+            if (s == "SplitRecurrent") parse_bool(loaded.SplitRecurrent);
 
-            if (s == "SplitLoopedRecurrent") {
-                a_DataFile >> tf;
-                if (tf == "true" || tf == "1" || tf == "1.0")
-                    loaded.SplitLoopedRecurrent = true;
-                else
-                    loaded.SplitLoopedRecurrent = false;
-            }
+            if (s == "SplitLoopedRecurrent") parse_bool(loaded.SplitLoopedRecurrent);
+
+            if (s == "NeuronTries") a_DataFile >> loaded.NeuronTries;
 
             if (s == "MutateAddLinkProb") a_DataFile >> loaded.MutateAddLinkProb;
 
@@ -814,29 +748,11 @@ namespace NEAT {
             if (s == "ActivationFunction_Relu_Prob") a_DataFile >> loaded.ActivationFunction_Relu_Prob;
             if (s == "ActivationFunction_Softplus_Prob") a_DataFile >> loaded.ActivationFunction_Softplus_Prob;
 
-            if (s == "DontUseBiasNeuron") {
-                a_DataFile >> tf;
-                if (tf == "true" || tf == "1" || tf == "1.0")
-                    loaded.DontUseBiasNeuron = true;
-                else
-                    loaded.DontUseBiasNeuron = false;
-            }
+            if (s == "DontUseBiasNeuron") parse_bool(loaded.DontUseBiasNeuron);
 
-            if (s == "AllowLoops") {
-                a_DataFile >> tf;
-                if (tf == "true" || tf == "1" || tf == "1.0")
-                    loaded.AllowLoops = true;
-                else
-                    loaded.AllowLoops = false;
-            }
+            if (s == "AllowLoops") parse_bool(loaded.AllowLoops);
 
-            if (s == "ArchiveEnforcement") {
-                a_DataFile >> tf;
-                if (tf == "true" || tf == "1" || tf == "1.0")
-                    loaded.ArchiveEnforcement = true;
-                else
-                    loaded.ArchiveEnforcement = false;
-            }
+            if (s == "ArchiveEnforcement") parse_bool(loaded.ArchiveEnforcement);
 
             if (s == "DisjointCoeff") a_DataFile >> loaded.DisjointCoeff;
 
@@ -890,29 +806,23 @@ namespace NEAT {
 
             if (s == "Qtree_Y") a_DataFile >> loaded.Qtree_Y;
 
-            if (s == "Leo") {
-                a_DataFile >> tf;
-                if (tf == "true" || tf == "1" || tf == "1.0")
-                    loaded.Leo = true;
-                else
-                    loaded.Leo = false;
-            }
-            if (s == "GeometrySeed") {
-                a_DataFile >> tf;
-                if (tf == "true" || tf == "1" || tf == "1.0")
-                    loaded.GeometrySeed = true;
-                else
-                    loaded.GeometrySeed = false;
-            }
+            if (s == "Leo") parse_bool(loaded.Leo);
+            if (s == "GeometrySeed") parse_bool(loaded.GeometrySeed);
 
             if (s == "LeoThreshold") a_DataFile >> loaded.LeoThreshold;
 
-            if (s == "LeoSeed") {
-                a_DataFile >> tf;
-                if (tf == "true" || tf == "1" || tf == "1.0")
-                    loaded.LeoSeed = true;
-                else
-                    loaded.LeoSeed = false;
+            if (s == "LeoSeed") parse_bool(loaded.LeoSeed);
+            if (s == "MutateNeuronTraitsProb") a_DataFile >> loaded.MutateNeuronTraitsProb;
+            if (s == "MutateLinkTraitsProb") a_DataFile >> loaded.MutateLinkTraitsProb;
+            if (s == "MutateGenomeTraitsProb") a_DataFile >> loaded.MutateGenomeTraitsProb;
+            if (s == "NeuronTraitSchemas") {
+                loaded.NeuronTraits = Serialization::ReadTraitParameters(a_DataFile);
+            }
+            if (s == "LinkTraitSchemas") {
+                loaded.LinkTraits = Serialization::ReadTraitParameters(a_DataFile);
+            }
+            if (s == "GenomeTraitSchemas") {
+                loaded.GenomeTraits = Serialization::ReadTraitParameters(a_DataFile);
             }
             if (s == "Elitism") {
                 a_DataFile >> loaded.EliteFraction;
@@ -920,13 +830,7 @@ namespace NEAT {
             if (s == "EliteFraction") {
                 a_DataFile >> loaded.EliteFraction;
             }
-            if (s == "TruncationSelection") {
-                a_DataFile >> tf;
-                if (tf == "true" || tf == "1" || tf == "1.0")
-                    loaded.TruncationSelection = true;
-                else
-                    loaded.TruncationSelection = false;
-            }
+            if (s == "TruncationSelection") parse_bool(loaded.TruncationSelection);
             if (s == "Depth") a_DataFile >> loaded.Depth;
             if (s == "Qtree_Z") a_DataFile >> loaded.Qtree_Z;
             if (s == "ActivationFunction_SpikingLIF_Prob") a_DataFile >> loaded.ActivationFunction_SpikingLIF_Prob;
@@ -1023,20 +927,8 @@ namespace NEAT {
             if (s == "TargetSpecies") a_DataFile >> loaded.TargetSpecies;
             if (s == "CompatibilityThresholdGain") a_DataFile >> loaded.CompatibilityThresholdGain;
             if (s == "MaxCompatTreshold") a_DataFile >> loaded.MaxCompatTreshold;
-            if (s == "RequireEvaluatedGenomes") {
-                a_DataFile >> tf;
-                if (tf == "true" || tf == "1" || tf == "1.0")
-                    loaded.RequireEvaluatedGenomes = true;
-                else
-                    loaded.RequireEvaluatedGenomes = false;
-            }
-            if (s == "RejectNonFiniteFitness") {
-                a_DataFile >> tf;
-                if (tf == "true" || tf == "1" || tf == "1.0")
-                    loaded.RejectNonFiniteFitness = true;
-                else
-                    loaded.RejectNonFiniteFitness = false;
-            }
+            if (s == "RequireEvaluatedGenomes") parse_bool(loaded.RequireEvaluatedGenomes);
+            if (s == "RejectNonFiniteFitness") parse_bool(loaded.RejectNonFiniteFitness);
             if (s == "MutationOperatorsPerOffspring") a_DataFile >> loaded.MutationOperatorsPerOffspring;
             if (s == "AdaptiveMutationStart") a_DataFile >> loaded.AdaptiveMutationStart;
             if (s == "AdaptiveMutationRate") a_DataFile >> loaded.AdaptiveMutationRate;
@@ -1049,7 +941,14 @@ namespace NEAT {
             if (s == "FitnessRankPressure") a_DataFile >> loaded.FitnessRankPressure;
             if (s == "FitnessSigmaScale") a_DataFile >> loaded.FitnessSigmaScale;
             if (s == "FitnessBoltzmannTemperature") a_DataFile >> loaded.FitnessBoltzmannTemperature;
-            // Unknown keys are skipped for forward compatibility.
+            // Unknown keys are skipped for forward compatibility: consume the rest of the
+            // line so an unknown value token is not misread as the next key. For known
+            // keys this only consumes the trailing newline (operator>> skips whitespace).
+            if (s != "NEAT_ParametersEnd") {
+                std::string t_ignored;
+                std::getline(a_DataFile, t_ignored);
+                if (!a_DataFile) return 1;
+            }
         }
 
         *this = loaded;
@@ -1057,8 +956,9 @@ namespace NEAT {
     }
 
     int Parameters::Load(const char *a_FileName) {
+        if (a_FileName == nullptr) return 1;
         std::ifstream data(a_FileName);
-        if (!data.is_open()) return 0;
+        if (!data.is_open()) return 1;
 
         int result = Load(data);
         data.close();
@@ -1067,7 +967,7 @@ namespace NEAT {
 
     void Parameters::Save(const char *filename) {
         if (filename == nullptr) throw std::invalid_argument("Parameters::Save: filename is null.");
-        FILE *f = detail::OpenFile(filename, "w");
+        FILE *f = detail::OpenFile(filename, "wb");
         if (f == nullptr) throw std::runtime_error("Parameters::Save: cannot open output file.");
         try {
             Save(f);
@@ -1216,7 +1116,10 @@ namespace NEAT {
         output << "LeoThreshold " << (p.LeoThreshold) << '\n';
         output << "LeoSeed " << (p.LeoSeed ? "true" : "false") << '\n';
         output << "GeometrySeed " << (p.GeometrySeed ? "true" : "false") << '\n';
-        output << "Elitism " << (p.EliteFraction) << '\n';
+        output << "MutateNeuronTraitsProb " << (p.MutateNeuronTraitsProb) << '\n';
+        output << "MutateLinkTraitsProb " << (p.MutateLinkTraitsProb) << '\n';
+        output << "MutateGenomeTraitsProb " << (p.MutateGenomeTraitsProb) << '\n';
+        // EliteFraction only; "Elitism" stays a read alias for older files.
         output << "EliteFraction " << (p.EliteFraction) << '\n';
         output << "MutateNeuronSpikingParametersProb " << (p.MutateNeuronSpikingParametersProb) << '\n';
         output << "MutateLinkSpikingParametersProb " << (p.MutateLinkSpikingParametersProb) << '\n';
@@ -1296,6 +1199,9 @@ namespace NEAT {
         output << "FitnessRankPressure " << (p.FitnessRankPressure) << '\n';
         output << "FitnessSigmaScale " << (p.FitnessSigmaScale) << '\n';
         output << "FitnessBoltzmannTemperature " << (p.FitnessBoltzmannTemperature) << '\n';
+        Serialization::WriteTraitParameters(output, "NeuronTraitSchemas", p.NeuronTraits);
+        Serialization::WriteTraitParameters(output, "LinkTraitSchemas", p.LinkTraits);
+        Serialization::WriteTraitParameters(output, "GenomeTraitSchemas", p.GenomeTraits);
         output << "NEAT_ParametersEnd\n";
     }
 
@@ -1624,7 +1530,7 @@ namespace NEAT {
                         detail.mut_power < 0.0)
                         return fail(prefix + "floating-point range is invalid");
                     if (!probability((prefix + "replacement probability").c_str(), detail.mut_replace_prob)) return false;
-                } else if (schema.type == "str") {
+                } else if (schema.type == "str" || schema.type == "string") {
                     if (!std::holds_alternative<StringTraitParameters>(schema.m_Details)) return fail(prefix + "detail type does not match");
                     const auto &detail = std::get<StringTraitParameters>(schema.m_Details);
                     if (detail.set.empty()) return fail(prefix + "set cannot be empty");

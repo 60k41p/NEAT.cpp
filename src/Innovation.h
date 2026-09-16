@@ -87,8 +87,10 @@ namespace NEAT {
 
         Innovation() {
             m_ID = 0;
+            m_InnovType = NEW_LINK;
             m_FromNeuronID = 0;
             m_ToNeuronID = 0;
+            m_NeuronType = NONE;
             m_NeuronID = 0;
         }
 

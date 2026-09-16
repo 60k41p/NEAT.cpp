@@ -18,6 +18,7 @@
 #include "NeuralNetwork.h"
 #include "Parameters.h"
 #include "Population.h"
+using NEAT::Real;
 
 namespace {
 
