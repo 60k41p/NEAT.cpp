@@ -131,15 +131,6 @@ namespace NEAT {
     // rounds a Real to the nearest integer (lround: halves away from zero, correct for negatives)
     inline int Rounded(const Real a_Val) { return static_cast<int>(std::lround(a_Val)); }
 
-    // rounds a Real up or down depending on whether its mantissa is higher or lower than offset
-    inline int RoundUnderOffset(const Real a_Val, const Real a_Offset) {
-        // ASSERT(a_Offset < 1 && a_Offset > -1); ???!? Should this be a test for the offset
-        const int t_Integral = static_cast<int>(a_Val);
-        const Real t_Mantissa = a_Val - t_Integral;
-
-        return (t_Mantissa < a_Offset) ? t_Integral : t_Integral + 1;
-    }
-
     // Scales the value "a", that is in range [a_min .. a_max] into its relative value in the range [tr_min .. tr_max] Example: A=2, in the range [0 .. 4] .. we
     // want to scale it to the range [-12 .. 12] .. we get 0..
     inline void Scale(Real &a, const Real a_min, const Real a_max, const Real a_tr_min, const Real a_tr_max) {
@@ -160,8 +151,6 @@ namespace NEAT {
         const Real rel_a = (a - a_min) / t_a_r;
         a = a_tr_min + t_r * rel_a;
     }
-
-    inline Real Abs(Real x) { return (x < 0) ? -x : x; }
 
     // Scales every entry of the vector from its current [min .. max] range into [a_tr_min .. a_tr_max].
     // Defined in Utils.cpp.

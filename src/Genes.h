@@ -435,6 +435,13 @@ namespace NEAT {
 
     //////////////////////////////////
     // This class defines a link gene
+    //
+    // A link gene carries an enable bit (Stanley & Miikkulainen 2002,
+    // Section 3.2, Figure 3): disabled genes stay in the genome as
+    // historical markers but are skipped when building the phenotype.
+    // Add-neuron mutation disables (rather than deletes) the split link,
+    // and crossover re-enables a matching gene with probability
+    // (1 - DisabledGeneInheritRate) when either parent has it disabled.
     //////////////////////////////////
     class LinkGene : public Gene {
         /////////////////////
@@ -452,6 +459,10 @@ namespace NEAT {
 
         // This variable is modified during evolution The weight of the connection
         Real m_Weight;
+
+        // Whether the link is expressed in the phenotype. Disabled links
+        // remain in the genome so crossover can reactivate them later.
+        bool m_Enabled;
 
         // Is it recurrent?
         bool m_IsRecurrent;
@@ -481,6 +492,7 @@ namespace NEAT {
             m_ToNeuronID = 0;
             m_InnovationID = 0;
             m_Weight = 0.0;
+            m_Enabled = true;
             m_IsRecurrent = false;
             m_SynapticDelay = 0.0;
             m_SynapticTimeConstant = 0.005;
@@ -499,6 +511,7 @@ namespace NEAT {
             m_InnovationID = a_InnovID;
 
             m_Weight = a_Wgt;
+            m_Enabled = true;
             m_IsRecurrent = a_Recurrent;
             m_SynapticDelay = 0.0;
             m_SynapticTimeConstant = 0.005;
@@ -527,11 +540,16 @@ namespace NEAT {
 
         bool IsRecurrent() const { return m_IsRecurrent; }
 
+        bool IsEnabled() const { return m_Enabled; }
+
+        void SetEnabled(bool a_Enabled) { m_Enabled = a_Enabled; }
+
         bool IsLoopedRecurrent() const { return m_FromNeuronID == m_ToNeuronID; }
 
         // overload '<', '>', '!=' and '==' used for sorting and comparison.
-        // Ordering uses the innovation ID; equality compares topology and weights,
-        // ignoring the historical innovation ID (reference topology semantics).
+        // Ordering uses the innovation ID; equality compares topology, weights
+        // and the enable bit, ignoring the historical innovation ID
+        // (reference topology semantics).
         // '!=' is the negation of '==' so the pair stays consistent.
         friend bool operator<(const LinkGene &a_lhs, const LinkGene &a_rhs) { return (a_lhs.m_InnovationID < a_rhs.m_InnovationID); }
 
@@ -539,7 +557,7 @@ namespace NEAT {
 
         friend bool operator==(const LinkGene &a_lhs, const LinkGene &a_rhs) {
             return (a_lhs.m_FromNeuronID == a_rhs.m_FromNeuronID && a_lhs.m_ToNeuronID == a_rhs.m_ToNeuronID && a_lhs.m_Weight == a_rhs.m_Weight &&
-                    a_lhs.m_IsRecurrent == a_rhs.m_IsRecurrent && a_lhs.m_SynapticDelay == a_rhs.m_SynapticDelay &&
+                    a_lhs.m_Enabled == a_rhs.m_Enabled && a_lhs.m_IsRecurrent == a_rhs.m_IsRecurrent && a_lhs.m_SynapticDelay == a_rhs.m_SynapticDelay &&
                     a_lhs.m_SynapticTimeConstant == a_rhs.m_SynapticTimeConstant && a_lhs.m_STDPEnabled == a_rhs.m_STDPEnabled &&
                     a_lhs.m_STDPPlus == a_rhs.m_STDPPlus && a_lhs.m_STDPMinus == a_rhs.m_STDPMinus && a_lhs.m_STDPTauPlus == a_rhs.m_STDPTauPlus &&
                     a_lhs.m_STDPTauMinus == a_rhs.m_STDPTauMinus && a_lhs.m_STDPMinWeight == a_rhs.m_STDPMinWeight &&
@@ -644,11 +662,6 @@ namespace NEAT {
             m_ActFunction = UNSIGNED_SIGMOID;
             InitSpikingDefaults();
         }
-
-        /*friend bool operator!=(const NeuronGene &a_lhs, const NeuronGene &a_rhs)
-        {
-            return (a_lhs.m_ID != a_rhs.m_ID);
-        }*/
 
         friend bool operator==(const NeuronGene &a_lhs, const NeuronGene &a_rhs) {
             return (a_lhs.m_ID == a_rhs.m_ID && a_lhs.m_Type == a_rhs.m_Type && a_lhs.x == a_rhs.x && a_lhs.y == a_rhs.y && a_lhs.m_SplitY == a_rhs.m_SplitY &&

@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <vector>
 
@@ -430,7 +431,7 @@ int TestGenome(int argc, char *argv[]) {
         g.SetFitness(3.5);
         g.Randomize_SpikingParameters(p, rng);
         const std::string data = g.Serialize();
-        CHECK(data.find("GenomeFormat 4") != std::string::npos);
+        CHECK(data.find("GenomeFormat 5") != std::string::npos);
         Genome h = Genome::Deserialize(data);
         CHECK(h.GetID() == 777);
         CHECK(Near(h.GetFitness(), 3.5));
@@ -474,9 +475,9 @@ int TestGenome(int argc, char *argv[]) {
         RNG rng;
         rng.Seed(21);
         InnovationDatabase innovs;
-        innovs.Init(1, 1000);
         Genome mom = MakeSeed(3, 1);
         Genome dad = MakeSeed(3, 1);
+        innovs.Init(mom);
         for (int i = 0; i < 10; ++i) {
             (void)mom.Mutate_AddNeuron(innovs, p, rng);
             (void)dad.Mutate_AddLink(innovs, p, rng);
@@ -682,6 +683,343 @@ int TestGenome(int argc, char *argv[]) {
         if (delayed_net.m_connections.size() == 1) {
             CHECK(delayed_net.m_connections[0].m_synaptic_delay > 0.0);
         }
+    }
+
+    // Layered seeds stack fully connected hidden layers.
+    {
+        Parameters p = DefaultParams();
+        GenomeInitStruct init;
+        init.NumInputs = 3;
+        init.NumOutputs = 2;
+        init.SeedType = LAYERED;
+        init.NumHidden = 2;
+        init.NumLayers = 2;
+        Genome g(p, init);
+        CHECK(g.NumNeurons() == 9);  // 3 in/bias + 2 out + 2x2 hidden
+        CHECK(g.NumLinks() == 14);   // 3*2 + 2*2 + 2*2
+        CHECK(g.Validate());
+        NeuralNetwork net;
+        g.BuildPhenotype(net);
+        CHECK(net.m_connections.size() == g.NumLinks());
+    }
+
+    // Link enable bit: toggle, add-neuron disablement, phenotype masking.
+    {
+        Parameters p = DefaultParams();
+        RNG rng;
+        rng.Seed(51);
+        InnovationDatabase innovs;
+
+        // Empty genomes have nothing to toggle.
+        Genome empty;
+        CHECK(!empty.Mutate_ToggleEnable(rng));
+
+        Genome g = MakeSeed(2, 1);
+        innovs.Init(g);
+        CHECK(g.NumLinks() == 2);
+        for (unsigned i = 0; i < g.NumLinks(); ++i) CHECK(g.GetLinkByIndex(static_cast<int>(i)).IsEnabled());
+
+        // Toggling flips exactly one link's bit.
+        CHECK(g.Mutate_ToggleEnable(rng));
+        unsigned disabled = 0;
+        for (unsigned i = 0; i < g.NumLinks(); ++i) {
+            if (!g.GetLinkByIndex(static_cast<int>(i)).IsEnabled()) ++disabled;
+        }
+        CHECK(disabled == 1);
+
+        // Add-neuron keeps (disables) the split link instead of deleting it.
+        Genome h = MakeSeed(2, 1);
+        CHECK(h.Mutate_AddNeuron(innovs, p, rng));
+        CHECK(h.NumLinks() == 4);  // 2 kept (one disabled) + 2 new
+        unsigned h_disabled = 0;
+        for (unsigned i = 0; i < h.NumLinks(); ++i) {
+            if (!h.GetLinkByIndex(static_cast<int>(i)).IsEnabled()) ++h_disabled;
+        }
+        CHECK(h_disabled == 1);
+        CHECK(h.Validate());
+
+        // The phenotype expresses only enabled links.
+        NeuralNetwork net;
+        h.BuildPhenotype(net);
+        CHECK(net.m_connections.size() == 3);
+
+        // Phenotypic changes map back by endpoints, skipping disabled links.
+        net.m_connections[0].m_weight = 42.0;
+        h.DerivePhenotypicChanges(net);
+        unsigned at_42 = 0;
+        for (unsigned i = 0; i < h.NumLinks(); ++i) {
+            if (Near(h.GetLinkByIndex(static_cast<int>(i)).GetWeight(), 42.0)) ++at_42;
+        }
+        CHECK(at_42 == 1);
+
+        // A hidden neuron kept alive only by disabled links is a dead end.
+        Genome d = MakeSeed(2, 1);
+        CHECK(d.Mutate_AddNeuron(innovs, p, rng));
+        CHECK(!d.HasDeadEnds());
+        int hidden_id = -1;
+        for (unsigned i = 0; i < d.NumNeurons(); ++i) {
+            if (d.GetNeuronByIndex(static_cast<int>(i)).Type() == HIDDEN) hidden_id = d.GetNeuronByIndex(static_cast<int>(i)).ID();
+        }
+        CHECK(hidden_id > 0);
+        for (unsigned i = 0; i < d.NumLinks(); ++i) {
+            LinkGene &l = d.m_LinkGenes[i];
+            if (l.FromNeuronID() == hidden_id || l.ToNeuronID() == hidden_id) l.SetEnabled(false);
+        }
+        CHECK(d.HasDeadEnds());
+        for (unsigned i = 0; i < d.NumLinks(); ++i) d.m_LinkGenes[i].SetEnabled(true);
+        CHECK(!d.HasDeadEnds());
+
+        // A cycle made only of disabled links is not a loop.
+        Genome c = MakeSeed(2, 1);
+        const int output_id = c.NumInputs() + 1;
+        c.m_LinkGenes.emplace_back(output_id, 1, c.GetLastInnovationID() + 1, 0.5, false);
+        CHECK(c.HasLoops());
+        c.m_LinkGenes.back().SetEnabled(false);
+        CHECK(!c.HasLoops());
+    }
+
+    // Mate propagates the enable bit (paper Section 4 rule).
+    {
+        Parameters p = DefaultParams();
+        p.PreferFitterParentRate = 1.0;
+        RNG rng;
+        rng.Seed(52);
+        Genome mom = MakeSeed(3, 1);
+        Genome dad = MakeSeed(3, 1);
+        mom.SetID(1);
+        dad.SetID(2);
+        mom.SetFitness(2.0);
+        dad.SetFitness(1.0);
+        mom.m_LinkGenes[0].SetEnabled(false);
+
+        p.DisabledGeneInheritRate = 1.0;
+        Genome baby = mom.MateWithMode(dad, MULTIPOINT, false, rng, p);
+        CHECK(baby.NumLinks() == 3);
+        CHECK(!baby.GetLinkByInnovID(1).IsEnabled());
+
+        p.DisabledGeneInheritRate = 0.0;
+        Genome baby2 = mom.MateWithMode(dad, MULTIPOINT, false, rng, p);
+        CHECK(baby2.NumLinks() == 3);
+        CHECK(baby2.GetLinkByInnovID(1).IsEnabled());
+
+        // Both parents enabled: the child is always enabled.
+        mom.m_LinkGenes[0].SetEnabled(true);
+        p.DisabledGeneInheritRate = 1.0;
+        Genome baby3 = mom.MateWithMode(dad, MULTIPOINT, false, rng, p);
+        CHECK(baby3.GetLinkByInnovID(1).IsEnabled());
+    }
+
+    // CompatibilityDistance never normalizes small genomes (paper Eq. 1).
+    {
+        auto coeffs = [](Parameters &p) {
+            p.NormalizeGenomeSize = true;
+            p.ExcessCoeff = 1.0;
+            p.DisjointCoeff = 1.0;
+            p.WeightDiffCoeff = 0.0;
+            p.ActivationADiffCoeff = 0.0;
+            p.ActivationBDiffCoeff = 0.0;
+            p.TimeConstantDiffCoeff = 0.0;
+            p.BiasDiffCoeff = 0.0;
+            p.ActivationFunctionDiffCoeff = 0.0;
+            p.SpikingNeuronDiffCoeff = 0.0;
+            p.SpikingLinkDiffCoeff = 0.0;
+        };
+        // Small genomes: one excess gene counts whole (N = 1).
+        Parameters p = DefaultParams();
+        coeffs(p);
+        GenomeInitStruct fs;
+        fs.NumInputs = 3;
+        fs.NumOutputs = 2;
+        fs.SeedType = PERCEPTRON;
+        fs.FS_NEAT = true;
+        fs.FS_NEAT_links = 2;
+        Genome small_a(DefaultParams(), fs);
+        Genome small_b = small_a;
+        // Add a link on a free endpoint pair with a fresh innovation number.
+        bool added = false;
+        for (int from = 1; from <= 3 && !added; ++from) {
+            for (int to = 4; to <= 5 && !added; ++to) {
+                bool used = false;
+                for (unsigned i = 0; i < small_a.NumLinks(); ++i) {
+                    const LinkGene &l = small_a.GetLinkByIndex(static_cast<int>(i));
+                    if (l.FromNeuronID() == from && l.ToNeuronID() == to) used = true;
+                }
+                if (!used) {
+                    small_b.m_LinkGenes.emplace_back(from, to, 1000000, 0.25, false);
+                    added = true;
+                }
+            }
+        }
+        CHECK(added);
+        CHECK(small_a.NumLinks() < 20 && small_b.NumLinks() < 20);
+        CHECK(Near(small_a.CompatibilityDistance(small_b, p), 1.0));
+
+        // Large genomes: the same single excess gene is divided by N >= 20.
+        GenomeInitStruct big;
+        big.NumInputs = 6;
+        big.NumOutputs = 5;
+        big.SeedType = PERCEPTRON;
+        big.FS_NEAT = true;
+        big.FS_NEAT_links = 20;
+        Genome big_a(DefaultParams(), big);
+        CHECK(big_a.NumLinks() >= 20);
+        Genome big_b = big_a;
+        added = false;
+        for (int from = 1; from <= 6 && !added; ++from) {
+            for (int to = 7; to <= 11 && !added; ++to) {
+                bool used = false;
+                for (unsigned i = 0; i < big_a.NumLinks(); ++i) {
+                    const LinkGene &l = big_a.GetLinkByIndex(static_cast<int>(i));
+                    if (l.FromNeuronID() == from && l.ToNeuronID() == to) used = true;
+                }
+                if (!used) {
+                    big_b.m_LinkGenes.emplace_back(from, to, 1000000, 0.25, false);
+                    added = true;
+                }
+            }
+        }
+        CHECK(added);
+        const Real big_dist = big_a.CompatibilityDistance(big_b, p);
+        CHECK(big_dist > 0.0 && big_dist < 0.1);
+    }
+
+    // Format 5 persists the enable bit; format 4 still loads (bit defaults on).
+    {
+        Genome g = MakeSeed(2, 1);
+        g.SetID(4242);
+        g.m_LinkGenes[0].SetEnabled(false);
+        const std::string data = g.Serialize();
+        CHECK(data.find("GenomeFormat 5") != std::string::npos);
+        Genome h = Genome::Deserialize(data);
+        CHECK(g.IsIdenticalTo(h));
+        CHECK(!h.GetLinkByIndex(0).IsEnabled());
+        CHECK(h.GetLinkByIndex(1).IsEnabled());
+
+        // Legacy file Save/Load preserves the bit.
+        const auto tmp = std::filesystem::temp_directory_path() / "multineat_test_genome_enabled.txt";
+        g.Save(tmp.string().c_str());
+        Genome file_loaded(tmp.string().c_str());
+        CHECK(!file_loaded.GetLinkByIndex(0).IsEnabled());
+        CHECK(file_loaded.GetLinkByIndex(1).IsEnabled());
+        std::error_code ec;
+        std::filesystem::remove(tmp, ec);
+
+        // A format-4 payload (no trailing bit) loads with every link enabled.
+        std::ostringstream v4;
+        std::istringstream lines(data);
+        std::string line;
+        while (std::getline(lines, line)) {
+            if (line.rfind("GenomeFormat 5", 0) == 0) {
+                v4 << "GenomeFormat 4\n";
+            } else if (line.rfind("Link ", 0) == 0) {
+                v4 << line.substr(0, line.find_last_of(' ')) << "\n";
+            } else {
+                v4 << line << "\n";
+            }
+        }
+        Genome legacy = Genome::Deserialize(v4.str());
+        CHECK(legacy.NumLinks() == g.NumLinks());
+        for (unsigned i = 0; i < legacy.NumLinks(); ++i) CHECK(legacy.GetLinkByIndex(static_cast<int>(i)).IsEnabled());
+    }
+
+    // LEO seeding and LEO-gated HyperNEAT phenotypes.
+    {
+        // LeoSeed reserves output index 1 as an UNSIGNED_STEP LEO neuron.
+        Parameters p = DefaultParams();
+        p.Leo = true;
+        p.LeoSeed = true;
+        GenomeInitStruct cppn_init;
+        cppn_init.NumInputs = 5;
+        cppn_init.NumOutputs = 2;
+        cppn_init.SeedType = PERCEPTRON;
+        Genome cppn(p, cppn_init);
+        CHECK(cppn.NumOutputs() == 2);
+        CHECK(cppn.m_NeuronGenes[5].m_ActFunction == UNSIGNED_SIGMOID);
+        CHECK(cppn.m_NeuronGenes[6].m_ActFunction == UNSIGNED_STEP);
+
+        // LeoSeed without Leo, or with fewer than two outputs, is rejected.
+        Parameters bad = DefaultParams();
+        bad.LeoSeed = true;
+        bool threw = false;
+        try {
+            Genome rejected(bad, cppn_init);
+        } catch (const std::invalid_argument &) {
+            threw = true;
+        }
+        CHECK(threw);
+        Parameters few = DefaultParams();
+        few.Leo = true;
+        few.LeoSeed = true;
+        GenomeInitStruct one_out;
+        one_out.NumInputs = 5;
+        one_out.NumOutputs = 1;
+        one_out.SeedType = PERCEPTRON;
+        threw = false;
+        try {
+            Genome rejected(few, one_out);
+        } catch (const std::invalid_argument &) {
+            threw = true;
+        }
+        CHECK(threw);
+
+        // GeometrySeed biases the source-x input onto the weight output.
+        Parameters geo = DefaultParams();
+        geo.GeometrySeed = true;
+        Genome gseed(geo, cppn_init);
+        bool found_x_link = false;
+        for (unsigned i = 0; i < gseed.NumLinks(); ++i) {
+            const LinkGene &l = gseed.GetLinkByIndex(static_cast<int>(i));
+            if (l.FromNeuronID() == 1 && l.ToNeuronID() == 6) {
+                CHECK(Near(l.GetWeight(), 1.0));
+                found_x_link = true;
+            } else {
+                CHECK(Near(l.GetWeight(), 0.0));
+            }
+        }
+        CHECK(found_x_link);
+
+        // LEO-gated build: output 0 is the weight, output 1 the LEO signal.
+        Parameters leo = DefaultParams();
+        leo.Leo = true;
+        leo.LeoThreshold = 0.1;
+        Genome gated(DefaultParams(), cppn_init);
+        for (auto &l : gated.m_LinkGenes) l.SetWeight(0.0);
+        // Bias (input 5) drives the weight output high and LEO low.
+        for (auto &l : gated.m_LinkGenes) {
+            if (l.FromNeuronID() == 5 && l.ToNeuronID() == 6) l.SetWeight(8.0);
+            if (l.FromNeuronID() == 5 && l.ToNeuronID() == 7) l.SetWeight(-8.0);
+        }
+        std::vector<std::vector<Real>> inputs{{0.0, 0.0}};
+        std::vector<std::vector<Real>> hidden;
+        std::vector<std::vector<Real>> outputs{{0.5, 1.0}};
+        Substrate subst(inputs, hidden, outputs);
+        subst.m_query_weights_only = true;
+        subst.m_allow_input_output_links = true;
+        NeuralNetwork suppressed;
+        gated.BuildHyperNEATPhenotype(suppressed, subst, leo);
+        CHECK(suppressed.m_connections.empty());
+        // Raising LEO above the threshold expresses the connection.
+        for (auto &l : gated.m_LinkGenes) {
+            if (l.FromNeuronID() == 5 && l.ToNeuronID() == 7) l.SetWeight(8.0);
+        }
+        NeuralNetwork expressed;
+        gated.BuildHyperNEATPhenotype(expressed, subst, leo);
+        CHECK(expressed.m_connections.size() == 1);
+        if (expressed.m_connections.size() == 1) CHECK(expressed.m_connections[0].m_weight > 0.0);
+        // The legacy two-argument build keeps the historical gate-on-positive.
+        NeuralNetwork legacy_build;
+        gated.BuildHyperNEATPhenotype(legacy_build, subst);
+        CHECK(legacy_build.m_connections.size() == 1);
+
+        // LEO needs room for the signal: one output is not enough.
+        Genome narrow(DefaultParams(), one_out);
+        threw = false;
+        try {
+            narrow.BuildHyperNEATPhenotype(expressed, subst, leo);
+        } catch (const std::invalid_argument &) {
+            threw = true;
+        }
+        CHECK(threw);
     }
 
     if (g_failures != 0) {

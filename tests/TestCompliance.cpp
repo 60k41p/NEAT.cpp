@@ -139,7 +139,7 @@ int TestCompliance(int argc, char *argv[]) {
         init.NumOutputs = 1;
         Genome g(p, init);
         const std::string data = g.Serialize();
-        CHECK(data.find("GenomeFormat 4") != std::string::npos);
+        CHECK(data.find("GenomeFormat 5") != std::string::npos);
         CHECK(data.find("GenomeState") != std::string::npos);
         CHECK(Genome::Deserialize(data).IsIdenticalTo(g));
     }

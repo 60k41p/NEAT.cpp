@@ -150,6 +150,10 @@ namespace NEAT {
         // the gene of the fitter parent will be prefered, instead of choosing one at random
         PreferFitterParentRate = 0.5;
 
+        // Probability that a matching link gene disabled in either parent is
+        // disabled in the child (Stanley & Miikkulainen 2002, Section 4).
+        DisabledGeneInheritRate = 0.75;
+
         // Performing truncation selection or not? (goes first)
         TruncationSelection = true;
 
@@ -247,6 +251,10 @@ namespace NEAT {
 
         // Probability for a baby that a simple neuron will be replaced with a link
         MutateRemSimpleNeuronProb = 0.0;
+
+        // Probability for a baby to be mutated by flipping a link enable bit.
+        // Zero preserves historical evolution without disabled genes.
+        MutateToggleEnableProb = 0.0;
 
         // Maximum number of tries to find 2 neurons to add/remove a link
         LinkTries = 64;
@@ -625,6 +633,7 @@ namespace NEAT {
             if (s == "MultipointCrossoverRate") a_DataFile >> loaded.MultipointCrossoverRate;
 
             if (s == "PreferFitterParentRate") a_DataFile >> loaded.PreferFitterParentRate;
+            if (s == "DisabledGeneInheritRate") a_DataFile >> loaded.DisabledGeneInheritRate;
 
             if (s == "RouletteWheelSelection") parse_bool(loaded.RouletteWheelSelection);
 
@@ -673,6 +682,8 @@ namespace NEAT {
             if (s == "MutateRemLinkProb") a_DataFile >> loaded.MutateRemLinkProb;
 
             if (s == "MutateRemSimpleNeuronProb") a_DataFile >> loaded.MutateRemSimpleNeuronProb;
+
+            if (s == "MutateToggleEnableProb") a_DataFile >> loaded.MutateToggleEnableProb;
 
             if (s == "LinkTries") a_DataFile >> loaded.LinkTries;
 
@@ -1006,6 +1017,7 @@ namespace NEAT {
         output << "InterspeciesCrossoverRate " << (p.InterspeciesCrossoverRate) << '\n';
         output << "MultipointCrossoverRate " << (p.MultipointCrossoverRate) << '\n';
         output << "PreferFitterParentRate " << (p.PreferFitterParentRate) << '\n';
+        output << "DisabledGeneInheritRate " << (p.DisabledGeneInheritRate) << '\n';
         output << "RouletteWheelSelection " << (p.RouletteWheelSelection ? "true" : "false") << '\n';
         output << "PhasedSearching " << (p.PhasedSearching ? "true" : "false") << '\n';
         output << "DeltaCoding " << (p.DeltaCoding ? "true" : "false") << '\n';
@@ -1029,6 +1041,7 @@ namespace NEAT {
         output << "MutateAddLinkFromBiasProb " << (p.MutateAddLinkFromBiasProb) << '\n';
         output << "MutateRemLinkProb " << (p.MutateRemLinkProb) << '\n';
         output << "MutateRemSimpleNeuronProb " << (p.MutateRemSimpleNeuronProb) << '\n';
+        output << "MutateToggleEnableProb " << (p.MutateToggleEnableProb) << '\n';
         output << "LinkTries " << (p.LinkTries) << '\n';
         output << "MaxLinks " << (p.MaxLinks) << '\n';
         output << "MaxNeurons " << (p.MaxNeurons) << '\n';
@@ -1339,6 +1352,8 @@ namespace NEAT {
                                                                {"BlendCrossoverRate", BlendCrossoverRate},
                                                                {"SimulatedBinaryCrossoverRate", SimulatedBinaryCrossoverRate},
                                                                {"PreferFitterParentRate", PreferFitterParentRate},
+                                                               {"DisabledGeneInheritRate", DisabledGeneInheritRate},
+                                                               {"MutateToggleEnableProb", MutateToggleEnableProb},
                                                                {"EliteFraction", EliteFraction},
                                                                {"MutateAddNeuronProb", MutateAddNeuronProb},
                                                                {"MutateAddLinkProb", MutateAddLinkProb},
@@ -1503,6 +1518,7 @@ namespace NEAT {
             ActivationFunction_SpikingAdaptiveLIF_Prob + ActivationFunction_SpikingIzhikevich_Prob + ActivationFunction_McCullochPitts_Prob;
         if ((MutateAddNeuronProb > 0.0 || MutateNeuronActivationTypeProb > 0.0) && activation_total <= 0.0)
             return fail("at least one activation function must have positive probability");
+        if (LeoSeed && !Leo) return fail("LeoSeed requires Leo: the seeded LEO output is only read when LEO gating is enabled");
 
         const auto validate_set_probabilities = [&fail](const std::string &prefix, std::size_t set_size, const std::vector<Real> &probs) {
             if (!probs.empty() && probs.size() != set_size) return fail(prefix + "probability count must match the set size");

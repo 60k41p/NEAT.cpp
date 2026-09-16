@@ -129,9 +129,7 @@ namespace NEAT {
 
         // comparison operator (nessesary for boost::python)
         bool operator==(Connection const &other) const {
-            if ((m_source_neuron_idx == other.m_source_neuron_idx) && (m_target_neuron_idx == other.m_target_neuron_idx)) /*&&
-                                                                      (m_weight == other.m_weight) &&
-                                                                      (m_recur_flag == other.m_recur_flag))*/
+            if ((m_source_neuron_idx == other.m_source_neuron_idx) && (m_target_neuron_idx == other.m_target_neuron_idx))
                 return true;
             else
                 return false;
@@ -346,7 +344,6 @@ namespace NEAT {
         }
 
         // Euclidean distance between two neurons in x/y/z space.
-        Real GetConnectionLenght(Neuron source, Neuron target);
         Real GetConnectionLength(const Neuron &source, const Neuron &target);
 
         Real GetTotalConnectionLength();

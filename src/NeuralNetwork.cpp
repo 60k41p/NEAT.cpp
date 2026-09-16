@@ -490,8 +490,6 @@ namespace NEAT {
         return std::sqrt(dx * dx + dy * dy + dz * dz);
     }
 
-    Real NeuralNetwork::GetConnectionLenght(Neuron source, Neuron target) { return GetConnectionLength(source, target); }
-
     Real NeuralNetwork::GetTotalConnectionLength() {
         ValidateNetworkTopology(*this);
         Real total = 0.0;

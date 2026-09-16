@@ -380,12 +380,20 @@ namespace NEAT {
         }
 
         // now the outputs
+        // With LeoSeed, output index 1 is a dedicated UNSIGNED_STEP LEO neuron,
+        // matching the [weight, LEO, ...] layout the LEO-gated HyperNEAT
+        // builder expects (Stanley, D'Ambrosio & Gauci 2009).
+        if (a_Parameters.LeoSeed) {
+            if (!a_Parameters.Leo) throw std::invalid_argument("Genome: LeoSeed requires the Leo parameter to be enabled.");
+            if (in.NumOutputs < 2) throw std::invalid_argument("Genome: LeoSeed requires at least two seed outputs.");
+        }
         for (unsigned int i = 0; i < (in.NumOutputs); i++) {
             NeuronGene t_ngene(OUTPUT, t_nnum, 1.0);
             // Initialize the neuron gene's properties
+            const ActivationFunction t_output_act = (a_Parameters.LeoSeed && i == 1) ? UNSIGNED_STEP : in.OutputActType;
             t_ngene.Init((a_Parameters.MinActivationA + a_Parameters.MaxActivationA) / 2.0, (a_Parameters.MinActivationB + a_Parameters.MaxActivationB) / 2.0,
                          (a_Parameters.MinNeuronTimeConstant + a_Parameters.MaxNeuronTimeConstant) / 2.0,
-                         (a_Parameters.MinNeuronBias + a_Parameters.MaxNeuronBias) / 2.0, in.OutputActType);
+                         (a_Parameters.MinNeuronBias + a_Parameters.MaxNeuronBias) / 2.0, t_output_act);
             InitializeNeuronSpiking(t_ngene, a_Parameters);
             // Initialize the traits
             t_ngene.InitTraits(a_Parameters.NeuronTraits, t_RNG);
@@ -393,24 +401,6 @@ namespace NEAT {
             m_NeuronGenes.emplace_back(t_ngene);
             t_nnum++;
         }
-
-        // Now add LEO
-        /*if (a_Parameters.Leo)
-        {
-            NeuronGene t_ngene(OUTPUT, t_nnum, 1.0);
-            // Initialize the neuron gene's properties
-            t_ngene.Init((a_Parameters.MinActivationA + a_Parameters.MaxActivationA) / 2.0,
-                         (a_Parameters.MinActivationB + a_Parameters.MaxActivationB) / 2.0,
-                         (a_Parameters.MinNeuronTimeConstant + a_Parameters.MaxNeuronTimeConstant) / 2.0,
-                         (a_Parameters.MinNeuronBias + a_Parameters.MaxNeuronBias) / 2.0,
-                         UNSIGNED_STEP);
-            // Initialize the traits
-            t_ngene.InitTraits(a_Parameters.NeuronTraits, t_RNG);
-
-            m_NeuronGenes.emplace_back(t_ngene);
-            t_nnum++;
-            in.NumOutputs++;
-        }*/
 
         // add and connect hidden neurons if seed type is != 0
         if ((in.SeedType == LAYERED) && (in.NumHidden > 0)) {
@@ -478,18 +468,7 @@ namespace NEAT {
                     }
                 }
 
-                /*if (a_Parameters.DontUseBiasNeuron == false)
-                {
-                    // Connect the bias as well
-                    for (unsigned int i = 0; i < a_NumOutputs; i++)
-                    {
-                        // add the link created with zero weights. needs future random initialization. !!!!!!!!
-                        LinkGene l = LinkGene(a_NumInputs, i + last_dest_id, t_innovnum, 0.0, false);
-                        l.InitTraits(a_Parameters.LinkTraits, t_RNG);
-                        m_LinkGenes.emplace_back(l);
-                        t_innovnum++;
-                    }
-                }*/
+                last_dest_id = in.NumInputs + 1;
             }
         } else  // The links connecting every input to every output - perceptron structure
         {
@@ -549,6 +528,25 @@ namespace NEAT {
                             made_already.push_back(std::make_pair(t_inp_id, t_outp_id));
                         }
                     }
+                }
+            }
+        }
+
+        // Geometric seeding along the source X axis: bias the weight output
+        // (output index 0) along the first CPPN input (source x). The seed
+        // genome is substrate-agnostic, so only that slot has a
+        // layout-independent identity. Only applies to seeds with a direct
+        // input-to-output link (perceptron and some FS-NEAT seeds); layered
+        // seeds have none and are unaffected. Takes effect when the seed
+        // population is created without weight randomization.
+        if (a_Parameters.GeometrySeed && in.NumOutputs > 0) {
+            const int t_weight_output_id = in.NumInputs + 1;
+            for (LinkGene &t_link : m_LinkGenes) {
+                if (t_link.FromNeuronID() == 1 && t_link.ToNeuronID() == t_weight_output_id) {
+                    Real t_seed_weight = 1.0;
+                    Clamp(t_seed_weight, a_Parameters.MinWeight, a_Parameters.MaxWeight);
+                    t_link.SetWeight(t_seed_weight);
+                    break;
                 }
             }
         }
@@ -720,6 +718,8 @@ namespace NEAT {
         std::vector<std::vector<std::size_t>> adjacency(m_NeuronGenes.size());
         std::vector<std::size_t> indegree(m_NeuronGenes.size(), 0);
         for (const LinkGene &link : m_LinkGenes) {
+            // Disabled links are not expressed and cannot form phenotype loops.
+            if (!link.IsEnabled()) continue;
             const auto source = neuron_indices.find(link.FromNeuronID());
             const auto target = neuron_indices.find(link.ToNeuronID());
             if (source == neuron_indices.end() || target == neuron_indices.end()) {
@@ -802,6 +802,8 @@ namespace NEAT {
 
         // Fill the net with the connections
         for (unsigned int i = 0; i < NumLinks(); i++) {
+            // Disabled genes are historical markers only; they are not expressed.
+            if (!m_LinkGenes[i].IsEnabled()) continue;
             Connection t_c;
 
             const auto t_from = t_id_to_index.find(m_LinkGenes[i].FromNeuronID());
@@ -857,12 +859,17 @@ namespace NEAT {
         // This is because of storage issues. RTRL need not to be used every time.
     }
 
-    // Builds a HyperNEAT phenotype based on the substrate The CPPN input dimensionality must match the largest number of dimensions in the substrate The output
-    // dimensionality is determined according to flags set in the substrate
+    // Builds a HyperNEAT phenotype based on the substrate The CPPN input dimensionality must match the largest number of dimensions in the substrate
+    // The output dimensionality is determined according to flags set in the substrate
 
-    // The procedure uses the [0] CPPN output for creating nodes, and if the substrate is leaky, [1] and [2] for time constants and biases Also assumes the CPPN
-    // uses signed activation outputs
+    // The procedure uses the [0] CPPN output for creating nodes, and if the substrate is leaky, [1] and [2] for time constants and biases Also assumes
+    // the CPPN uses signed activation outputs
     void Genome::BuildHyperNEATPhenotype(NeuralNetwork &net, Substrate &subst) {
+        const Parameters t_defaults;
+        BuildHyperNEATPhenotype(net, subst, t_defaults);
+    }
+
+    void Genome::BuildHyperNEATPhenotype(NeuralNetwork &net, Substrate &subst, const Parameters &params) {
         // We need a substrate with at least one input and output
         if (subst.m_input_coords.empty() || subst.m_output_coords.empty())
             throw std::invalid_argument("A HyperNEAT substrate requires input and output coordinates");
@@ -870,8 +877,13 @@ namespace NEAT {
 
         int max_dims = subst.GetMaxDims();
 
+        // With LEO gating the CPPN layout is [weight, LEO, ...], so a
+        // weights-only substrate needs one extra output for the LEO signal.
+        // Gating substrates already provide (link, weight[, time const, bias]).
+        const int t_required_outputs = subst.GetMinCPPNOutputs() + ((params.Leo && subst.m_query_weights_only) ? 1 : 0);
+
         // Make sure the CPPN dimensionality is right
-        if (static_cast<int>(m_NumInputs) < subst.GetMinCPPNInputs() || static_cast<int>(m_NumOutputs) < subst.GetMinCPPNOutputs())
+        if (static_cast<int>(m_NumInputs) < subst.GetMinCPPNInputs() || static_cast<int>(m_NumOutputs) < t_required_outputs)
             throw std::invalid_argument("The CPPN does not provide enough inputs or outputs for the substrate");
         if (!std::isfinite(subst.m_max_weight_and_bias) || subst.m_max_weight_and_bias < 0.0 || !std::isfinite(subst.m_min_time_const) ||
             !std::isfinite(subst.m_max_time_const) || subst.m_min_time_const > subst.m_max_time_const)
@@ -943,8 +955,8 @@ namespace NEAT {
                 // neuron specific stuff
                 t_temp_phenotype.Flush();
 
-                // Inputs for the generation of time consts and biases across the nodes in the substrate We input only the position of the first node and ignore
-                // the other one
+                // Inputs for the generation of time consts and biases across the nodes in the substrate We input only the position of the first node
+                // and ignore the other one
                 std::vector<Real> t_inputs;
                 t_inputs.resize(NumInputs());
 
@@ -1135,15 +1147,23 @@ namespace NEAT {
             // the output is a weight
             Real t_link = 0;
             Real t_weight = 0;
+            Real t_leo = 0;
 
-            if (subst.m_query_weights_only) {
+            if (params.Leo) {
+                // Canonical Hypercube layout: output 0 is the weight and
+                // output 1 the LEO expression signal.
+                t_weight = t_temp_phenotype.Output()[0];
+                t_leo = t_temp_phenotype.Output()[1];
+            } else if (subst.m_query_weights_only) {
                 t_weight = t_temp_phenotype.Output()[0];
             } else {
                 t_link = t_temp_phenotype.Output()[0];
                 t_weight = t_temp_phenotype.Output()[1];
             }
 
-            if (((t_link > 0) && (!subst.m_query_weights_only)) || (subst.m_query_weights_only)) {
+            const bool t_expressed =
+                params.Leo ? (t_leo > params.LeoThreshold) : (((t_link > 0) && (!subst.m_query_weights_only)) || (subst.m_query_weights_only));
+            if (t_expressed) {
                 // now this weight will be scaled
                 t_weight *= subst.m_max_weight_and_bias;
 
@@ -1164,38 +1184,41 @@ namespace NEAT {
     // Projects the weight changes of a phenotype back to the genome.
     // WARNING! Using this too often in conjuction with RTRL can confuse evolution.
     void Genome::DerivePhenotypicChanges(NeuralNetwork &a_Net) {
-        // the a_Net and the genome must have identical topology. if the topology differs, no changes will be made to the genome
-        if (a_Net.m_connections.size() != m_LinkGenes.size()) return;
+        // Match phenotype connections back to genome links by endpoint neuron
+        // IDs. Disabled links are skipped when building the phenotype, so an
+        // index-aligned copy would misattribute weights once any link is
+        // disabled. If the topologies differ, no changes are made.
+        std::unordered_map<std::uint64_t, std::size_t> t_endpoint_to_link;
+        t_endpoint_to_link.reserve(m_LinkGenes.size() * 2);
+        const auto endpoint_key = [](int source, int target) {
+            return (static_cast<std::uint64_t>(static_cast<std::uint32_t>(source)) << 32U) | static_cast<std::uint32_t>(target);
+        };
+        for (std::size_t i = 0; i < m_LinkGenes.size(); ++i) {
+            if (!m_LinkGenes[i].IsEnabled()) continue;
+            t_endpoint_to_link.emplace(endpoint_key(m_LinkGenes[i].FromNeuronID(), m_LinkGenes[i].ToNeuronID()), i);
+        }
+        // BuildPhenotype appends neurons in genome order without skipping, so
+        // phenotype neuron index k is m_NeuronGenes[k].
+        if (a_Net.m_neurons.size() != m_NeuronGenes.size() || a_Net.m_connections.size() != t_endpoint_to_link.size()) return;
 
-        // Since we don't have a comparison operator yet, we are going to assume
-        // identical topolgy
-        // TODO: create that comparison operator for NeuralNetworks
-
-        // Iterate through the links and replace weights
-        for (unsigned int i = 0; i < NumLinks(); i++) {
-            m_LinkGenes[i].SetWeight(a_Net.GetConnectionByIndex(i).m_weight);
+        for (const Connection &t_connection : a_Net.m_connections) {
+            if (t_connection.m_source_neuron_idx < 0 || t_connection.m_target_neuron_idx < 0 ||
+                static_cast<std::size_t>(t_connection.m_source_neuron_idx) >= m_NeuronGenes.size() ||
+                static_cast<std::size_t>(t_connection.m_target_neuron_idx) >= m_NeuronGenes.size())
+                return;
+            const int t_source_id = m_NeuronGenes[static_cast<std::size_t>(t_connection.m_source_neuron_idx)].ID();
+            const int t_target_id = m_NeuronGenes[static_cast<std::size_t>(t_connection.m_target_neuron_idx)].ID();
+            const auto t_match = t_endpoint_to_link.find(endpoint_key(t_source_id, t_target_id));
+            if (t_match == t_endpoint_to_link.end()) return;
+            m_LinkGenes[t_match->second].SetWeight(t_connection.m_weight);
         }
 
         // TODO: if neuron parameters were changed, derive them
         // * in future expansions
     }
 
-    // std::map<std::pair<int,int>, Real> distance_cache;
-
     // Returns the absolute distance between this genome and a_G
     Real Genome::CompatibilityDistance(Genome &a_G, Parameters &a_Parameters) {
-        // first check if in cache, if so, return that
-        /*auto q1 = std::make_pair(this->GetID(), a_G.GetID());
-        auto q2 = std::make_pair(a_G.GetID(), this->GetID());
-        if (distance_cache.count(q1) > 0)
-        {
-            return distance_cache[q1];
-        }
-        else if (distance_cache.count(q2) > 0)
-        {
-            return distance_cache[q2];
-        }*/
-
         // New - if there is a behavior in the genomes, return their distance
 
         Real t_total_distance = 0.0;
@@ -1317,10 +1340,16 @@ namespace NEAT {
             }
         }
 
-        // choose between normalizing for genome size or not
+        // Choose between normalizing for genome size or not. Following
+        // Stanley & Miikkulainen (2002, Eq. 1), small genomes are never
+        // normalized: when both genomes have fewer than 20 links, N = 1. This
+        // applies unconditionally so early-evolution speciation matches the
+        // paper even when NormalizeGenomeSize is off (which already forces
+        // N = 1 for all sizes).
         Real t_max_genome_size = static_cast<Real>(std::max(t_links_1->size(), t_links_2->size()));
         if (t_max_genome_size < 1.0) t_max_genome_size = 1.0;
         Real t_normalizer = a_Parameters.NormalizeGenomeSize ? t_max_genome_size : 1.0;
+        if (t_links_1->size() < 20 && t_links_2->size() < 20) t_normalizer = 1.0;
 
         // if there are no matching links, make it 1.0 to avoid divide error
         if (t_num_matching_links < 1.0) t_num_matching_links = 1.0;
@@ -1465,9 +1494,6 @@ namespace NEAT {
             t_total_distance += n;
         }
 
-        // store in cache
-        // distance_cache[std::make_pair(this->GetID(), a_G.GetID())] = t_total_distance;
-
         return t_total_distance;
     }
 
@@ -1477,9 +1503,6 @@ namespace NEAT {
         if (this == &a_G) return true;
 
         Real t_total_distance = CompatibilityDistance(a_G, a_Parameters);
-
-        /*if ((NumLinks() == 0) && (a_G.NumLinks() == 0))
-            return true;*/
 
         if (t_total_distance <= a_Parameters.CompatTreshold)
             return true;  // compatible
@@ -1526,19 +1549,6 @@ namespace NEAT {
         // No links to split - go away..
         if (NumLinks() == 0 || a_Parameters.NeuronTries <= 0) return false;
 
-        // Also we need at least one neuron with 2 incoming links before we split any
-        /*bool good=false;
-        for (int i=NumInputs(); i<m_NeuronGenes.size(); i++)
-        {
-            if (LinksOutputtingTo(m_NeuronGenes[i].ID()) > 1)
-            {
-                good = true;
-                break;
-            }
-        }
-        if (!good)
-            return false;*/
-
         // First find a link that to be split
         ////////////////////
 
@@ -1581,9 +1591,9 @@ namespace NEAT {
         Real t_orig_weight = m_LinkGenes[t_link_num].GetWeight();
         t_chosenlink = m_LinkGenes[t_link_num];  // save the whole link
 
-        // remove the link from the genome
-        // TODO: add option to keep the link, but disabled
-        RemoveLinkGene(m_LinkGenes[t_link_num].InnovationID());
+        // Keep the split link in the genome but disabled, so the innovation
+        // stays available to crossover (Stanley & Miikkulainen 2002, Fig. 3).
+        m_LinkGenes[t_link_num].SetEnabled(false);
 
         // Check if an innovation of this type already occured somewhere in the population
         int t_innovid = a_Innovs.CheckInnovation(t_in, t_out, NEW_NEURON);
@@ -1628,15 +1638,7 @@ namespace NEAT {
             InitializeNeuronSpiking(t_ngene, a_Parameters, &a_RNG);
 
             // Initialize the traits
-            // if (a_RNG.RandFloat() < 0.5)
-            //{
             t_ngene.InitTraits(a_Parameters.NeuronTraits, a_RNG);
-            //}
-            // else
-            //{   // mate instead of randomizing
-            //    t_ngene.m_Traits = m_NeuronGenes[GetNeuronIndex(t_in)].m_Traits;
-            //    t_ngene.MateTraits(m_NeuronGenes[GetNeuronIndex(t_out)].m_Traits, a_RNG);
-            //}
 
             // Add the NeuronGene
             m_NeuronGenes.emplace_back(t_ngene);
@@ -1691,8 +1693,8 @@ namespace NEAT {
 
             ASSERT((t_l1id > 0) && (t_l2id > 0));
 
-            // Perhaps this innovation occured more than once. Find the first such innovation that had occured, but the genome not having the same id.. If
-            // didn't find such, then add new innovation.
+            // Perhaps this innovation occured more than once. Find the first such innovation that had occured, but the genome not having the same id..
+            // If didn't find such, then add new innovation.
             std::vector<int> t_idxs = a_Innovs.CheckAllInnovations(t_in, t_out, NEW_NEURON);
             bool t_found = false;
             for (unsigned int i = 0; i < t_idxs.size(); i++) {
@@ -1750,15 +1752,7 @@ namespace NEAT {
             InitializeNeuronSpiking(t_ngene, a_Parameters, &a_RNG);
 
             // Initialize the traits
-            // if (a_RNG.RandFloat() < 0.5)
-            //{
             t_ngene.InitTraits(a_Parameters.NeuronTraits, a_RNG);
-            //}// mate instead of randomizing
-            // else
-            //{
-            //    t_ngene.m_Traits = m_NeuronGenes[GetNeuronIndex(t_in)].m_Traits;
-            //    t_ngene.MateTraits(m_NeuronGenes[GetNeuronIndex(t_out)].m_Traits, a_RNG);
-            //}
 
             // Make sure the recurrent flag is kept
             bool t_recurrentflag = t_chosenlink.IsRecurrent();
@@ -2060,6 +2054,8 @@ namespace NEAT {
 
         for (size_t i = 0, end = m_LinkGenes.size(); i < end; ++i) {
             const LinkGene &l = m_LinkGenes[i];
+            // Disabled links are not expressed, so they cannot keep a neuron alive.
+            if (!l.IsEnabled()) continue;
             // there is a link going to this neuron, so there are incoming; don't count the link if it is looped recurrent or coming from a bias
             if ((l.ToNeuronID() == a_ID) && (!l.IsLoopedRecurrent()) && l.FromNeuronID() != bias_id) {
                 t_no_incoming = false;
@@ -2170,21 +2166,21 @@ namespace NEAT {
         return true;
     }
 
-    // Returns the count of links inputting from the specified neuron ID
+    // Returns the count of expressed (enabled) links inputting from the specified neuron ID
     int Genome::LinksInputtingFrom(int a_ID) const {
         int t_counter = 0;
         for (unsigned int i = 0; i < NumLinks(); i++) {
-            if (m_LinkGenes[i].FromNeuronID() == a_ID) t_counter++;
+            if (m_LinkGenes[i].FromNeuronID() == a_ID && m_LinkGenes[i].IsEnabled()) t_counter++;
         }
 
         return t_counter;
     }
 
-    // Returns the count of links outputting to the specified neuron ID
+    // Returns the count of expressed (enabled) links outputting to the specified neuron ID
     int Genome::LinksOutputtingTo(int a_ID) const {
         int t_counter = 0;
         for (unsigned int i = 0; i < NumLinks(); i++) {
-            if (m_LinkGenes[i].ToNeuronID() == a_ID) t_counter++;
+            if (m_LinkGenes[i].ToNeuronID() == a_ID && m_LinkGenes[i].IsEnabled()) t_counter++;
         }
 
         return t_counter;
@@ -2303,6 +2299,15 @@ namespace NEAT {
         }
 
         return false;
+    }
+
+    // Flips the enable bit of one uniformly random link gene
+    bool Genome::Mutate_ToggleEnable(RNG &a_RNG) {
+        if (NumLinks() == 0) return false;
+
+        const int t_link_index = a_RNG.RandInt(0, static_cast<int>(NumLinks()) - 1);
+        m_LinkGenes[static_cast<std::size_t>(t_link_index)].SetEnabled(!m_LinkGenes[static_cast<std::size_t>(t_link_index)].IsEnabled());
+        return true;
     }
 
     // Perturbs the weights
@@ -2751,6 +2756,10 @@ namespace NEAT {
         while (!((t_curMom == mom_links.end()) && (t_curDad == dad_links.end()))) {
             LinkGene t_selectedgene = t_emptygene;
             bool t_skip = false;
+            // Whether the selected gene matched in both parents, and whether
+            // either parental copy is disabled (for the inheritance rule).
+            bool t_matching = false;
+            bool t_either_disabled = false;
 
             // the end of mum's genes have been reached EXCESS
             if (t_curMom == mom_links.end()) {
@@ -2783,6 +2792,8 @@ namespace NEAT {
 
                 // if both innovations match
                 if (t_innov_mom == t_innov_dad) {
+                    t_matching = true;
+                    t_either_disabled = !t_curMom->IsEnabled() || !t_curDad->IsEnabled();
                     switch (a_Mode) {
                         case MULTIPOINT:
                             if (a_RNG.RandFloat() < a_Parameters.PreferFitterParentRate)
@@ -2862,6 +2873,14 @@ namespace NEAT {
             // this means that no gene is selected (should be skipped).
             // The endpoint set also guards against duplicate links.
             if ((t_selectedgene.InnovationID() > 0) && (!t_skip)) {
+                // A matching gene disabled in either parent is disabled in
+                // the child with probability DisabledGeneInheritRate and
+                // re-enabled otherwise (Stanley & Miikkulainen 2002,
+                // Section 4). Disjoint and excess genes keep the bit they
+                // were inherited with.
+                if (t_matching && t_either_disabled) {
+                    t_selectedgene.SetEnabled(a_RNG.RandFloat() >= a_Parameters.DisabledGeneInheritRate);
+                }
                 const std::uint64_t key = endpoint_key(t_selectedgene.FromNeuronID(), t_selectedgene.ToNeuronID());
                 if (child_endpoints.insert(key).second) {
                     t_baby.m_LinkGenes.push_back(t_selectedgene);
@@ -2904,10 +2923,10 @@ namespace NEAT {
             return a_Depth;
         }
 
-        // Find all links outputting to this neuron ID
+        // Find all enabled links outputting to this neuron ID
         std::vector<int> t_inputting_links_idx;
         for (unsigned int i = 0; i < NumLinks(); i++) {
-            if (m_LinkGenes[i].ToNeuronID() == a_NeuronID) t_inputting_links_idx.emplace_back(i);
+            if (m_LinkGenes[i].ToNeuronID() == a_NeuronID && m_LinkGenes[i].IsEnabled()) t_inputting_links_idx.emplace_back(i);
         }
 
         // For all incoming links..
@@ -2935,6 +2954,7 @@ namespace NEAT {
         std::vector<std::vector<std::size_t>> outgoing(m_NeuronGenes.size());
         std::vector<std::size_t> indegree(m_NeuronGenes.size(), 0);
         for (const auto &link : m_LinkGenes) {
+            if (!link.IsEnabled()) continue;
             if (link.IsRecurrent()) continue;
             const auto source = neuron_indices.find(link.FromNeuronID());
             const auto target = neuron_indices.find(link.ToNeuronID());
@@ -3018,8 +3038,8 @@ namespace NEAT {
         // loop over the connections and save each one
         for (unsigned int i = 0; i < NumLinks(); i++) {
             const LinkGene &lg = m_LinkGenes[i];
-            fprintf(a_file, "Link %d %d %d %d %3.8f\n", lg.FromNeuronID(), lg.ToNeuronID(), lg.InnovationID(), static_cast<int>(lg.IsRecurrent()),
-                    lg.GetWeight());
+            fprintf(a_file, "Link %d %d %d %d %3.8f %d\n", lg.FromNeuronID(), lg.ToNeuronID(), lg.InnovationID(), static_cast<int>(lg.IsRecurrent()),
+                    lg.GetWeight(), static_cast<int>(lg.IsEnabled()));
             // TODO write link traits
             fprintf(a_file,
                     "LinkSpiking %3.18f %3.18f %d %3.18f %3.18f "
@@ -3055,7 +3075,7 @@ namespace NEAT {
             }
             if (token == "GenomeFormat") {
                 data >> format_version;
-                if (format_version < 1 || format_version > 4) throw std::runtime_error("Genome: unsupported serialization format.");
+                if (format_version < 1 || format_version > 5) throw std::runtime_error("Genome: unsupported serialization format.");
             } else if (token == "GenomeState") {
                 int evaluated = 0;
                 data >> m_Fitness >> m_AdjustedFitness >> m_OffspringAmount >> m_Depth >> m_NumInputs >> m_NumOutputs >> evaluated >> m_initial_num_neurons >>
@@ -3109,6 +3129,23 @@ namespace NEAT {
                         link.m_STDPTauMinus >> link.m_STDPMinWeight >> link.m_STDPMaxWeight;
                     link.m_STDPEnabled = stdp_enabled != 0;
                 }
+                // The enable bit (format 5) is required in versioned data.
+                // Versionless legacy files may predate it, so accept a
+                // missing field there and default to enabled.
+                LinkGene &link = m_LinkGenes[static_cast<std::size_t>(last_link)];
+                if (format_version >= 5) {
+                    int enabled = 1;
+                    data >> enabled;
+                    link.m_Enabled = enabled != 0;
+                } else {
+                    data >> std::ws;
+                    const int next = data.peek();
+                    if (next == '-' || next == '+' || (next >= '0' && next <= '9')) {
+                        int enabled = 1;
+                        data >> enabled;
+                        link.m_Enabled = enabled != 0;
+                    }
+                }
             } else if (token == "LinkTraits") {
                 if (last_link < 0) throw std::runtime_error("Genome: LinkTraits appears before a link.");
                 m_LinkGenes[static_cast<std::size_t>(last_link)].m_Traits = Serialization::ReadTraits(data);
@@ -3149,7 +3186,7 @@ namespace NEAT {
         std::ostringstream output;
         Serialization::UseRoundTripPrecision(output);
         output << "GenomeStart " << GetID() << "\n";
-        output << "GenomeFormat 4\n";
+        output << "GenomeFormat 5\n";
         output << "GenomeState " << m_Fitness << ' ' << m_AdjustedFitness << ' ' << m_OffspringAmount << ' ' << m_Depth << ' ' << m_NumInputs << ' '
                << m_NumOutputs << ' ' << static_cast<int>(m_Evaluated) << ' ' << m_initial_num_neurons << ' ' << m_initial_num_links << '\n';
         Serialization::WriteTraits(output, "GenomeTraits", m_GenomeGene.m_Traits);
@@ -3166,7 +3203,7 @@ namespace NEAT {
             output << "Link " << link.m_FromNeuronID << ' ' << link.m_ToNeuronID << ' ' << link.m_InnovationID << ' ' << static_cast<int>(link.m_IsRecurrent)
                    << ' ' << link.m_Weight << ' ' << link.m_SynapticDelay << ' ' << link.m_SynapticTimeConstant << ' ' << static_cast<int>(link.m_STDPEnabled)
                    << ' ' << link.m_STDPPlus << ' ' << link.m_STDPMinus << ' ' << link.m_STDPTauPlus << ' ' << link.m_STDPTauMinus << ' '
-                   << link.m_STDPMinWeight << ' ' << link.m_STDPMaxWeight << '\n';
+                   << link.m_STDPMinWeight << ' ' << link.m_STDPMaxWeight << ' ' << static_cast<int>(link.m_Enabled) << '\n';
             Serialization::WriteTraits(output, "LinkTraits", link.m_Traits);
         }
         output << "GenomeEnd\n";
@@ -3276,7 +3313,7 @@ namespace NEAT {
             const LinkGene &l1 = m_LinkGenes[i];
             const LinkGene &l2 = other.m_LinkGenes[i];
 
-            if (l1.m_FromNeuronID != l2.m_FromNeuronID || l1.m_ToNeuronID != l2.m_ToNeuronID || l1.m_Weight != l2.m_Weight ||
+            if (l1.m_FromNeuronID != l2.m_FromNeuronID || l1.m_ToNeuronID != l2.m_ToNeuronID || l1.m_Weight != l2.m_Weight || l1.m_Enabled != l2.m_Enabled ||
                 l1.m_IsRecurrent != l2.m_IsRecurrent || l1.m_SynapticDelay != l2.m_SynapticDelay || l1.m_SynapticTimeConstant != l2.m_SynapticTimeConstant ||
                 l1.m_STDPEnabled != l2.m_STDPEnabled || l1.m_STDPPlus != l2.m_STDPPlus || l1.m_STDPMinus != l2.m_STDPMinus ||
                 l1.m_STDPTauPlus != l2.m_STDPTauPlus || l1.m_STDPTauMinus != l2.m_STDPTauMinus || l1.m_STDPMinWeight != l2.m_STDPMinWeight ||
@@ -3292,26 +3329,9 @@ namespace NEAT {
         for (auto t = traits.begin(); t != traits.end(); t++) {
             bool doit = false;
             std::string s = t->second.dep_key;
-            // std::string sv = bs::get<std::string>(t->second.dep_values);
             if (s != "") {
                 // there is such trait..
                 if (traits.count(s) != 0) {
-                    /*int a; Real b; std::string c;
-                    if ((*it).m_Traits[s].value.type() == typeid(int))
-                        a = bs::get<int>((*it).m_Traits[s].value);
-                    if ((*it).m_Traits[s].value.type() == typeid(Real))
-                        b = bs::get<Real>((*it).m_Traits[s].value);
-                    if ((*it).m_Traits[s].value.type() == typeid(std::string))
-                        c = bs::get<std::string>((*it).m_Traits[s].value);
-
-                    int a1; Real b1; std::string c1;
-                    if ((t->second.dep_values).type() == typeid(int))
-                        a1 = bs::get<int>((t->second.dep_values));
-                    if ((t->second.dep_values).type() == typeid(Real))
-                        b1 = bs::get<Real>((t->second.dep_values));
-                    if ((t->second.dep_values).type() == typeid(std::string))
-                        c1 = bs::get<std::string>((t->second.dep_values));*/
-
                     // and it has the right value?
                     for (int ix = 0; ix < t->second.dep_values.size(); ix++) {
                         if (traits[s].value == (t->second.dep_values[ix])) {

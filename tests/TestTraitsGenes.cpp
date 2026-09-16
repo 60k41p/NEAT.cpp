@@ -341,6 +341,13 @@ int TestTraitsGenes(int argc, char *argv[]) {
         CHECK(Near(l.GetWeight(), 0.5));
         CHECK(!l.IsRecurrent());
         CHECK(!l.IsLoopedRecurrent());
+        // Links start enabled; the bit is part of equality.
+        CHECK(l.IsEnabled());
+        LinkGene disabled = l;
+        disabled.SetEnabled(false);
+        CHECK(!disabled.IsEnabled());
+        CHECK(!(l == disabled));
+        CHECK(l != disabled);
         // Spiking defaults are sane and inert for rate networks.
         CHECK(!l.m_STDPEnabled);
         CHECK(Near(l.m_SynapticDelay, 0.0));

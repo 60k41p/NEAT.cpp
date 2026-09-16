@@ -110,7 +110,7 @@ int TestUtils(int argc, char *argv[]) {
         CHECK(i == 4);
     }
 
-    // Rounded / RoundUnderOffset (lround: halves away from zero, incl. negatives)
+    // Rounded (lround: halves away from zero, incl. negatives)
     {
         CHECK(Rounded(1.2) == 1);
         CHECK(Rounded(1.5) == 2);
@@ -118,9 +118,6 @@ int TestUtils(int argc, char *argv[]) {
         CHECK(Rounded(-1.6) == -2);
         CHECK(Rounded(-1.5) == -2);
         CHECK(Rounded(-1.2) == -1);
-        CHECK(RoundUnderOffset(1.2, 0.5) == 1);
-        CHECK(RoundUnderOffset(1.7, 0.5) == 2);
-        CHECK(RoundUnderOffset(1.2, 0.1) == 2);
     }
 
     // Scale Real: [0..4] -> [-12..12], 2 maps to 0
@@ -149,13 +146,6 @@ int TestUtils(int argc, char *argv[]) {
         a = 7.0;
         Scale(a, 0.0, 4.0, 3.0, 3.0);
         CHECK(Near(a, 3.0));
-    }
-
-    // Abs
-    {
-        CHECK(Near(Abs(2.5), 2.5));
-        CHECK(Near(Abs(-2.5), 2.5));
-        CHECK(Near(Abs(0.0), 0.0));
     }
 
     if (g_failures != 0) {
