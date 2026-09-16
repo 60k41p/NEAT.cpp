@@ -1,14 +1,29 @@
 // Micro/macro benchmarks for NEAT.cpp. Standalone executable; prints one line
-// per benchmark: <name> <elapsed_ms> (<ops> ops, <ns_per_op> ns/op).
+// per benchmark: <name> <cpu_ms> (<ops> ops, <ns_per_op> ns/op).
 //
 // Build:  cmake -S . -B build/bench -DCMAKE_BUILD_TYPE=Release -DNEATCPP_ENABLE_BENCHMARKS=ON
 // Run:    ./build/bench/benchmarks/NEATcppBench
 //
 // Seeded and fixed-iteration so runs are comparable across changes;
 // compare output against RESULTS.md baselines.
+//
+// Timing uses calling-thread CPU time (not wall time), so preemption, sleep
+// and blocked file I/O do not count towards the reported totals.
+#if defined(_WIN32)
+#include <windows.h>
+#endif
+#if defined(__APPLE__)
+#include <mach/mach.h>
+#include <mach/thread_info.h>
+#endif
+#if !defined(_WIN32) && !defined(__APPLE__)
+#include <time.h>
+#endif
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
+#include <ctime>
 #include <string>
 #include <vector>
 
@@ -20,7 +35,67 @@
 #include "Random.h"
 
 using namespace NEAT;
-using Clock = std::chrono::steady_clock;
+
+// Calling-thread CPU clock satisfying the Cpp17Clock requirements. Measures
+// user + system time consumed by the calling thread only; time the thread is
+// descheduled or blocked (e.g. on disk I/O) is excluded.
+class ThreadCpuClock {
+   public:
+    using rep = long long;
+    using period = std::nano;
+    using duration = std::chrono::duration<rep, period>;
+    using time_point = std::chrono::time_point<ThreadCpuClock>;
+    static constexpr bool is_steady = true;
+
+    static time_point now() noexcept { return time_point(duration(static_cast<rep>(threadCpuNanos()))); }
+
+   private:
+    static std::uint64_t threadCpuNanos() noexcept {
+#if defined(_WIN32)
+        FILETIME creationTime, exitTime, kernelTime, userTime;
+        if (GetThreadTimes(GetCurrentThread(), &creationTime, &exitTime, &kernelTime, &userTime) == 0) {
+            return 0;
+        }
+        ULARGE_INTEGER kernel, user;
+        kernel.LowPart = kernelTime.dwLowDateTime;
+        kernel.HighPart = kernelTime.dwHighDateTime;
+        user.LowPart = userTime.dwLowDateTime;
+        user.HighPart = userTime.dwHighDateTime;
+        // FILETIME ticks are 100ns intervals.
+        return (kernel.QuadPart + user.QuadPart) * 100ULL;
+#elif defined(__APPLE__)
+        thread_basic_info_data_t info;
+        mach_msg_type_number_t count = THREAD_BASIC_INFO_COUNT;
+        const thread_port_t port = mach_thread_self();
+        const kern_return_t result = thread_info(port, THREAD_BASIC_INFO, reinterpret_cast<thread_info_t>(&info), &count);
+        mach_port_deallocate(mach_task_self(), port);
+        if (result != KERN_SUCCESS) {
+            return 0;
+        }
+        const std::uint64_t user =
+            static_cast<std::uint64_t>(info.user_time.seconds) * 1000000000ULL + static_cast<std::uint64_t>(info.user_time.microseconds) * 1000ULL;
+        const std::uint64_t system =
+            static_cast<std::uint64_t>(info.system_time.seconds) * 1000000000ULL + static_cast<std::uint64_t>(info.system_time.microseconds) * 1000ULL;
+        return user + system;
+#else
+#if defined(CLOCK_THREAD_CPUTIME_ID)
+        struct timespec ts;
+        if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts) != 0) {
+            return 0;
+        }
+        return static_cast<std::uint64_t>(ts.tv_sec) * 1000000000ULL + static_cast<std::uint64_t>(ts.tv_nsec);
+#else
+        const std::clock_t ticks = std::clock();
+        if (ticks == static_cast<std::clock_t>(-1)) {
+            return 0;
+        }
+        return static_cast<std::uint64_t>(ticks) * 1000000000ULL / static_cast<std::uint64_t>(CLOCKS_PER_SEC);
+#endif
+#endif
+    }
+};
+
+using Clock = ThreadCpuClock;
 
 namespace {
 
@@ -171,7 +246,7 @@ namespace {
 
     void bench_xor_solve() {
         // The reference XOR recipe from upstream MultiNEAT: generation count and
-        // wall time until best fitness > 15.0 (seeded, deterministic).
+        // thread CPU time until best fitness > 15.0 (seeded, deterministic).
         Parameters p;
         p.PopulationSize = 100;
         p.DynamicCompatibility = true;
